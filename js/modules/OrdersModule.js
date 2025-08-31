@@ -9,6 +9,7 @@ export class OrdersModule {
     create(orderData) {
         const order = this.prepareOrder(orderData);
         const orderMonth = this.getOrderMonth(order.date);
+        const currentDisplayMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
 
         // ВАЖНО: Запазваме състоянието ПРЕДИ промяната
@@ -22,16 +23,21 @@ export class OrdersModule {
         this.storage.save('monthlyData', monthlyData);
         this.state.set('monthlyData', monthlyData);
 
-        // Това е за други listeners (UI refresh и т.н.)
-        this.eventBus.emit('order:created', order);
+        // Информираме дали поръчката е създадена в текущия показван месец
+        this.eventBus.emit('order:created', {
+            order,
+            createdInMonth: orderMonth,
+            isVisibleInCurrentMonth: orderMonth === currentDisplayMonth
+        });
 
-        console.log(`Order created for ${orderMonth}:`, order.client);
+        console.log(`Order created for ${orderMonth} (displaying ${currentDisplayMonth}):`, order.client);
         return order;
     }
 
     update(orderId, orderData) {
         const order = this.prepareOrder({ ...orderData, id: orderId });
         const newOrderMonth = this.getOrderMonth(order.date);
+        const currentDisplayMonth = this.state.get('currentMonth'); // Месецът който виждаме в UI
         const monthlyData = this.state.get('monthlyData');
 
         // ВАЖНО: Запазваме състоянието ПРЕДИ промяната
@@ -41,7 +47,6 @@ export class OrdersModule {
         let currentOrderMonth = null;
         let orderIndex = -1;
 
-        // Търсим поръчката във всички месеци
         for (const [month, data] of Object.entries(monthlyData)) {
             if (data.orders) {
                 const index = data.orders.findIndex(o => o.id === orderId);
@@ -70,6 +75,11 @@ export class OrdersModule {
 
             // Добави в новия месец
             monthlyData[newOrderMonth].orders.push(order);
+
+            // ВАЖНО: Ако поръчката се премества извън текущия месец за показване
+            if (newOrderMonth !== currentDisplayMonth) {
+                console.warn(`Order moved to ${newOrderMonth}, but displaying ${currentDisplayMonth}`);
+            }
         } else {
             // Само обнови поръчката в същия месец
             monthlyData[currentOrderMonth].orders[orderIndex] = order;
@@ -77,7 +87,7 @@ export class OrdersModule {
 
         this.storage.save('monthlyData', monthlyData);
         this.state.set('monthlyData', monthlyData);
-        this.eventBus.emit('order:updated', order);
+        this.eventBus.emit('order:updated', { order, movedToMonth: newOrderMonth });
 
         console.log(`Order ${orderId} updated in ${newOrderMonth}`);
         return order;

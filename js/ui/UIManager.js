@@ -1,11 +1,12 @@
 import {ModalsManager} from "./components/ModalsManager.js";
 
 export class UIManager {
-    constructor(modules, state, eventBus, router) {
+    constructor(modules, state, eventBus, router, undoRedo) {  // Добави undoRedo параметър
         this.modules = modules;
         this.state = state;
         this.eventBus = eventBus;
         this.router = router;
+        this.undoRedo = undoRedo;  // Запази референцията
         this.currentView = null;
 
         // Инициализираме месеците БЕЗ да пипаме данните

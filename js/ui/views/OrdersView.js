@@ -126,10 +126,11 @@ export default class OrdersView {
                 <td>${order.fullSet ? '✅' : '❌'}</td>
                 <td><span class="status-badge ${statusClass}">${order.status}</span></td>
                 <td>${order.notes}</td>
-                <td>
-                    <button class="btn btn-sm" data-action="edit" data-id="${order.id}">✏️</button>
-                    <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}">🗑️</button>
-                </td>
+<td>
+    <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
+    <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
+    <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+</td>
             </tr>
         `;
     }
@@ -253,31 +254,32 @@ export default class OrdersView {
     bulkDelete() {
         if (confirm(`Сигурни ли сте, че искате да изтриете ${this.selectedOrders.size} поръчки?`)) {
             let deleted = 0;
+            const orderIds = Array.from(this.selectedOrders); // Convert to array first
 
-            this.selectedOrders.forEach(orderId => {
-                this.ordersModule.delete(orderId);
-                deleted++;
+            // Delete each order individually to ensure proper state management
+            orderIds.forEach(orderId => {
+                try {
+                    this.ordersModule.delete(orderId);
+                    deleted++;
+                } catch (error) {
+                    console.error(`Error deleting order ${orderId}:`, error);
+                }
             });
 
-            // Запазете промените
-            const monthlyData = this.state.get('monthlyData');
-            this.ordersModule.storage.save('monthlyData', monthlyData);
+            // Clear selection immediately
+            this.selectedOrders.clear();
 
+            // Show notification
             this.eventBus.emit('notification:show', {
                 message: `${deleted} поръчки бяха изтрити`,
                 type: 'success'
             });
 
-            this.clearSelection();
+            // Force immediate UI refresh without timeout
+            this.refresh();
 
-            // Форсирайте презареждане
-            setTimeout(() => {
-                const container = document.getElementById('view-container');
-                if (container) {
-                    container.innerHTML = this.render();
-                    this.attachListeners();
-                }
-            }, 100);
+            // Update bulk UI state
+            this.updateBulkUI();
         }
     }
 
@@ -330,6 +332,13 @@ export default class OrdersView {
             });
         });
 
+        document.querySelectorAll('[data-action="duplicate"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const orderId = parseInt(e.target.dataset.id);
+                this.eventBus.emit('modal:open', { type: 'order', mode: 'duplicate', id: orderId });
+            });
+        });
+
         document.querySelectorAll('[data-action="delete"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const orderId = parseInt(e.target.dataset.id);
@@ -348,6 +357,38 @@ export default class OrdersView {
             container.innerHTML = this.render();
             this.attachListeners();
         }
+    }
+
+// Добави нов метод за smart refresh
+    smartRefresh(eventData) {
+        // Ако поръчката е създадена/обновена в друг месец, покажи предупреждение
+        if (eventData && eventData.createdInMonth) {
+            const currentMonth = this.state.get('currentMonth');
+            if (eventData.createdInMonth !== currentMonth) {
+                this.eventBus.emit('notification:show', {
+                    message: `Поръчката е създадена в ${this.formatMonth(eventData.createdInMonth)}. Сменете месеца за да я видите.`,
+                    type: 'info'
+                });
+            }
+        }
+
+        if (eventData && eventData.movedToMonth) {
+            const currentMonth = this.state.get('currentMonth');
+            if (eventData.movedToMonth !== currentMonth) {
+                this.eventBus.emit('notification:show', {
+                    message: `Поръчката е преместена в ${this.formatMonth(eventData.movedToMonth)}. Сменете месеца за да я видите.`,
+                    type: 'info'
+                });
+            }
+        }
+
+        this.refresh();
+    }
+
+    formatMonth(monthKey) {
+        const [year, month] = monthKey.split('-');
+        const months = ['Ян', 'Фев', 'Мар', 'Апр', 'Май', 'Юни', 'Юли', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
+        return `${months[parseInt(month) - 1]} ${year}`;
     }
 
     // Utility methods remain the same

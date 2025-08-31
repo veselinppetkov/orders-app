@@ -86,139 +86,155 @@ export class ModalsManager {
 
     renderOrderModal(data) {
         const isEdit = data.mode === 'edit';
-        const order = isEdit ? this.modules.orders.getOrders().find(o => o.id === data.id) : null;
+        const isDuplicate = data.mode === 'duplicate';
+        const order = (isEdit || isDuplicate) ? this.modules.orders.getOrders().find(o => o.id === data.id) : null;
+
+        // За дублиране, създаваме нов обект с reset-нати полета
+        const formData = isDuplicate && order ? {
+            ...order,
+            id: null, // премахваме ID за да се създаде нов
+            date: new Date().toISOString().split('T')[0], // днешна дата
+            status: 'Очакван', // reset статус
+            notes: '', // изчистваме бележките
+            imageData: null // премахваме снимката
+        } : order;
+
         const settings = this.state.get('settings');
         const clients = this.modules.clients.getAllClients();
 
         return `
-            <div class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>${isEdit ? '✏️ Редактиране на поръчка' : '➕ Нова поръчка'}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+        <div class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>${isEdit ? '✏️ Редактиране на поръчка' :
+            isDuplicate ? '📋 Дублиране на поръчка' :
+                '➕ Нова поръчка'}</h2>
+                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                </div>
+                
+                <form id="order-form" class="modal-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Дата:</label>
+                            <input type="date" id="orderDate" value="${formData?.date || new Date().toISOString().split('T')[0]}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Клиент:</label>
+                            <div class="input-with-button">
+                                <input type="text" id="orderClient" list="clients-list" value="${formData?.client || ''}" required placeholder="Изберете или въведете клиент">
+                                <datalist id="clients-list">
+                                    ${clients.map(c => `<option value="${c.name}">`).join('')}
+                                </datalist>
+                                <button type="button" class="input-addon-btn" onclick="window.app.ui.modals.quickAddClient()">+</button>
+                            </div>
+                            <div id="client-hint" class="hint-text"></div>
+                        </div>
                     </div>
                     
-                    <form id="order-form" class="modal-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Дата:</label>
-                                <input type="date" id="orderDate" value="${order?.date || new Date().toISOString().split('T')[0]}" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Клиент:</label>
-                                <div class="input-with-button">
-                                    <input type="text" id="orderClient" list="clients-list" value="${order?.client || ''}" required placeholder="Изберете или въведете клиент">
-                                    <datalist id="clients-list">
-                                        ${clients.map(c => `<option value="${c.name}">`).join('')}
-                                    </datalist>
-                                    <button type="button" class="input-addon-btn" onclick="window.app.ui.modals.quickAddClient()">+</button>
-                                </div>
-                                <div id="client-hint" class="hint-text"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Телефон:</label>
-                                <input type="tel" id="orderPhone" value="${order?.phone || ''}">
-                            </div>
-                            <div class="form-group">
-                                <label>Източник:</label>
-                                <select id="orderOrigin" required>
-                                    ${settings.origins.map(o => `
-                                        <option value="${o}" ${order?.origin === o ? 'selected' : ''}>${o}</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Доставчик:</label>
-                                <select id="orderVendor" required>
-                                    ${settings.vendors.map(v => `
-                                        <option value="${v}" ${order?.vendor === v ? 'selected' : ''}>${v}</option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Модел:</label>
-                                <input type="text" id="orderModel" value="${order?.model || ''}" required placeholder="Описание на модела">
-                            </div>
-                        </div>
-                        
+                    <div class="form-row">
                         <div class="form-group">
-                            <label>Снимка на модела:</label>
-                            <div class="image-upload-area">
-                                <input type="file" id="orderImage" accept="image/*" style="display: none;">
-                                <button type="button" class="btn btn-upload" onclick="document.getElementById('orderImage').click()">
-                                    📷 Избери снимка
-                                </button>
-                                <div class="hint-text">Или поставете снимка с Ctrl+V</div>
-                                <div id="image-preview" class="image-preview">
-                                    ${order?.imageData ? `
-                                        <img src="${order.imageData}" class="preview-img">
-                                        <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
-                                    ` : '<div class="no-image">Няма избрана снимка</div>'}
-                                </div>
-                            </div>
+                            <label>Телефон:</label>
+                            <input type="tel" id="orderPhone" value="${formData?.phone || ''}">
                         </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Доставна цена (USD):</label>
-                                <input type="number" id="orderCostUSD" value="${order?.costUSD || ''}" step="0.01" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Доставка (USD):</label>
-                                <input type="number" id="orderShippingUSD" value="${order?.shippingUSD || settings.factoryShipping}" step="0.01">
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Доп. разходи (BGN):</label>
-                                <input type="number" id="orderExtrasBGN" value="${order?.extrasBGN || 0}" step="0.01">
-                            </div>
-                            <div class="form-group">
-                                <label>Продажна цена (BGN):</label>
-                                <input type="number" id="orderSellBGN" value="${order?.sellBGN || ''}" step="0.01">
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Статус:</label>
-                                <select id="orderStatus">
-                                    <option value="Очакван" ${order?.status === 'Очакван' ? 'selected' : ''}>Очакван</option>
-                                    <option value="Доставен" ${order?.status === 'Доставен' ? 'selected' : ''}>Доставен</option>
-                                    <option value="Свободен" ${order?.status === 'Свободен' ? 'selected' : ''}>Свободен</option>
-                                    <option value="Други" ${order?.status === 'Други' ? 'selected' : ''}>Други</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="orderFullSet" ${order?.fullSet ? 'checked' : ''}>
-                                    Пълен сет
-                                </label>
-                            </div>
-                        </div>
-                        
                         <div class="form-group">
-                            <label>Бележки:</label>
-                            <textarea id="orderNotes" rows="3">${order?.notes || ''}</textarea>
+                            <label>Източник:</label>
+                            <select id="orderOrigin" required>
+                                ${settings.origins.map(o => `
+                                    <option value="${o}" ${formData?.origin === o ? 'selected' : ''}>${o}</option>
+                                `).join('')}
+                            </select>
                         </div>
-                        
-                        <div class="form-actions">
-                            <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
-                            <button type="submit" class="btn primary">
-                                ${isEdit ? 'Запази промените' : 'Добави поръчка'}
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Доставчик:</label>
+                            <select id="orderVendor" required>
+                                ${settings.vendors.map(v => `
+                                    <option value="${v}" ${formData?.vendor === v ? 'selected' : ''}>${v}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Модел:</label>
+                            <input type="text" id="orderModel" value="${formData?.model || ''}" required placeholder="Описание на модела">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Снимка на модела:</label>
+                        <div class="image-upload-area">
+                            <input type="file" id="orderImage" accept="image/*" style="display: none;">
+                            <button type="button" class="btn btn-upload" onclick="document.getElementById('orderImage').click()">
+                                📷 Избери снимка
                             </button>
+                            <div class="hint-text">Или поставете снимка с Ctrl+V</div>
+                            <div id="image-preview" class="image-preview">
+                                ${formData?.imageData ? `
+                                    <img src="${formData.imageData}" class="preview-img">
+                                    <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
+                                ` : '<div class="no-image">Няма избрана снимка</div>'}
+                            </div>
                         </div>
-                    </form>
-                </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Доставна цена (USD):</label>
+                            <input type="number" id="orderCostUSD" value="${formData?.costUSD || ''}" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Доставка (USD):</label>
+                            <input type="number" id="orderShippingUSD" value="${formData?.shippingUSD || settings.factoryShipping}" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Доп. разходи (BGN):</label>
+                            <input type="number" id="orderExtrasBGN" value="${formData?.extrasBGN || 0}" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Продажна цена (BGN):</label>
+                            <input type="number" id="orderSellBGN" value="${formData?.sellBGN || ''}" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Статус:</label>
+                            <select id="orderStatus">
+                                <option value="Очакван" ${formData?.status === 'Очакван' ? 'selected' : ''}>Очакван</option>
+                                <option value="Доставен" ${formData?.status === 'Доставен' ? 'selected' : ''}>Доставен</option>
+                                <option value="Свободен" ${formData?.status === 'Свободен' ? 'selected' : ''}>Свободен</option>
+                                <option value="Други" ${formData?.status === 'Други' ? 'selected' : ''}>Други</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="orderFullSet" ${formData?.fullSet ? 'checked' : ''}>
+                                Пълен сет
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Бележки:</label>
+                        <textarea id="orderNotes" rows="3">${formData?.notes || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="submit" class="btn primary">
+                            ${isEdit ? 'Запази промените' :
+            isDuplicate ? 'Създай копие' :
+                'Добави поръчка'}
+                        </button>
+                    </div>
+                </form>
             </div>
-        `;
+        </div>
+    `;
     }
 
     renderClientModal(data) {
@@ -529,18 +545,24 @@ export class ModalsManager {
                 this.modules.orders.getOrders().find(o => o.id === this.currentModal.id)?.imageData : null)
         };
 
+        let result;
         if (this.currentModal.mode === 'edit') {
-            this.modules.orders.update(this.currentModal.id, orderData);
+            result = this.modules.orders.update(this.currentModal.id, orderData);
             this.eventBus.emit('notification:show', { message: 'Поръчката е актуализирана!', type: 'success' });
         } else {
-            this.modules.orders.create(orderData);
-            this.eventBus.emit('notification:show', { message: 'Поръчката е добавена!', type: 'success' });
+            // Both 'create' and 'duplicate' create new orders
+            result = this.modules.orders.create(orderData);
+            const message = this.currentModal.mode === 'duplicate' ?
+                'Копието на поръчката е създадено!' : 'Поръчката е добавена!';
+            this.eventBus.emit('notification:show', { message, type: 'success' });
         }
 
         this.close();
 
-        // Refresh current view
-        if (window.app.ui.currentView?.refresh) {
+        // Използвай smartRefresh ако е достъпно
+        if (window.app.ui.currentView?.smartRefresh) {
+            window.app.ui.currentView.smartRefresh(result);
+        } else if (window.app.ui.currentView?.refresh) {
             window.app.ui.currentView.refresh();
         }
     }

@@ -41,7 +41,7 @@ export class App {
         await this.loadData();
 
         // Създаваме UIManager СЛЕД зареждане на данните
-        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router, this.undoRedo);
+        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router, this.undoRedo);  // Добави undoRedo тук
 
         // Initialize router
         this.router.init();
