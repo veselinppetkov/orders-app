@@ -1,3 +1,4 @@
+// js/core/StorageService.js - ПОПРАВЕНА ВЕРСИЯ
 export class StorageService {
     constructor(prefix = 'orderSystem_') {
         this.prefix = prefix;
@@ -5,10 +6,18 @@ export class StorageService {
 
     save(key, data) {
         try {
-            localStorage.setItem(this.prefix + key, JSON.stringify(data));
+            const jsonStr = JSON.stringify(data);
+            localStorage.setItem(this.prefix + key, jsonStr);
+
+            // Debug информация
+            console.log(`💾 Saved ${key}:`, {
+                size: jsonStr.length,
+                keys: typeof data === 'object' && data ? Object.keys(data).length : 'N/A'
+            });
+
             return true;
         } catch (error) {
-            console.error('Storage save error:', error);
+            console.error(`❌ Storage save error for ${key}:`, error);
             return false;
         }
     }
@@ -16,61 +25,81 @@ export class StorageService {
     load(key) {
         try {
             const rawData = localStorage.getItem(this.prefix + key);
-            if (!rawData) return null;
+            if (!rawData) {
+                console.log(`📂 No data found for key: ${key}`);
+                return null;
+            }
 
             const parsed = JSON.parse(rawData);
 
-            // Специална проверка за monthlyData
+            // Debug информация за monthlyData
             if (key === 'monthlyData' && parsed) {
-                console.log('Loading monthlyData, sample check:', {
-                    hasAugust: !!parsed['2025-08'],
-                    augustOrders: parsed['2025-08']?.orders?.length || 0
+                const months = Object.keys(parsed);
+                const totalOrders = Object.values(parsed).reduce((sum, month) => sum + (month.orders?.length || 0), 0);
+
+                console.log(`📊 Loaded ${key}:`, {
+                    months: months,
+                    totalOrders: totalOrders,
+                    sample: months.length > 0 ? {
+                        month: months[0],
+                        orders: parsed[months[0]]?.orders?.length || 0
+                    } : null
                 });
+            } else {
+                console.log(`📂 Loaded ${key}:`, typeof parsed);
             }
 
             return parsed;
         } catch (error) {
-            console.error('Storage load error for key:', key, error);
+            console.error(`❌ Storage load error for key ${key}:`, error);
             return null;
         }
     }
 
     remove(key) {
         localStorage.removeItem(this.prefix + key);
+        console.log(`🗑️  Removed ${key}`);
     }
 
     clear() {
-        Object.keys(localStorage)
-            .filter(key => key.startsWith(this.prefix))
-            .forEach(key => localStorage.removeItem(key));
+        const keysToRemove = Object.keys(localStorage)
+            .filter(key => key.startsWith(this.prefix));
+
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`🧹 Cleared ${keysToRemove.length} keys with prefix ${this.prefix}`);
     }
 
+    // ПОПРАВЕНА ФУНКЦИЯ за експорт
     async exportData() {
-        // Директно четене от localStorage без load метода
-        const rawMonthlyData = localStorage.getItem(this.prefix + 'monthlyData');
-        const rawClientsData = localStorage.getItem(this.prefix + 'clientsData');
-        const rawSettings = localStorage.getItem(this.prefix + 'settings');
+        console.log('📤 Starting export...');
 
-        const monthlyData = rawMonthlyData ? JSON.parse(rawMonthlyData) : {};
-        const clientsData = rawClientsData ? JSON.parse(rawClientsData) : {};
-        const settings = rawSettings ? JSON.parse(rawSettings) : {};
+        // Използвай load метода за консистентност
+        const monthlyData = this.load('monthlyData') || {};
+        const clientsData = this.load('clientsData') || {};
+        const settings = this.load('settings') || {};
+        const inventory = this.load('inventory') || {};
 
-        // Проверка преди експорт
-        console.log('Export check:', {
-            hasMonthlyData: !!monthlyData['2025-08'],
-            ordersCount: monthlyData['2025-08']?.orders?.length || 0,
-            firstOrder: monthlyData['2025-08']?.orders?.[0]
+        // Зареди допълнителни данни директно (те не минават през load метода)
+        const availableMonths = JSON.parse(localStorage.getItem('orderSystem_availableMonths') || '[]');
+        const currentMonth = localStorage.getItem('orderSystem_currentMonth') || '';
+
+        // Debug информация преди експорт
+        console.log('📋 Export data summary:', {
+            months: Object.keys(monthlyData),
+            totalOrders: Object.values(monthlyData).reduce((sum, month) => sum + (month.orders?.length || 0), 0),
+            totalClients: Object.keys(clientsData).length,
+            currentMonth: currentMonth
         });
 
         const data = {
-            monthlyData: this.load('monthlyData') || {},
-            clientsData: this.load('clientsData') || {},
-            settings: this.load('settings') || {},
-            inventory: this.load('inventory') || {},
-            availableMonths: JSON.parse(localStorage.getItem('orderSystem_availableMonths')) || [],
-            currentMonth: localStorage.getItem('orderSystem_currentMonth') || '',
+            monthlyData,
+            clientsData,
+            settings,
+            inventory,
+            availableMonths,
+            currentMonth,
             exportDate: new Date().toISOString(),
-            version: '1.1'
+            version: '1.2' // Увеличена версия
         };
 
         const jsonStr = JSON.stringify(data, null, 2);
@@ -85,55 +114,109 @@ export class StorageService {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
+        console.log('✅ Export completed successfully');
         return true;
     }
 
+    // ПОДОБРЕНА ФУНКЦИЯ за импорт
     async importData(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
+                    console.log('📥 Starting import...');
                     const data = JSON.parse(e.target.result);
-                    console.log('Importing data:', data);
 
-                    // Validate data structure
-                    if (!data.monthlyData || !data.clientsData || !data.settings) {
-                        throw new Error('Невалиден формат на файла');
+                    // Валидация на структурата
+                    if (!data.monthlyData || typeof data.monthlyData !== 'object') {
+                        throw new Error('Липсват или са невалидни monthlyData');
+                    }
+                    if (!data.clientsData || typeof data.clientsData !== 'object') {
+                        throw new Error('Липсват или са невалидни clientsData');
+                    }
+                    if (!data.settings || typeof data.settings !== 'object') {
+                        throw new Error('Липсват или са невалидни settings');
                     }
 
-                    if (data.availableMonths) {
-                        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(data.availableMonths));
-                    }
+                    // Debug информация за импорта
+                    const importSummary = {
+                        months: Object.keys(data.monthlyData),
+                        totalOrders: Object.values(data.monthlyData).reduce((sum, month) => sum + (month.orders?.length || 0), 0),
+                        totalClients: Object.keys(data.clientsData).length,
+                        currentMonth: data.currentMonth || '',
+                        version: data.version || 'unknown'
+                    };
 
-                    // Log what we're importing
-                    Object.keys(data.monthlyData).forEach(month => {
-                        console.log(`Month ${month}:`, {
-                            orders: data.monthlyData[month].orders?.length || 0,
-                            expenses: data.monthlyData[month].expenses?.length || 0
-                        });
-                    });
+                    console.log('📋 Import data summary:', importSummary);
 
-                    // Clear old data
+                    // ВАЖНО: Изчисти стари данни преди импорт
+                    console.log('🧹 Clearing old data...');
                     localStorage.removeItem(this.prefix + 'monthlyData');
                     localStorage.removeItem(this.prefix + 'clientsData');
                     localStorage.removeItem(this.prefix + 'settings');
+                    localStorage.removeItem(this.prefix + 'inventory');
+                    localStorage.removeItem('orderSystem_currentMonth');
+                    localStorage.removeItem('orderSystem_availableMonths');
 
-                    // Save with proper structure
-                    localStorage.setItem(this.prefix + 'monthlyData', JSON.stringify(data.monthlyData));
-                    localStorage.setItem(this.prefix + 'clientsData', JSON.stringify(data.clientsData));
-                    localStorage.setItem(this.prefix + 'settings', JSON.stringify(data.settings));
+                    // Запази новите данни
+                    console.log('💾 Saving imported data...');
+                    const success1 = this.save('monthlyData', data.monthlyData);
+                    const success2 = this.save('clientsData', data.clientsData);
+                    const success3 = this.save('settings', data.settings);
+                    const success4 = this.save('inventory', data.inventory || {});
 
-                    // Verify save
-                    const saved = JSON.parse(localStorage.getItem(this.prefix + 'monthlyData'));
-                    console.log('Saved monthlyData:', saved);
+                    // Запази допълнителните данни
+                    if (data.availableMonths) {
+                        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(data.availableMonths));
+                    }
+                    if (data.currentMonth) {
+                        localStorage.setItem('orderSystem_currentMonth', data.currentMonth);
+                    }
+
+                    // Проверка че данните са запазени правилно
+                    const verification = this.load('monthlyData');
+                    if (!verification) {
+                        throw new Error('Импортът не беше успешен - данните не са запазени');
+                    }
+
+                    console.log('✅ Import completed successfully');
+                    console.log('🔍 Verification:', {
+                        saved: !!verification,
+                        months: Object.keys(verification),
+                        orders: Object.values(verification).reduce((sum, month) => sum + (month.orders?.length || 0), 0)
+                    });
 
                     resolve(data);
                 } catch (error) {
-                    console.error('Import error:', error);
+                    console.error('❌ Import error:', error);
                     reject(error);
                 }
             };
+
+            reader.onerror = () => {
+                reject(new Error('Грешка при четене на файла'));
+            };
+
             reader.readAsText(file);
         });
+    }
+
+    // НОВА ФУНКЦИЯ за проверка на интегритета на данните
+    checkDataIntegrity() {
+        console.log('🔍 Checking data integrity...');
+
+        const monthlyData = this.load('monthlyData');
+        const currentMonth = localStorage.getItem('orderSystem_currentMonth');
+
+        const report = {
+            hasMonthlyData: !!monthlyData,
+            currentMonth: currentMonth,
+            totalMonths: monthlyData ? Object.keys(monthlyData).length : 0,
+            totalOrders: monthlyData ? Object.values(monthlyData).reduce((sum, month) => sum + (month.orders?.length || 0), 0) : 0,
+            currentMonthHasData: !!(monthlyData && currentMonth && monthlyData[currentMonth])
+        };
+
+        console.log('📊 Data integrity report:', report);
+        return report;
     }
 }

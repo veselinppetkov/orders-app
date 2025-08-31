@@ -8,7 +8,7 @@ import { ExpensesModule } from './modules/ExpensesModule.js';
 import { ReportsModule } from './modules/ReportsModule.js';
 import { SettingsModule } from './modules/SettingsModule.js';
 import { UIManager } from './ui/UIManager.js';
-import {InventoryModule} from "./modules/InventoryModule.js";
+import { InventoryModule } from "./modules/InventoryModule.js";
 
 export class App {
     constructor() {
@@ -27,21 +27,21 @@ export class App {
             reports: new ReportsModule(this.state, this.eventBus),
             settings: new SettingsModule(this.state, this.storage, this.eventBus)
         };
-
-        // UI Manager
-        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router);
     }
 
     async init() {
         console.log('Initializing Order Management System...');
 
-        // Load saved data FIRST
+        // КРИТИЧНО: Зареждаме всички данни ПРЕДИ UIManager
         await this.loadData();
 
-        // Initialize router AFTER data is loaded
+        // Създаваме UIManager СЛЕД зареждане на данните
+        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router);
+
+        // Initialize router
         this.router.init();
 
-        // Initialize UI AFTER everything else
+        // Initialize UI
         this.ui.init();
 
         // Setup global event handlers
@@ -51,36 +51,72 @@ export class App {
     }
 
     async loadData() {
-        // Директно четене без load метода
+        console.log('Loading data from localStorage...');
+
+        // Зареждаме всички данни
         const monthlyDataRaw = localStorage.getItem('orderSystem_monthlyData');
         const clientsDataRaw = localStorage.getItem('orderSystem_clientsData');
+        const inventoryRaw = localStorage.getItem('orderSystem_inventory');
         const settingsRaw = localStorage.getItem('orderSystem_settings');
+        const currentMonthRaw = localStorage.getItem('orderSystem_currentMonth');
 
+        // Парсваме данните
         const monthlyData = monthlyDataRaw ? JSON.parse(monthlyDataRaw) : {};
         const clientsData = clientsDataRaw ? JSON.parse(clientsDataRaw) : {};
-        const settings = settingsRaw ? JSON.parse(settingsRaw) : this.state.get('settings');
+        const inventory = inventoryRaw ? JSON.parse(inventoryRaw) : {};
+        const settings = settingsRaw ? JSON.parse(settingsRaw) : this.getDefaultSettings();
 
-        console.log('Direct load check:', {
-            augustOrders: monthlyData['2025-08']?.orders?.length || 0
+        // ВАЖНО: Запазваме текущия месец
+        const currentMonth = currentMonthRaw || this.getCurrentMonth();
+
+        console.log('Loaded data:', {
+            currentMonth,
+            monthlyDataKeys: Object.keys(monthlyData),
+            ordersInCurrentMonth: monthlyData[currentMonth]?.orders?.length || 0
         });
 
+        // Обновяваме state
         this.state.update({
             monthlyData,
             clientsData,
-            settings
+            inventory,
+            settings,
+            currentMonth
         });
+
+        // Запазваме currentMonth ако не е бил запазен
+        if (!currentMonthRaw) {
+            localStorage.setItem('orderSystem_currentMonth', currentMonth);
+        }
+    }
+
+    getCurrentMonth() {
+        const date = new Date();
+        return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+    }
+
+    getDefaultSettings() {
+        return {
+            usdRate: 1.71,
+            factoryShipping: 1.5,
+            origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
+            vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
+        };
     }
 
     setupEventHandlers() {
-        // Auto-save on data changes
-        this.eventBus.on('order:created', () => this.autoSave());
-        this.eventBus.on('order:updated', () => this.autoSave());
-        this.eventBus.on('order:deleted', () => this.autoSave());
-        this.eventBus.on('client:created', () => this.autoSave());
-        this.eventBus.on('client:updated', () => this.autoSave());
-        this.eventBus.on('client:deleted', () => this.autoSave());
+        const autoSaveEvents = [
+            'order:created', 'order:updated', 'order:deleted',
+            'client:created', 'client:updated', 'client:deleted',
+            'inventory:created', 'inventory:updated', 'inventory:deleted',
+            'expense:created', 'expense:updated', 'expense:deleted',
+            'settings:updated'
+        ];
 
-        // Handle keyboard shortcuts
+        autoSaveEvents.forEach(event => {
+            this.eventBus.on(event, () => this.autoSave());
+        });
+
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
@@ -88,17 +124,42 @@ export class App {
                 this.ui.showNotification('Данните са запазени', 'success');
             }
         });
+
+        window.addEventListener('beforeunload', () => {
+            this.autoSave();
+        });
     }
 
     autoSave() {
-        this.storage.save('monthlyData', this.state.get('monthlyData'));
-        this.storage.save('clientsData', this.state.get('clientsData'));
-        this.storage.save('settings', this.state.get('settings'));
-    }
+        const state = this.state.getState();
 
+        console.log('Auto-saving...', {
+            currentMonth: state.currentMonth,
+            ordersCount: state.monthlyData?.[state.currentMonth]?.orders?.length || 0
+        });
+
+        if (state.monthlyData) {
+            this.storage.save('monthlyData', state.monthlyData);
+        }
+        if (state.clientsData) {
+            this.storage.save('clientsData', state.clientsData);
+        }
+        if (state.inventory) {
+            this.storage.save('inventory', state.inventory);
+        }
+        if (state.settings) {
+            this.storage.save('settings', state.settings);
+        }
+        if (state.currentMonth) {
+            localStorage.setItem('orderSystem_currentMonth', state.currentMonth);
+        }
+        if (state.availableMonths) {
+            localStorage.setItem('orderSystem_availableMonths', JSON.stringify(state.availableMonths));
+        }
+    }
 }
 
-// Initialize app when DOM is ready
+// Initialize
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.app = new App();
@@ -108,4 +169,3 @@ if (document.readyState === 'loading') {
     window.app = new App();
     window.app.init();
 }
-

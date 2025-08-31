@@ -1,3 +1,4 @@
+// js/modules/OrdersModule.js - ПОПРАВЕНА ВЕРСИЯ
 export class OrdersModule {
     constructor(state, storage, eventBus) {
         this.state = state;
@@ -10,9 +11,8 @@ export class OrdersModule {
         const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
 
-        if (!monthlyData[currentMonth]) {
-            monthlyData[currentMonth] = { orders: [], expenses: [] };
-        }
+        // ПОПРАВКА: Осигури че месецът съществува преди добавяне
+        this.ensureMonthExists(currentMonth, monthlyData);
 
         monthlyData[currentMonth].orders.push(order);
 
@@ -20,6 +20,7 @@ export class OrdersModule {
         this.state.set('monthlyData', monthlyData);
         this.eventBus.emit('order:created', order);
 
+        console.log(`Order created for ${currentMonth}:`, order.client);
         return order;
     }
 
@@ -28,12 +29,17 @@ export class OrdersModule {
         const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
 
+        // ПОПРАВКА: Осигури че месецът съществува
+        this.ensureMonthExists(currentMonth, monthlyData);
+
         const index = monthlyData[currentMonth].orders.findIndex(o => o.id === orderId);
         if (index !== -1) {
             monthlyData[currentMonth].orders[index] = order;
             this.storage.save('monthlyData', monthlyData);
             this.state.set('monthlyData', monthlyData);
             this.eventBus.emit('order:updated', order);
+
+            console.log(`Order ${orderId} updated in ${currentMonth}`);
         }
 
         return order;
@@ -43,22 +49,48 @@ export class OrdersModule {
         const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
 
-        monthlyData[currentMonth].orders = monthlyData[currentMonth].orders.filter(o => o.id !== orderId);
+        if (monthlyData[currentMonth] && monthlyData[currentMonth].orders) {
+            monthlyData[currentMonth].orders = monthlyData[currentMonth].orders.filter(o => o.id !== orderId);
 
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-        this.eventBus.emit('order:deleted', orderId);
+            this.storage.save('monthlyData', monthlyData);
+            this.state.set('monthlyData', monthlyData);
+            this.eventBus.emit('order:deleted', orderId);
+
+            console.log(`Order ${orderId} deleted from ${currentMonth}`);
+        }
+    }
+
+    // НОВА ФУНКЦИЯ - осигурява че месецът съществува
+    ensureMonthExists(month, monthlyData) {
+        if (!monthlyData[month]) {
+            console.log(`Creating month structure for orders: ${month}`);
+            monthlyData[month] = { orders: [], expenses: [] };
+        }
+        if (!monthlyData[month].orders) {
+            monthlyData[month].orders = [];
+        }
+        if (!monthlyData[month].expenses) {
+            monthlyData[month].expenses = [];
+        }
     }
 
     getOrders(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
-        return monthlyData[targetMonth]?.orders || [];
+
+        // ПОПРАВКА: Осигури че месецът съществува
+        this.ensureMonthExists(targetMonth, monthlyData);
+
+        const orders = monthlyData[targetMonth]?.orders || [];
+        console.log(`Getting orders for ${targetMonth}:`, orders.length);
+        return orders;
     }
 
     getAllOrders() {
         const monthlyData = this.state.get('monthlyData');
-        return Object.values(monthlyData).flatMap(m => m.orders || []);
+        const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
+        console.log(`Total orders across all months:`, allOrders.length);
+        return allOrders;
     }
 
     prepareOrder(data) {
@@ -75,7 +107,7 @@ export class OrdersModule {
             shippingUSD: parseFloat(data.shippingUSD) || settings.factoryShipping,
             rate: settings.usdRate,
             extrasBGN: parseFloat(data.extrasBGN) || 0,
-            sellBGN: parseFloat(data.sellBGN) || 0, // Ако е празно - 0
+            sellBGN: parseFloat(data.sellBGN) || 0,
             status: data.status || 'Очакван',
             fullSet: data.fullSet || false,
             notes: data.notes || '',

@@ -19,29 +19,49 @@ export class ExpensesModule {
     }
 
     initializeMonth(month) {
-        const monthlyData = this.state.get('monthlyData');
+        const monthlyData = this.state.get('monthlyData') || {};
 
-        // Създай структурата само ако месецът не съществува
+        // КРИТИЧНО: Проверяваме дали месецът вече има данни
+        if (monthlyData[month]?.orders?.length > 0) {
+            console.log(`Month ${month} already has ${monthlyData[month].orders.length} orders, skipping full init`);
+
+            // Само добавяме expenses ако липсват
+            if (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0) {
+                monthlyData[month].expenses = JSON.parse(JSON.stringify(this.defaultExpenses));
+                this.state.set('monthlyData', monthlyData);
+                this.storage.save('monthlyData', monthlyData);
+            }
+            return;
+        }
+
+        // За нов месец
         if (!monthlyData[month]) {
-            monthlyData[month] = { orders: [], expenses: [] };
-        }
+            monthlyData[month] = {
+                orders: [],
+                expenses: JSON.parse(JSON.stringify(this.defaultExpenses))
+            };
 
-        // Добави expenses само ако липсват, БЕЗ да пипаш orders
-        if (!monthlyData[month].expenses) {
-            monthlyData[month].expenses = [];
-        }
-
-        if (monthlyData[month].expenses.length === 0) {
-            monthlyData[month].expenses = JSON.parse(JSON.stringify(this.defaultExpenses));
-            // НЕ запазвай тук - остави state management-а да се грижи
             this.state.set('monthlyData', monthlyData);
+            this.storage.save('monthlyData', monthlyData);
+            console.log(`Initialized new month ${month}`);
+        }
+    }
+
+    // Нов метод САМО за добавяне на expenses
+    addDefaultExpenses(month) {
+        const monthlyData = this.state.get('monthlyData') || {};
+
+        if (monthlyData[month] && (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0)) {
+            monthlyData[month].expenses = JSON.parse(JSON.stringify(this.defaultExpenses));
+            this.state.set('monthlyData', monthlyData);
+            this.storage.save('monthlyData', monthlyData);
+            console.log(`Added default expenses to ${month}`);
         }
     }
 
     getExpenses(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
-        this.initializeMonth(targetMonth);
-        const monthlyData = this.state.get('monthlyData');
+        const monthlyData = this.state.get('monthlyData') || {};
         return monthlyData[targetMonth]?.expenses || [];
     }
 
@@ -49,13 +69,16 @@ export class ExpensesModule {
         const expense = {
             id: Date.now(),
             name: expenseData.name,
-            amount: parseFloat(expenseData.amount) || 0, // Конвертиране към число
+            amount: parseFloat(expenseData.amount) || 0,
             note: expenseData.note || ''
         };
 
         const currentMonth = this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData');
+        const monthlyData = this.state.get('monthlyData') || {};
 
+        if (!monthlyData[currentMonth]) {
+            monthlyData[currentMonth] = { orders: [], expenses: [] };
+        }
         if (!monthlyData[currentMonth].expenses) {
             monthlyData[currentMonth].expenses = [];
         }
@@ -71,36 +94,40 @@ export class ExpensesModule {
 
     delete(expenseId) {
         const currentMonth = this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData');
+        const monthlyData = this.state.get('monthlyData') || {};
 
-        monthlyData[currentMonth].expenses = monthlyData[currentMonth].expenses.filter(e => e.id !== expenseId);
+        if (monthlyData[currentMonth]?.expenses) {
+            monthlyData[currentMonth].expenses = monthlyData[currentMonth].expenses.filter(e => e.id !== expenseId);
 
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-        this.eventBus.emit('expense:deleted', expenseId);
+            this.storage.save('monthlyData', monthlyData);
+            this.state.set('monthlyData', monthlyData);
+            this.eventBus.emit('expense:deleted', expenseId);
+        }
     }
 
     update(expenseId, expenseData) {
         const currentMonth = this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData');
+        const monthlyData = this.state.get('monthlyData') || {};
 
-        const index = monthlyData[currentMonth].expenses.findIndex(e => e.id === expenseId);
-        if (index !== -1) {
-            monthlyData[currentMonth].expenses[index] = {
-                id: expenseId,
-                name: expenseData.name,
-                amount: parseFloat(expenseData.amount) || 0, // Конвертиране към число
-                note: expenseData.note || ''
-            };
+        if (monthlyData[currentMonth]?.expenses) {
+            const index = monthlyData[currentMonth].expenses.findIndex(e => e.id === expenseId);
+            if (index !== -1) {
+                monthlyData[currentMonth].expenses[index] = {
+                    id: expenseId,
+                    name: expenseData.name,
+                    amount: parseFloat(expenseData.amount) || 0,
+                    note: expenseData.note || ''
+                };
 
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
-            this.eventBus.emit('expense:updated', monthlyData[currentMonth].expenses[index]);
+                this.storage.save('monthlyData', monthlyData);
+                this.state.set('monthlyData', monthlyData);
+                this.eventBus.emit('expense:updated', monthlyData[currentMonth].expenses[index]);
+            }
         }
     }
 
     getTotalExpenses(month = null) {
         const expenses = this.getExpenses(month);
-        return expenses.reduce((sum, e) => sum + e.amount, 0);
+        return expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
     }
 }

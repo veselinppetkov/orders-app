@@ -7,50 +7,102 @@ export class UIManager {
         this.eventBus = eventBus;
         this.router = router;
         this.currentView = null;
-        this.availableMonths = this.loadAvailableMonths();
+
+        // Инициализираме месеците БЕЗ да пипаме данните
+        this.initializeMonths();
 
         this.modals = new ModalsManager(modules, state, eventBus);
-
         window.app = window.app || {};
         window.app.ui = this;
-
-        // Initialize months if needed
-        this.ensureCurrentMonth();
-
-
     }
 
-    ensureCurrentMonth() {
-        const currentMonth = this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData');
-
-        if (!monthlyData[currentMonth]) {
-            monthlyData[currentMonth] = { orders: [], expenses: [] };
-            this.state.set('monthlyData', monthlyData);
+    initializeMonths() {
+        // Зареждаме запазените месеци
+        let savedMonths = null;
+        try {
+            const saved = localStorage.getItem('orderSystem_availableMonths');
+            if (saved) {
+                savedMonths = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.error('Error loading months:', e);
         }
 
-        // НЕ извиквайте initializeMonth тук ако вече има данни!
-        if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
-            this.modules.expenses.initializeMonth(currentMonth);
+        // Ако няма, генерираме default
+        if (!savedMonths || savedMonths.length === 0) {
+            savedMonths = this.generateDefaultMonths();
         }
+
+        // Премахваме дубликати
+        const uniqueMonths = [];
+        const seenKeys = new Set();
+
+        for (const month of savedMonths) {
+            if (!seenKeys.has(month.key)) {
+                seenKeys.add(month.key);
+                uniqueMonths.push(month);
+            }
+        }
+
+        // Сортираме
+        uniqueMonths.sort((a, b) => a.key.localeCompare(b.key));
+
+        this.availableMonths = uniqueMonths;
+        this.state.set('availableMonths', uniqueMonths);
+        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(uniqueMonths));
+
+        // НЕ викаме ensureCurrentMonth тук - то ще се извика в init()
+    }
+
+    generateDefaultMonths() {
+        const months = [];
+        const currentDate = new Date();
+
+        for (let i = 3; i >= 0; i--) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+            months.push({
+                key: this.formatMonthKey(date),
+                name: this.formatMonthName(date)
+            });
+        }
+        return months;
     }
 
     init() {
+        // ВАЖНО: Проверяваме месеца СЛЕД като данните са заредени
+        this.ensureCurrentMonth();
+
         this.render();
         this.attachGlobalListeners();
 
-        // Listen for events
         this.eventBus.on('route:change', (view) => this.switchView(view));
         this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
         this.eventBus.on('modal:open', (data) => this.openModal(data));
 
-        // Initial view
         this.switchView('orders');
+    }
+
+    ensureCurrentMonth() {
+        const currentMonth = this.state.get('currentMonth');
+        const monthlyData = this.state.get('monthlyData') || {};
+
+        console.log('Ensuring current month:', currentMonth, 'with orders:', monthlyData[currentMonth]?.orders?.length || 0);
+
+        // НЕ създаваме нова структура ако вече има данни!
+        if (!monthlyData[currentMonth]) {
+            monthlyData[currentMonth] = { orders: [], expenses: [] };
+            this.state.set('monthlyData', monthlyData);
+
+            // Инициализираме expenses САМО за нов месец
+            this.modules.expenses.initializeMonth(currentMonth);
+        } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
+            // Добавяме expenses САМО ако липсват, БЕЗ да пипаме orders
+            this.modules.expenses.addDefaultExpenses(currentMonth);
+        }
     }
 
     render() {
         const app = document.getElementById('app');
-        const months = this.getAvailableMonths();
         const currentMonth = this.state.get('currentMonth');
 
         app.innerHTML = `
@@ -61,7 +113,7 @@ export class UIManager {
                     <div class="month-selector">
                         <label>Избери месец:</label>
                         <select id="monthSelector">
-                            ${months.map(m => `
+                            ${this.availableMonths.map(m => `
                                 <option value="${m.key}" ${m.key === currentMonth ? 'selected' : ''}>
                                     ${m.name}
                                 </option>
@@ -88,27 +140,6 @@ export class UIManager {
         `;
     }
 
-    saveAvailableMonths(months) {
-        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(months));
-    }
-
-    getAvailableMonths() {
-        const months = [];
-        const currentDate = new Date();
-
-        // Last 4 months
-        for (let i = 3; i >= 0; i--) {
-            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-            months.push({
-                key: this.formatMonthKey(date),
-                name: this.formatMonthName(date)
-            });
-        }
-
-        return months;
-    }
-
-
     formatMonthKey(date) {
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -122,34 +153,42 @@ export class UIManager {
     }
 
     attachGlobalListeners() {
-
         document.getElementById('monthSelector')?.addEventListener('change', async (e) => {
-            this.state.set('currentMonth', e.target.value);
-            this.ensureCurrentMonth();
+            const newMonth = e.target.value;
+            this.state.set('currentMonth', newMonth);
+            localStorage.setItem('orderSystem_currentMonth', newMonth);
 
-            // Изчакваме презареждането да завърши
+            // Проверяваме структурата БЕЗ да презаписваме
+            const monthlyData = this.state.get('monthlyData');
+            if (!monthlyData[newMonth]) {
+                monthlyData[newMonth] = { orders: [], expenses: [] };
+                this.state.set('monthlyData', monthlyData);
+                this.modules.expenses.initializeMonth(newMonth);
+            }
+
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
         });
-        // Add month button
+
         document.getElementById('add-month-btn')?.addEventListener('click', async () => {
             const selector = document.getElementById('monthSelector');
-            const lastOption = selector.options[selector.options.length - 1];
-            const lastDate = new Date(lastOption.value + '-01T00:00:00');
+            const lastMonth = this.availableMonths[this.availableMonths.length - 1];
+            const lastDate = new Date(lastMonth.key + '-01');
             const newDate = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 1);
 
             const monthKey = this.formatMonthKey(newDate);
             const monthName = this.formatMonthName(newDate);
 
-            if ([...selector.options].some(opt => opt.value === monthKey)) {
+            if (this.availableMonths.some(m => m.key === monthKey)) {
                 this.showNotification('Този месец вече съществува!', 'error');
                 return;
             }
 
-            const months = this.state.get('availableMonths');
-            months.push({ key: monthKey, name: monthName });
-            this.state.set('availableMonths', months);
-            localStorage.setItem('orderSystem_availableMonths', JSON.stringify(months));
+            const newMonth = { key: monthKey, name: monthName };
+            this.availableMonths.push(newMonth);
+
+            this.state.set('availableMonths', this.availableMonths);
+            localStorage.setItem('orderSystem_availableMonths', JSON.stringify(this.availableMonths));
 
             const option = document.createElement('option');
             option.value = monthKey;
@@ -158,47 +197,39 @@ export class UIManager {
             selector.value = monthKey;
 
             this.state.set('currentMonth', monthKey);
-            this.ensureCurrentMonth();
+            localStorage.setItem('orderSystem_currentMonth', monthKey);
+
+            const monthlyData = this.state.get('monthlyData');
+            monthlyData[monthKey] = { orders: [], expenses: [] };
+            this.state.set('monthlyData', monthlyData);
+
             this.modules.expenses.initializeMonth(monthKey);
 
-            this.availableMonths.push({ key: monthKey, name: monthName });
-            this.saveAvailableMonths(this.availableMonths);
-
-            // Изчакваме презареждането
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
 
             this.showNotification('Нов месец добавен успешно!', 'success');
         });
 
-        // Tab navigation
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 const view = e.target.dataset.view;
-                console.log('Tab clicked:', view); // За дебъг
                 this.router.navigate(view);
             });
         });
     }
 
     async switchView(viewName) {
-        // Update active tab
         document.querySelectorAll('.tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === viewName);
         });
 
-        // Load view dynamically
         try {
-            let ViewClass;
+            const moduleName = viewName === 'inventory' ? 'InventoryView' :
+                viewName.charAt(0).toUpperCase() + viewName.slice(1) + 'View';
 
-            // Специална проверка за inventory
-            if (viewName === 'inventory') {
-                const module = await import('./views/InventoryView.js');
-                ViewClass = module.default;
-            } else {
-                const module = await import(`./views/${viewName.charAt(0).toUpperCase() + viewName.slice(1)}View.js`);
-                ViewClass = module.default;
-            }
+            const module = await import(`./views/${moduleName}.js`);
+            const ViewClass = module.default;
 
             this.currentView = new ViewClass(this.modules, this.state, this.eventBus);
 
@@ -215,6 +246,8 @@ export class UIManager {
 
     showNotification(message, type = 'info') {
         const container = document.getElementById('notification-container');
+        if (!container) return;
+
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.textContent = message;
@@ -224,8 +257,8 @@ export class UIManager {
     }
 
     openModal(data) {
-        // This would open the appropriate modal based on data.type
-        console.log('Modal requested:', data);
-        // Implementation would go here
+        if (this.modals) {
+            this.modals.open(data);
+        }
     }
 }
