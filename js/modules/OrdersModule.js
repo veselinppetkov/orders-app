@@ -8,56 +8,106 @@ export class OrdersModule {
 
     create(orderData) {
         const order = this.prepareOrder(orderData);
-        const currentMonth = this.state.get('currentMonth');
+        const orderMonth = this.getOrderMonth(order.date);
         const monthlyData = this.state.get('monthlyData');
 
-        // ПОПРАВКА: Осигури че месецът съществува преди добавяне
-        this.ensureMonthExists(currentMonth, monthlyData);
+        // Осигури че месецът съществува преди добавяне
+        this.ensureMonthExists(orderMonth, monthlyData);
 
-        monthlyData[currentMonth].orders.push(order);
+        monthlyData[orderMonth].orders.push(order);
 
         this.storage.save('monthlyData', monthlyData);
         this.state.set('monthlyData', monthlyData);
         this.eventBus.emit('order:created', order);
 
-        console.log(`Order created for ${currentMonth}:`, order.client);
+        console.log(`Order created for ${orderMonth}:`, order.client);
         return order;
     }
 
     update(orderId, orderData) {
         const order = this.prepareOrder({ ...orderData, id: orderId });
-        const currentMonth = this.state.get('currentMonth');
+        const newOrderMonth = this.getOrderMonth(order.date);
         const monthlyData = this.state.get('monthlyData');
 
-        // ПОПРАВКА: Осигури че месецът съществува
-        this.ensureMonthExists(currentMonth, monthlyData);
+        // Намираме в кой месец е поръчката сега
+        let currentOrderMonth = null;
+        let orderIndex = -1;
 
-        const index = monthlyData[currentMonth].orders.findIndex(o => o.id === orderId);
-        if (index !== -1) {
-            monthlyData[currentMonth].orders[index] = order;
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
-            this.eventBus.emit('order:updated', order);
-
-            console.log(`Order ${orderId} updated in ${currentMonth}`);
+        // Търсим поръчката във всички месеци
+        for (const [month, data] of Object.entries(monthlyData)) {
+            if (data.orders) {
+                const index = data.orders.findIndex(o => o.id === orderId);
+                if (index !== -1) {
+                    currentOrderMonth = month;
+                    orderIndex = index;
+                    break;
+                }
+            }
         }
 
+        if (currentOrderMonth === null) {
+            console.error(`Order with ID ${orderId} not found in any month`);
+            return null;
+        }
+
+        // Ако месецът е променен, премести поръчката
+        if (currentOrderMonth !== newOrderMonth) {
+            console.log(`Moving order from ${currentOrderMonth} to ${newOrderMonth}`);
+
+            // Премахни от стария месец
+            monthlyData[currentOrderMonth].orders.splice(orderIndex, 1);
+
+            // Осигури че новия месец съществува
+            this.ensureMonthExists(newOrderMonth, monthlyData);
+
+            // Добави в новия месец
+            monthlyData[newOrderMonth].orders.push(order);
+        } else {
+            // Само обнови поръчката в същия месец
+            monthlyData[currentOrderMonth].orders[orderIndex] = order;
+        }
+
+        this.storage.save('monthlyData', monthlyData);
+        this.state.set('monthlyData', monthlyData);
+        this.eventBus.emit('order:updated', order);
+
+        console.log(`Order ${orderId} updated in ${newOrderMonth}`);
         return order;
     }
 
     delete(orderId) {
-        const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
+        let deleted = false;
 
-        if (monthlyData[currentMonth] && monthlyData[currentMonth].orders) {
-            monthlyData[currentMonth].orders = monthlyData[currentMonth].orders.filter(o => o.id !== orderId);
+        // Търсим поръчката във всички месеци
+        for (const [month, data] of Object.entries(monthlyData)) {
+            if (data.orders) {
+                const initialLength = data.orders.length;
+                data.orders = data.orders.filter(o => o.id !== orderId);
 
+                if (data.orders.length < initialLength) {
+                    deleted = true;
+                    console.log(`Order ${orderId} deleted from ${month}`);
+                    break;
+                }
+            }
+        }
+
+        if (deleted) {
             this.storage.save('monthlyData', monthlyData);
             this.state.set('monthlyData', monthlyData);
             this.eventBus.emit('order:deleted', orderId);
-
-            console.log(`Order ${orderId} deleted from ${currentMonth}`);
+        } else {
+            console.warn(`Order ${orderId} not found for deletion`);
         }
+    }
+
+    // НОВА ФУНКЦИЯ - извлича месеца от датата на поръчката
+    getOrderMonth(date) {
+        const orderDate = new Date(date);
+        const year = orderDate.getFullYear();
+        const month = (orderDate.getMonth() + 1).toString().padStart(2, '0');
+        return `${year}-${month}`;
     }
 
     // НОВА ФУНКЦИЯ - осигурява че месецът съществува
@@ -78,7 +128,7 @@ export class OrdersModule {
         const targetMonth = month || this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData');
 
-        // ПОПРАВКА: Осигури че месецът съществува
+        // Осигури че месецът съществува
         this.ensureMonthExists(targetMonth, monthlyData);
 
         const orders = monthlyData[targetMonth]?.orders || [];
@@ -91,6 +141,22 @@ export class OrdersModule {
         const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
         console.log(`Total orders across all months:`, allOrders.length);
         return allOrders;
+    }
+
+    // НОВА ФУНКЦИЯ - намира поръчка по ID във всички месеци
+    findOrderById(orderId) {
+        const monthlyData = this.state.get('monthlyData');
+
+        for (const [month, data] of Object.entries(monthlyData)) {
+            if (data.orders) {
+                const order = data.orders.find(o => o.id === orderId);
+                if (order) {
+                    return { order, month };
+                }
+            }
+        }
+
+        return null;
     }
 
     prepareOrder(data) {

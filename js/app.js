@@ -1,7 +1,9 @@
+// js/app.js - ОБНОВЕНА ВЕРСИЯ С UNDO/REDO
 import { StateManager } from './core/StateManager.js';
 import { StorageService } from './core/StorageService.js';
 import { EventBus } from './core/EventBus.js';
 import { Router } from './core/Router.js';
+import { UndoRedoManager } from './core/UndoRedoManager.js';
 import { OrdersModule } from './modules/OrdersModule.js';
 import { ClientsModule } from './modules/ClientsModule.js';
 import { ExpensesModule } from './modules/ExpensesModule.js';
@@ -27,6 +29,9 @@ export class App {
             reports: new ReportsModule(this.state, this.eventBus),
             settings: new SettingsModule(this.state, this.storage, this.eventBus)
         };
+
+        // Undo/Redo система (добавена)
+        this.undoRedo = new UndoRedoManager(this.state, this.storage, this.eventBus);
     }
 
     async init() {
@@ -36,7 +41,7 @@ export class App {
         await this.loadData();
 
         // Създаваме UIManager СЛЕД зареждане на данните
-        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router);
+        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router, this.undoRedo);
 
         // Initialize router
         this.router.init();
@@ -46,6 +51,9 @@ export class App {
 
         // Setup global event handlers
         this.setupEventHandlers();
+
+        // Добавяме глобален достъп за debugging
+        window.undoRedo = this.undoRedo;
 
         console.log('Application initialized successfully');
     }
@@ -118,6 +126,7 @@ export class App {
         });
 
         document.addEventListener('keydown', (e) => {
+            // Ctrl+S за запазване
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
                 this.autoSave();

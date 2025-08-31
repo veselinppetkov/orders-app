@@ -108,8 +108,28 @@ export class UIManager {
         app.innerHTML = `
             <div class="container">
                 <header class="header">
-                    <h1>📦 Система за управление на поръчки</h1>
-                    <p>Професионално решение за следене на вашите поръчки</p>
+                    <div class="header-content">
+                        <div class="header-title">
+                            <h1>📦 Система за управление на поръчки</h1>
+                            <p>Професионално решение за следене на вашите поръчки</p>
+                        </div>
+                        
+                        <!-- Undo/Redo бутони -->
+                        <div class="undo-redo-controls">
+                            <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
+                                <span class="btn-icon">↩️</span>
+                                <span class="btn-text">Undo</span>
+                            </button>
+                            <button class="redo-btn" id="redo-btn" title="Повторение (Ctrl+Shift+Z)">
+                                <span class="btn-icon">↪️</span>
+                                <span class="btn-text">Redo</span>
+                            </button>
+                            <div class="undo-info" id="undo-info">
+                                <span id="undo-count">0</span> / <span id="redo-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="month-selector">
                         <label>Избери месец:</label>
                         <select id="monthSelector">
@@ -138,27 +158,56 @@ export class UIManager {
             <div id="modal-container"></div>
             <div id="notification-container"></div>
         `;
+
+        // Обновяваме състоянието на бутоните
+        this.updateUndoRedoButtons();
     }
 
-    formatMonthKey(date) {
-        const year = date.getFullYear();
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        return `${year}-${month}`;
-    }
+    updateUndoRedoButtons() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        const undoCount = document.getElementById('undo-count');
+        const redoCount = document.getElementById('redo-count');
 
-    formatMonthName(date) {
-        const months = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
-            'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
-        return `${months[date.getMonth()]} ${date.getFullYear()}`;
+        if (this.undoRedo) {
+            const canUndo = this.undoRedo.canUndo();
+            const canRedo = this.undoRedo.canRedo();
+
+            // Обновяваме бутоните
+            if (undoBtn) {
+                undoBtn.disabled = !canUndo;
+                undoBtn.classList.toggle('disabled', !canUndo);
+            }
+
+            if (redoBtn) {
+                redoBtn.disabled = !canRedo;
+                redoBtn.classList.toggle('disabled', !canRedo);
+            }
+
+            // Обновяваме брояча
+            if (undoCount) undoCount.textContent = this.undoRedo.getUndoCount();
+            if (redoCount) redoCount.textContent = this.undoRedo.getRedoCount();
+        }
     }
 
     attachGlobalListeners() {
+        // Undo/Redo бутони
+        document.getElementById('undo-btn')?.addEventListener('click', () => {
+            this.undoRedo.undo();
+            this.updateUndoRedoButtons();
+        });
+
+        document.getElementById('redo-btn')?.addEventListener('click', () => {
+            this.undoRedo.redo();
+            this.updateUndoRedoButtons();
+        });
+
+        // Останалите съществуващи listeners...
         document.getElementById('monthSelector')?.addEventListener('change', async (e) => {
             const newMonth = e.target.value;
             this.state.set('currentMonth', newMonth);
             localStorage.setItem('orderSystem_currentMonth', newMonth);
 
-            // Проверяваме структурата БЕЗ да презаписваме
             const monthlyData = this.state.get('monthlyData');
             if (!monthlyData[newMonth]) {
                 monthlyData[newMonth] = { orders: [], expenses: [] };
@@ -168,6 +217,7 @@ export class UIManager {
 
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
+            this.updateUndoRedoButtons();
         });
 
         document.getElementById('add-month-btn')?.addEventListener('click', async () => {
@@ -209,6 +259,7 @@ export class UIManager {
             await this.switchView(currentViewName);
 
             this.showNotification('Нов месец добавен успешно!', 'success');
+            this.updateUndoRedoButtons();
         });
 
         document.querySelectorAll('.tab').forEach(tab => {
@@ -217,6 +268,104 @@ export class UIManager {
                 this.router.navigate(view);
             });
         });
+
+        // Обновяваме бутоните при всяко действие
+        this.eventBus.on('order:created', () => this.updateUndoRedoButtons());
+        this.eventBus.on('order:updated', () => this.updateUndoRedoButtons());
+        this.eventBus.on('order:deleted', () => this.updateUndoRedoButtons());
+        this.eventBus.on('client:created', () => this.updateUndoRedoButtons());
+        this.eventBus.on('client:updated', () => this.updateUndoRedoButtons());
+        this.eventBus.on('client:deleted', () => this.updateUndoRedoButtons());
+    }
+
+    // Всички останали методи остават същите...
+    initializeMonths() {
+        // Зареждаме запазените месеци
+        let savedMonths = null;
+        try {
+            const saved = localStorage.getItem('orderSystem_availableMonths');
+            if (saved) {
+                savedMonths = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.error('Error loading months:', e);
+        }
+
+        // Ако няма, генерираме default
+        if (!savedMonths || savedMonths.length === 0) {
+            savedMonths = this.generateDefaultMonths();
+        }
+
+        // Премахваме дубликати
+        const uniqueMonths = [];
+        const seenKeys = new Set();
+
+        for (const month of savedMonths) {
+            if (!seenKeys.has(month.key)) {
+                seenKeys.add(month.key);
+                uniqueMonths.push(month);
+            }
+        }
+
+        // Сортираме
+        uniqueMonths.sort((a, b) => a.key.localeCompare(b.key));
+
+        this.availableMonths = uniqueMonths;
+        this.state.set('availableMonths', uniqueMonths);
+        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(uniqueMonths));
+    }
+
+    generateDefaultMonths() {
+        const months = [];
+        const currentDate = new Date();
+
+        for (let i = 3; i >= 0; i--) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+            months.push({
+                key: this.formatMonthKey(date),
+                name: this.formatMonthName(date)
+            });
+        }
+        return months;
+    }
+
+    init() {
+        this.ensureCurrentMonth();
+        this.render();
+        this.attachGlobalListeners();
+
+        this.eventBus.on('route:change', (view) => this.switchView(view));
+        this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
+        this.eventBus.on('modal:open', (data) => this.openModal(data));
+
+        this.switchView('orders');
+    }
+
+    ensureCurrentMonth() {
+        const currentMonth = this.state.get('currentMonth');
+        const monthlyData = this.state.get('monthlyData') || {};
+
+        console.log('Ensuring current month:', currentMonth, 'with orders:', monthlyData[currentMonth]?.orders?.length || 0);
+
+        if (!monthlyData[currentMonth]) {
+            monthlyData[currentMonth] = { orders: [], expenses: [] };
+            this.state.set('monthlyData', monthlyData);
+            this.modules.expenses.initializeMonth(currentMonth);
+        } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
+            this.modules.expenses.addDefaultExpenses(currentMonth);
+        }
+    }
+
+    formatMonthKey(date) {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        return `${year}-${month}`;
+    }
+
+    formatMonthName(date) {
+        const months = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни',
+            'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
+        return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
 
     async switchView(viewName) {

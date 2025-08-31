@@ -194,3 +194,148 @@ tr:hover {
         transform: translateX(0);
     }
 }
+
+/* Undo/Redo CSS - Добавете в основния CSS файл */
+
+/* Header Layout */
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.header-title {
+    flex: 1;
+}
+
+/* Undo/Redo Controls */
+.undo-redo-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 20px;
+}
+
+.undo-btn, .redo-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+    color: #495057;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.undo-btn:hover, .redo-btn:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+.undo-btn:active, .redo-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Disabled state */
+.undo-btn:disabled, .redo-btn:disabled,
+.undo-btn.disabled, .redo-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: #f8f9fa;
+    color: #6c757d;
+}
+
+.undo-btn:disabled:hover, .redo-btn:disabled:hover,
+.undo-btn.disabled:hover, .redo-btn.disabled:hover {
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Button icons */
+.btn-icon {
+    font-size: 16px;
+    display: inline-block;
+}
+
+.btn-text {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Undo info counter */
+.undo-info {
+    font-size: 11px;
+    color: #6c757d;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .undo-redo-controls {
+        margin-left: 0;
+        align-self: flex-start;
+    }
+
+    .btn-text {
+        display: none;
+    }
+
+    .undo-btn, .redo-btn {
+        min-width: 36px;
+        justify-content: center;
+    }
+}
+
+/* Animation when buttons become available */
+.undo-btn:not(.disabled), .redo-btn:not(.disabled) {
+    animation: buttonAvailable 0.3s ease-out;
+}
+
+@keyframes buttonAvailable {
+    0% {
+        opacity: 0.4;
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Tooltip styles for keyboard shortcuts */
+.undo-btn[title]:hover::after,
+.redo-btn[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.undo-btn, .redo-btn {
+    position: relative;
+}
