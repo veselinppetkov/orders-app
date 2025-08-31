@@ -1,4 +1,4 @@
-// js/core/UndoRedoManager.js - ПОДОБРЕНА ВЕРСИЯ С ПО-ДОБРИ НОТИФИКАЦИИ
+// js/core/UndoRedoManager.js - ПОПРАВЕНА ВЕРСИЯ
 export class UndoRedoManager {
     constructor(state, storage, eventBus) {
         this.state = state;
@@ -20,11 +20,12 @@ export class UndoRedoManager {
     }
 
     setupEventListeners() {
+        // ВАЖНО: Слушаме за "before-" събития, които се случват ПРЕДИ промяната
         const trackedEvents = [
-            'order:created', 'order:updated', 'order:deleted',
-            'client:created', 'client:updated', 'client:deleted',
-            'expense:created', 'expense:updated', 'expense:deleted',
-            'inventory:created', 'inventory:updated', 'inventory:deleted'
+            'order:before-created', 'order:before-updated', 'order:before-deleted',
+            'client:before-created', 'client:before-updated', 'client:before-deleted',
+            'expense:before-created', 'expense:before-updated', 'expense:before-deleted',
+            'inventory:before-created', 'inventory:before-updated', 'inventory:before-deleted'
         ];
 
         trackedEvents.forEach(event => {
@@ -53,7 +54,7 @@ export class UndoRedoManager {
     }
 
     saveState(action, data) {
-        // Запазваме текущото състояние ПРЕДИ промяната
+        // Сега запазваме състоянието точно когато се извика (ПРЕДИ промяната)
         const currentState = {
             monthlyData: JSON.parse(JSON.stringify(this.state.get('monthlyData'))),
             clientsData: JSON.parse(JSON.stringify(this.state.get('clientsData'))),
@@ -74,6 +75,14 @@ export class UndoRedoManager {
         this.redoStack = [];
 
         console.log(`💾 State saved for action: ${action} (Stack size: ${this.undoStack.length})`);
+
+        // Debug - показваме какво точно запазваме
+        if (action.includes('order')) {
+            const monthlyData = currentState.monthlyData;
+            const currentMonth = this.state.get('currentMonth');
+            const ordersInCurrentMonth = monthlyData[currentMonth]?.orders?.length || 0;
+            console.log(`📦 Saved state with ${ordersInCurrentMonth} orders in ${currentMonth}`);
+        }
     }
 
     extractActionData(action, data) {
@@ -120,7 +129,7 @@ export class UndoRedoManager {
 
         this.redoStack.push(currentState);
 
-        // Взимаме последното състояние от undo стека
+        // Взимаме последното състояние от undo стека (състоянието ПРЕДИ промяната)
         const previousState = this.undoStack.pop();
 
         // Възстановяваме състоянието
@@ -130,6 +139,13 @@ export class UndoRedoManager {
         this.showUndoNotification(this.getUndoMessage(previousState), 'success');
 
         console.log(`↩️ Undo performed: ${previousState.action}`);
+
+        // Debug
+        const monthlyData = previousState.monthlyData;
+        const currentMonth = this.state.get('currentMonth');
+        const ordersInCurrentMonth = monthlyData[currentMonth]?.orders?.length || 0;
+        console.log(`📦 Restored state with ${ordersInCurrentMonth} orders in ${currentMonth}`);
+
         return true;
     }
 
@@ -164,14 +180,24 @@ export class UndoRedoManager {
     restoreState(state) {
         this.isUndoRedoOperation = true;
 
+        console.log('🔄 Restoring state...');
+
         this.state.set('monthlyData', state.monthlyData);
         this.state.set('clientsData', state.clientsData);
         this.state.set('inventory', state.inventory);
 
-        // Запазваме в localStorage
+        // ВАЖНО: Запазваме в localStorage
         this.storage.save('monthlyData', state.monthlyData);
         this.storage.save('clientsData', state.clientsData);
         this.storage.save('inventory', state.inventory);
+
+        // Проверяваме че е запазено
+        setTimeout(() => {
+            const verification = this.storage.load('monthlyData');
+            const currentMonth = this.state.get('currentMonth');
+            const ordersCount = verification?.[currentMonth]?.orders?.length || 0;
+            console.log(`✅ Verification: ${ordersCount} orders in localStorage for ${currentMonth}`);
+        }, 100);
 
         this.isUndoRedoOperation = false;
 
@@ -223,18 +249,18 @@ export class UndoRedoManager {
 
     getActionText(action) {
         const actionTexts = {
-            'order:created': 'Създаване на поръчка',
-            'order:updated': 'Редактиране на поръчка',
-            'order:deleted': 'Изтриване на поръчка',
-            'client:created': 'Създаване на клиент',
-            'client:updated': 'Редактиране на клиент',
-            'client:deleted': 'Изтриване на клиент',
-            'expense:created': 'Създаване на разход',
-            'expense:updated': 'Редактиране на разход',
-            'expense:deleted': 'Изтриване на разход',
-            'inventory:created': 'Създаване на артикул',
-            'inventory:updated': 'Редактиране на артикул',
-            'inventory:deleted': 'Изтриване на артикул'
+            'order:before-created': 'Създаване на поръчка',
+            'order:before-updated': 'Редактиране на поръчка',
+            'order:before-deleted': 'Изтриване на поръчка',
+            'client:before-created': 'Създаване на клиент',
+            'client:before-updated': 'Редактиране на клиент',
+            'client:before-deleted': 'Изтриване на клиент',
+            'expense:before-created': 'Създаване на разход',
+            'expense:before-updated': 'Редактиране на разход',
+            'expense:before-deleted': 'Изтриване на разход',
+            'inventory:before-created': 'Създаване на артикул',
+            'inventory:before-updated': 'Редактиране на артикул',
+            'inventory:before-deleted': 'Изтриване на артикул'
         };
 
         return actionTexts[action] || 'Неизвестно действие';

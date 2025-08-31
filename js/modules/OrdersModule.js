@@ -1,4 +1,4 @@
-// js/modules/OrdersModule.js - ПОПРАВЕНА ВЕРСИЯ
+// js/modules/OrdersModule.js - ПОПРАВЕНА ВЕРСИЯ С ПРАВИЛНО UNDO/REDO
 export class OrdersModule {
     constructor(state, storage, eventBus) {
         this.state = state;
@@ -11,6 +11,9 @@ export class OrdersModule {
         const orderMonth = this.getOrderMonth(order.date);
         const monthlyData = this.state.get('monthlyData');
 
+        // ВАЖНО: Запазваме състоянието ПРЕДИ промяната
+        this.eventBus.emit('order:before-created', order);
+
         // Осигури че месецът съществува преди добавяне
         this.ensureMonthExists(orderMonth, monthlyData);
 
@@ -18,6 +21,8 @@ export class OrdersModule {
 
         this.storage.save('monthlyData', monthlyData);
         this.state.set('monthlyData', monthlyData);
+
+        // Това е за други listeners (UI refresh и т.н.)
         this.eventBus.emit('order:created', order);
 
         console.log(`Order created for ${orderMonth}:`, order.client);
@@ -28,6 +33,9 @@ export class OrdersModule {
         const order = this.prepareOrder({ ...orderData, id: orderId });
         const newOrderMonth = this.getOrderMonth(order.date);
         const monthlyData = this.state.get('monthlyData');
+
+        // ВАЖНО: Запазваме състоянието ПРЕДИ промяната
+        this.eventBus.emit('order:before-updated', { id: orderId, newData: order });
 
         // Намираме в кой месец е поръчката сега
         let currentOrderMonth = null;
@@ -77,6 +85,24 @@ export class OrdersModule {
 
     delete(orderId) {
         const monthlyData = this.state.get('monthlyData');
+
+        // ВАЖНО: Намираме поръчката и запазваме състоянието ПРЕДИ изтриването
+        let orderToDelete = null;
+        for (const [month, data] of Object.entries(monthlyData)) {
+            if (data.orders) {
+                const order = data.orders.find(o => o.id === orderId);
+                if (order) {
+                    orderToDelete = order;
+                    break;
+                }
+            }
+        }
+
+        if (orderToDelete) {
+            // Запазваме състоянието ПРЕДИ изтриването
+            this.eventBus.emit('order:before-deleted', orderToDelete);
+        }
+
         let deleted = false;
 
         // Търсим поръчката във всички месеци
