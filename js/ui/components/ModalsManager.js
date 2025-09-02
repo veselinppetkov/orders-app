@@ -89,11 +89,11 @@ export class ModalsManager {
         const isDuplicate = data.mode === 'duplicate';
         const order = (isEdit || isDuplicate) ? this.modules.orders.getOrders().find(o => o.id === data.id) : null;
 
-        // За дублиране, създаваме нов обект с reset-нати полета
+// За дублиране, създаваме нов обект с reset-нати полета
         const formData = isDuplicate && order ? {
             ...order,
             id: null, // премахваме ID за да се създаде нов
-            date: new Date().toISOString().split('T')[0], // днешна дата
+            // date: запазва оригиналната дата
             status: 'Очакван', // reset статус
             notes: '', // изчистваме бележките
             imageData: null // премахваме снимката
@@ -465,14 +465,28 @@ export class ModalsManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${orders.map(o => `
-                                        <tr>
-                                            <td>${new Date(o.date).toLocaleDateString('bg-BG')}</td>
-                                            <td>${o.model}</td>
-                                            <td>${o.sellBGN.toFixed(2)} лв</td>
-                                            <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
-                                        </tr>
-                                    `).join('')}
+${orders.map(o => `
+    <tr>
+        <td>${new Date(o.date).toLocaleDateString('bg-BG')}</td>
+        <td class="image-cell">
+            ${o.imageData ?
+            `<img src="${o.imageData}" 
+                     class="model-image" 
+                     alt="${o.model}" 
+                     title="${o.model}"
+                     onclick="window.app.ui.modals.open({
+                         type: 'image',
+                         imageSrc: '${o.imageData}',
+                         title: '${o.model}',
+                         caption: 'Клиент: ${o.client} | Дата: ${new Date(o.date).toLocaleDateString('bg-BG')}'
+                     })">` :
+            `<div class="no-image-placeholder">${o.model}</div>`
+        }
+        </td>
+        <td>${o.sellBGN.toFixed(2)} лв</td>
+        <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
+    </tr>
+`).join('')}
                                 </tbody>
                             </table>
                         ` : '<p>Няма поръчки</p>'}
