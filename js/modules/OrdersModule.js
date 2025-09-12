@@ -222,13 +222,17 @@ export class OrdersModule {
         return order;
     }
 
+// js/modules/OrdersModule.js - Replace the filterOrders method (around line 120)
+
     filterOrders(filters) {
         let orders = this.getOrders();
 
+        // Apply status filter
         if (filters.status && filters.status !== 'all') {
             orders = orders.filter(o => this.getStatusClass(o.status) === filters.status);
         }
 
+        // Apply search filter
         if (filters.search) {
             const term = filters.search.toLowerCase();
             orders = orders.filter(o =>
@@ -238,13 +242,23 @@ export class OrdersModule {
             );
         }
 
+        // Apply origin filter
         if (filters.origin) {
             orders = orders.filter(o => o.origin === filters.origin);
         }
 
+        // Apply vendor filter
         if (filters.vendor) {
             orders = orders.filter(o => o.vendor === filters.vendor);
         }
+
+        // SORT BY DATE - NEWEST FIRST (most recent orders at top)
+        orders.sort((a, b) => {
+            // Date format is YYYY-MM-DD, so string comparison works
+            // For descending order (newest first): b.date - a.date
+            // OLDEST FIRST (chronological order)
+            return a.date.localeCompare(b.date);
+        });
 
         return orders;
     }
