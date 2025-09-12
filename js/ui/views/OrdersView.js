@@ -1,4 +1,5 @@
 import { DebounceUtils } from '../../utils/DebounceUtils.js';
+import { FormatUtils } from '../../utils/FormatUtils.js';
 
 export default class OrdersView {
     constructor(modules, state, eventBus) {
@@ -91,51 +92,63 @@ export default class OrdersView {
         `;
     }
 
+// js/ui/views/OrdersView.js - Complete renderOrderRow method replacement
+
     renderOrderRow(order) {
         const statusClass = this.ordersModule.getStatusClass(order.status);
         const isSelected = this.selectedOrders.has(order.id);
 
         return `
-            <tr data-order-id="${order.id}" class="${isSelected ? 'selected-row' : ''}">
-                <td>
-                    <input type="checkbox" 
-                           class="order-checkbox" 
-                           data-id="${order.id}"
-                           ${isSelected ? 'checked' : ''}>
-                </td>
-                <td>${this.formatDate(order.date)}</td>
-                <td>${order.client}</td>
-                <td>${order.phone || ''}</td>
-                <td><span class="badge" style="background: ${this.getOriginColor(order.origin)}">${order.origin}</span></td>
-                <td>${order.vendor}</td>
-                <td class="image-cell">
-                    ${order.imageData ?
+        <tr data-order-id="${order.id}" class="${isSelected ? 'selected-row' : ''}">
+            <td>
+                <input type="checkbox" 
+                       class="order-checkbox" 
+                       data-id="${order.id}"
+                       ${isSelected ? 'checked' : ''}>
+            </td>
+            <td>${this.formatDate(order.date)}</td>
+            <td>${order.client}</td>
+            <td>${order.phone || ''}</td>
+            <td>
+                <span class="badge origin-badge" 
+                      style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
+                    ${order.origin}
+                </span>
+            </td>
+            <td>${order.vendor}</td>
+            <td class="image-cell">
+                ${order.imageData ?
             `<img src="${order.imageData}" 
-                             class="model-image" 
-                             alt="${order.model}" 
-                             title="${order.model}"
-                             onclick="window.app.ui.modals.open({
-                                 type: 'image',
-                                 imageSrc: '${order.imageData}',
-                                 title: '${order.model}',
-                                 caption: 'Клиент: ${order.client} | Дата: ${this.formatDate(order.date)}'
-                             })">` :
+                         class="model-image" 
+                         alt="${order.model}" 
+                         title="${order.model}"
+                         onclick="window.app.ui.modals.open({
+                             type: 'image',
+                             imageSrc: '${order.imageData}',
+                             title: '${order.model}',
+                             caption: 'Клиент: ${order.client} | Дата: ${this.formatDate(order.date)}'
+                         })">` :
             `<div class="no-image-placeholder">${order.model}</div>`
         }
-                </td>
-                <td><strong>${order.totalBGN.toFixed(2)} лв</strong></td>
-                <td>${order.sellBGN.toFixed(2)} лв</td>
-                <td><strong style="color: ${order.balanceBGN < 0 ? '#dc3545' : '#28a745'}">${order.balanceBGN.toFixed(2)} лв</strong></td>
-                <td>${order.fullSet ? '✅' : '❌'}</td>
-                <td><span class="status-badge ${statusClass}">${order.status}</span></td>
-                <td>${order.notes}</td>
-<td>
-    <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
-    <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
-    <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
-</td>
-            </tr>
-        `;
+            </td>
+            <td><strong>${order.totalBGN.toFixed(2)} лв</strong></td>
+            <td>${order.sellBGN.toFixed(2)} лв</td>
+            <td><strong style="color: ${order.balanceBGN < 0 ? '#dc3545' : '#28a745'}">${order.balanceBGN.toFixed(2)} лв</strong></td>
+            <td>${order.fullSet ? '✅' : '❌'}</td>
+            <td>
+                <span class="status-badge" 
+                      style="background: ${FormatUtils.getStatusColor(order.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(order.status))}">
+                    ${order.status}
+                </span>
+            </td>
+            <td>${order.notes}</td>
+            <td>
+                <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
+                <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
+                <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+            </td>
+        </tr>
+    `;
     }
 
     attachListeners() {
@@ -481,17 +494,5 @@ export default class OrdersView {
 
     formatDate(dateStr) {
         return new Date(dateStr).toLocaleDateString('bg-BG');
-    }
-
-    getOriginColor(origin) {
-        const colors = {
-            'OLX': '#dc3545',
-            'Bazar.bg': '#ff9800',
-            'Instagram': '#667eea',
-            'WhatsApp': '#28a745',
-            'Facebook': '#3b5998',
-            'IG Ads': '#764ba2'
-        };
-        return colors[origin] || '#6c757d';
     }
 }
