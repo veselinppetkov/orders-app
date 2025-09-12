@@ -1,4 +1,4 @@
-// js/app.js - UPDATED VERSION with Supabase integration
+// js/app.js - COMPLETE ASYNC VERSION with Supabase integration
 
 // ADD this import at the top
 import { SupabaseService } from './core/SupabaseService.js';
@@ -25,104 +25,211 @@ export class App {
         this.eventBus = new EventBus();
         this.router = new Router(this.eventBus);
 
-        // ADD: Initialize Supabase service
+        // Initialize Supabase service
         this.supabase = new SupabaseService();
 
-        // Business modules - PASS supabase to modules that need it
-        this.modules = {
-            orders: new OrdersModule(this.state, this.storage, this.eventBus, this.supabase), // ADD supabase param
-            clients: new ClientsModule(this.state, this.storage, this.eventBus, this.supabase), // ADD supabase param
-            inventory: new InventoryModule(this.state, this.storage, this.eventBus),
-            expenses: new ExpensesModule(this.state, this.storage, this.eventBus),
-            reports: new ReportsModule(this.state, this.eventBus),
-            settings: new SettingsModule(this.state, this.storage, this.eventBus, this.supabase) // ADD supabase param
-        };
+        // Business modules - WILL BE INITIALIZED IN init()
+        this.modules = {};
 
-        // Undo/Redo система
-        this.undoRedo = new UndoRedoManager(this.state, this.storage, this.eventBus);
+        // Undo/Redo system - WILL BE INITIALIZED AFTER MODULES
+        this.undoRedo = null;
 
-        // ADD protection properties (keep existing)
+        // Protection properties
         this.unsavedChanges = false;
         this.lastAutoSave = Date.now();
         this.emergencyExportAttempts = 0;
+
+        console.log('🚀 App constructor completed - ready for async initialization');
     }
 
     async init() {
-        console.log('Initializing Order Management System with Supabase...');
+        try {
+            console.log('🚀 Starting complete async application initialization...');
 
-        // MODIFIED: Load data from both sources during transition
-        await this.loadData();
+            // STEP 1: Load data from both sources during transition
+            await this.loadData();
 
-        // Create UIManager
-        this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router, this.undoRedo);
+            // STEP 2: Initialize business modules WITH proper dependencies
+            await this.initializeModules();
 
-        // Initialize router and UI
-        this.router.init();
-        this.ui.init();
+            // STEP 3: Initialize Undo/Redo system AFTER modules exist
+            this.undoRedo = new UndoRedoManager(this.state, this.storage, this.eventBus);
 
-        // Setup global event handlers
-        this.setupEventHandlers();
-        this.setupBrowserProtection(); // Keep existing protection
-        this.startEmergencyProtection();
-        this.setupVisibilityProtection();
+            // STEP 4: Create UIManager with all dependencies
+            this.ui = new UIManager(this.modules, this.state, this.eventBus, this.router, this.undoRedo);
 
-        // Add global access for debugging
-        window.undoRedo = this.undoRedo;
-        window.supabase = this.supabase; // ADD: Global access to supabase
+            // STEP 5: Initialize router and UI
+            this.router.init();
+            await this.ui.init(); // UI init is now async
 
-        console.log('Application initialized successfully with Supabase integration');
+            // STEP 6: Setup global event handlers and protection
+            this.setupEventHandlers();
+            this.setupBrowserProtection();
+            this.startEmergencyProtection();
+            this.setupVisibilityProtection();
+
+            // STEP 7: Add global access for debugging
+            window.undoRedo = this.undoRedo;
+            window.supabase = this.supabase;
+
+            console.log('✅ Application initialized successfully with complete async support');
+
+        } catch (error) {
+            console.error('❌ Critical error during app initialization:', error);
+            this.handleInitializationError(error);
+        }
+    }
+
+    async initializeModules() {
+        console.log('🔧 Initializing business modules with async support...');
+
+        // Initialize modules in dependency order
+        this.modules = {
+            // Core modules (no dependencies)
+            orders: new OrdersModule(this.state, this.storage, this.eventBus, this.supabase),
+            clients: new ClientsModule(this.state, this.storage, this.eventBus, this.supabase),
+            inventory: new InventoryModule(this.state, this.storage, this.eventBus),
+            expenses: new ExpensesModule(this.state, this.storage, this.eventBus),
+            settings: new SettingsModule(this.state, this.storage, this.eventBus, this.supabase),
+        };
+
+        // Reports module DEPENDS ON orders module - initialize after
+        this.modules.reports = new ReportsModule(this.state, this.eventBus, this.modules.orders);
+
+        console.log('✅ All business modules initialized with proper dependencies');
     }
 
     async loadData() {
-        console.log('Loading data from localStorage and Supabase...');
+        console.log('📂 Loading data from localStorage and Supabase...');
 
-        // PHASE 1: Load from localStorage (existing data)
-        const monthlyDataLocal = localStorage.getItem('orderSystem_monthlyData');
-        const clientsDataLocal = localStorage.getItem('orderSystem_clientsData');
-        const inventoryLocal = localStorage.getItem('orderSystem_inventory');
-        const settingsLocal = localStorage.getItem('orderSystem_settings');
-        const currentMonthLocal = localStorage.getItem('orderSystem_currentMonth');
-
-        // Parse localStorage data
-        const monthlyData = monthlyDataLocal ? JSON.parse(monthlyDataLocal) : {};
-        const clientsData = clientsDataLocal ? JSON.parse(clientsDataLocal) : {};
-        const inventory = inventoryLocal ? JSON.parse(inventoryLocal) : {};
-        const currentMonth = currentMonthLocal || this.getCurrentMonth();
-
-        // PHASE 2: Load settings from Supabase (they might be different/updated)
-        let settings;
         try {
-            settings = await this.supabase.getSettings();
-            console.log('✅ Settings loaded from Supabase');
+            // PHASE 1: Load from localStorage (existing data)
+            const monthlyDataLocal = localStorage.getItem('orderSystem_monthlyData');
+            const clientsDataLocal = localStorage.getItem('orderSystem_clientsData');
+            const inventoryLocal = localStorage.getItem('orderSystem_inventory');
+            const settingsLocal = localStorage.getItem('orderSystem_settings');
+            const currentMonthLocal = localStorage.getItem('orderSystem_currentMonth');
+
+            // Parse localStorage data
+            const monthlyData = monthlyDataLocal ? JSON.parse(monthlyDataLocal) : {};
+            const clientsData = clientsDataLocal ? JSON.parse(clientsDataLocal) : {};
+            const inventory = inventoryLocal ? JSON.parse(inventoryLocal) : {};
+            const currentMonth = currentMonthLocal || this.getCurrentMonth();
+
+            // PHASE 2: Try to load settings from Supabase
+            let settings;
+            try {
+                console.log('⚙️ Attempting to load settings from Supabase...');
+
+                // Create temporary settings module to test Supabase connection
+                const tempSettingsModule = new SettingsModule(this.state, this.storage, this.eventBus, this.supabase);
+                settings = await tempSettingsModule.getSettings();
+
+                console.log('✅ Settings loaded from Supabase successfully');
+            } catch (error) {
+                console.warn('⚠️ Supabase settings failed, using localStorage fallback:', error.message);
+                settings = settingsLocal ? JSON.parse(settingsLocal) : this.getDefaultSettings();
+            }
+
+            console.log('📊 Data loading summary:', {
+                currentMonth,
+                monthlyDataKeys: Object.keys(monthlyData),
+                ordersInCurrentMonth: monthlyData[currentMonth]?.orders?.length || 0,
+                clientsCount: Object.keys(clientsData).length,
+                inventoryItems: Object.keys(inventory).length,
+                settingsSource: settings ? (settings.loadedFromSupabase ? 'supabase' : 'localStorage') : 'default'
+            });
+
+            // Update state with combined data
+            this.state.update({
+                monthlyData,
+                clientsData,
+                inventory,
+                settings,
+                currentMonth
+            });
+
+            // Save currentMonth if not saved
+            if (!currentMonthLocal) {
+                localStorage.setItem('orderSystem_currentMonth', currentMonth);
+            }
+
+            console.log('✅ Data loading completed successfully');
+
         } catch (error) {
-            console.warn('⚠️ Supabase settings failed, using localStorage:', error);
-            settings = settingsLocal ? JSON.parse(settingsLocal) : this.getDefaultSettings();
-        }
+            console.error('❌ Critical error during data loading:', error);
 
-        console.log('Loaded data summary:', {
-            currentMonth,
-            monthlyDataKeys: Object.keys(monthlyData),
-            ordersInCurrentMonth: monthlyData[currentMonth]?.orders?.length || 0,
-            clientsCount: Object.keys(clientsData).length,
-            settingsSource: settings ? 'supabase' : 'localStorage'
-        });
+            // Fallback to minimal state
+            this.state.update({
+                monthlyData: {},
+                clientsData: {},
+                inventory: {},
+                settings: this.getDefaultSettings(),
+                currentMonth: this.getCurrentMonth()
+            });
 
-        // Update state with combined data
-        this.state.update({
-            monthlyData,
-            clientsData,
-            inventory,
-            settings,
-            currentMonth
-        });
-
-        // Save currentMonth if not saved
-        if (!currentMonthLocal) {
-            localStorage.setItem('orderSystem_currentMonth', currentMonth);
+            throw new Error(`Data loading failed: ${error.message}`);
         }
     }
 
-    // Keep all existing methods unchanged...
+    handleInitializationError(error) {
+        console.error('💥 Application initialization failed:', error);
+
+        // Show critical error message to user
+        document.body.innerHTML = `
+            <div class="critical-error">
+                <h1>🚨 Application Initialization Failed</h1>
+                <p><strong>Error:</strong> ${error.message}</p>
+                <p>The application encountered a critical error during startup.</p>
+                
+                <div class="error-actions">
+                    <button onclick="window.location.reload()" class="btn danger">
+                        🔄 Reload Application
+                    </button>
+                    <button onclick="window.app.exportEmergencyData()" class="btn warning">
+                        📤 Emergency Data Export
+                    </button>
+                    <button onclick="localStorage.clear(); window.location.reload()" class="btn secondary">
+                        🗑️ Clear Data & Restart
+                    </button>
+                </div>
+                
+                <details style="margin-top: 20px;">
+                    <summary>Technical Details</summary>
+                    <pre style="background: #f5f5f5; padding: 10px; margin-top: 10px; font-size: 12px;">${error.stack}</pre>
+                </details>
+            </div>
+        `;
+    }
+
+    exportEmergencyData() {
+        try {
+            const emergencyData = {
+                localStorage: { ...localStorage },
+                state: this.state ? this.state.getState() : {},
+                timestamp: new Date().toISOString(),
+                error: 'Emergency export due to initialization failure'
+            };
+
+            const dataStr = JSON.stringify(emergencyData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `emergency_backup_${Date.now()}.json`;
+            a.click();
+
+            URL.revokeObjectURL(url);
+
+            alert('Emergency data exported successfully!');
+        } catch (error) {
+            console.error('❌ Emergency export failed:', error);
+            alert('Emergency export failed. Please copy your localStorage data manually.');
+        }
+    }
+
+    // Keep all existing utility methods unchanged...
     getCurrentMonth() {
         const date = new Date();
         return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
@@ -136,9 +243,6 @@ export class App {
             vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
         };
     }
-
-    // Keep all your existing methods (setupEventHandlers, autoSave, protection methods, etc.)
-    // ... rest of existing methods remain exactly the same ...
 
     setupEventHandlers() {
         const autoSaveEvents = [
@@ -169,32 +273,64 @@ export class App {
     autoSave() {
         const state = this.state.getState();
 
-        console.log('Auto-saving...', {
+        console.log('💾 Auto-saving application state...', {
             currentMonth: state.currentMonth,
             ordersCount: state.monthlyData?.[state.currentMonth]?.orders?.length || 0
         });
 
-        if (state.monthlyData) {
-            this.storage.save('monthlyData', state.monthlyData);
-        }
-        if (state.clientsData) {
-            this.storage.save('clientsData', state.clientsData);
-        }
-        if (state.inventory) {
-            this.storage.save('inventory', state.inventory);
-        }
-        if (state.settings) {
-            this.storage.save('settings', state.settings);
-        }
-        if (state.currentMonth) {
-            localStorage.setItem('orderSystem_currentMonth', state.currentMonth);
-        }
-        if (state.availableMonths) {
-            localStorage.setItem('orderSystem_availableMonths', JSON.stringify(state.availableMonths));
+        try {
+            if (state.monthlyData) {
+                this.storage.save('monthlyData', state.monthlyData);
+            }
+            if (state.clientsData) {
+                this.storage.save('clientsData', state.clientsData);
+            }
+            if (state.inventory) {
+                this.storage.save('inventory', state.inventory);
+            }
+            if (state.settings) {
+                this.storage.save('settings', state.settings);
+            }
+            if (state.currentMonth) {
+                localStorage.setItem('orderSystem_currentMonth', state.currentMonth);
+            }
+            if (state.availableMonths) {
+                localStorage.setItem('orderSystem_availableMonths', JSON.stringify(state.availableMonths));
+            }
+
+            console.log('✅ Auto-save completed successfully');
+
+        } catch (error) {
+            console.error('❌ Auto-save failed:', error);
+            this.handleSaveFailure(error);
         }
     }
 
-    // Keep all existing browser protection methods exactly as they are...
+    handleSaveFailure(error) {
+        console.error('🚨 Critical save failure:', error);
+
+        // Attempt emergency export
+        this.emergencyExportAttempts++;
+
+        if (this.emergencyExportAttempts <= 3) {
+            try {
+                this.storage.exportData();
+                console.log('📤 Emergency export completed due to save failure');
+            } catch (exportError) {
+                console.error('❌ Emergency export also failed:', exportError);
+            }
+        }
+
+        // Show user notification
+        if (this.ui && this.ui.showNotification) {
+            this.ui.showNotification(
+                '🚨 Critical: Save failed! Data may be lost. Export recommended immediately!',
+                'error'
+            );
+        }
+    }
+
+    // Keep all existing browser protection methods...
     setupBrowserProtection() {
         window.addEventListener('beforeunload', (e) => {
             const health = this.storage.getStorageHealth();
@@ -210,7 +346,6 @@ export class App {
                 e.returnValue = message;
 
                 this.attemptEmergencyExport();
-
                 return message;
             }
         });
@@ -225,7 +360,6 @@ export class App {
         console.log('🔒 Browser protection activated');
     }
 
-    // ... include all your other existing methods (markUnsaved, emergencyAutoSave, etc.)
     markUnsaved() {
         this.unsavedChanges = true;
         this.lastAutoSave = Date.now();
@@ -244,11 +378,12 @@ export class App {
             console.log('💾 Emergency auto-save completed');
         } catch (error) {
             console.error('❌ Emergency auto-save failed:', error);
-            this.handleCriticalStorageFailure();
+            this.handleSaveFailure(error);
         }
     }
 
     startEmergencyProtection() {
+        // Auto-backup every 10 minutes
         setInterval(() => {
             try {
                 this.createEmergencyBackup();
@@ -257,10 +392,11 @@ export class App {
             }
         }, 10 * 60 * 1000);
 
+        // Health check every 30 seconds
         setInterval(() => {
             const health = this.storage.getStorageHealth();
             if (health.status === 'error') {
-                this.handleCriticalStorageFailure();
+                this.handleSaveFailure(new Error('Storage health check failed'));
             }
         }, 30 * 1000);
     }
@@ -295,8 +431,8 @@ export class App {
             localStorage.setItem(backupKey, JSON.stringify(emergencyData));
 
             this.cleanEmergencyBackups();
-
             console.log('🚨 Emergency backup created:', backupKey);
+
         } catch (error) {
             console.error('❌ Emergency backup creation failed:', error);
         }
@@ -316,24 +452,6 @@ export class App {
             }
         } catch (error) {
             console.warn('⚠️ Emergency backup cleanup failed:', error);
-        }
-    }
-
-    handleCriticalStorageFailure() {
-        this.emergencyExportAttempts++;
-
-        if (this.emergencyExportAttempts <= 3) {
-            try {
-                this.storage.exportData();
-                this.showCriticalWarning();
-                console.log('🚨 Critical storage failure - emergency export attempted');
-            } catch (error) {
-                console.error('❌ Critical failure export failed:', error);
-
-                if (this.emergencyExportAttempts >= 3) {
-                    this.showFinalWarning();
-                }
-            }
         }
     }
 
@@ -409,9 +527,9 @@ export class App {
         alert('EMERGENCY: Raw data displayed. COPY ALL TEXT and save to file manually!');
     }
 
-    urgentExport() {
+    async urgentExport() {
         try {
-            this.storage.exportData();
+            await this.storage.exportData();
             localStorage.setItem('lastManualExport', Date.now().toString());
 
             const warning = document.getElementById('critical-warning');
@@ -429,13 +547,29 @@ export class App {
     }
 }
 
-// Initialize
+// Initialize with complete error handling
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.app = new App();
-        window.app.init();
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            window.app = new App();
+            await window.app.init(); // NOW ASYNC
+        } catch (error) {
+            console.error('💥 Failed to initialize application:', error);
+            if (window.app) {
+                window.app.handleInitializationError(error);
+            }
+        }
     });
 } else {
-    window.app = new App();
-    window.app.init();
+    (async () => {
+        try {
+            window.app = new App();
+            await window.app.init(); // NOW ASYNC
+        } catch (error) {
+            console.error('💥 Failed to initialize application:', error);
+            if (window.app) {
+                window.app.handleInitializationError(error);
+            }
+        }
+    })();
 }

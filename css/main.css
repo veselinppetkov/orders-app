@@ -650,3 +650,297 @@ tr:hover {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Additional CSS for Async Refactoring */
+
+/* Loading and Error States */
+.loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #667eea;
+    animation: pulse 2s infinite;
+}
+
+.loading-state h3 {
+    margin-bottom: 15px;
+    font-size: 1.5em;
+}
+
+.loading-state p {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.error-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #dc3545;
+}
+
+.error-state h3 {
+    margin-bottom: 15px;
+    color: #dc3545;
+}
+
+.error-state .btn {
+    margin-top: 20px;
+}
+
+/* Empty States */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state h3 {
+    margin-bottom: 15px;
+    color: #495057;
+}
+
+.empty-state .btn {
+    margin-top: 20px;
+}
+
+/* Critical Error Styles */
+.critical-error {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #dc3545;
+    color: white;
+    padding: 40px;
+    z-index: 10000;
+    overflow-y: auto;
+}
+
+.critical-error h1 {
+    margin-bottom: 20px;
+}
+
+.error-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.error-actions .btn {
+    background: white;
+    color: #dc3545;
+    border: 2px solid white;
+}
+
+.error-actions .btn:hover {
+    background: #f8f9fa;
+}
+
+/* Enhanced Report Tables */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+.report-table th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.report-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.report-table .total-row {
+    background: #f8f9fa;
+    font-weight: 600;
+    border-top: 2px solid #667eea;
+}
+
+.report-table .profit-positive {
+    color: #28a745;
+}
+
+.report-table .profit-negative {
+    color: #dc3545;
+}
+
+.rank-cell .rank {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #6c757d;
+    color: white;
+    text-align: center;
+    line-height: 24px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.rank-cell .rank.top-rank {
+    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+    color: #333;
+}
+
+.no-data {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Enhanced Expense Items */
+.expense-item.default-expense {
+    border-left: 4px solid #17a2b8;
+}
+
+.expense-item.custom-expense {
+    border-left: 4px solid #28a745;
+}
+
+.expense-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.expense-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.expense-badge.default {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.expense-badge.custom {
+    background: #d4edda;
+    color: #155724;
+}
+
+.expense-stats {
+    margin-top: 8px;
+}
+
+.total-info {
+    margin-top: 10px;
+    color: #6c757d;
+    font-size: 14px;
+}
+
+/* Enhanced Insights */
+.expenses-insights {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 15px;
+}
+
+.insights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.insight-card {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+}
+
+.insight-label {
+    font-size: 12px;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+}
+
+.insight-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Enhanced Inventory */
+.ordered-control input {
+    width: 60px;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.inventory-table tr.out-of-stock {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+.inventory-table tr.low-stock {
+    background: rgba(255, 193, 7, 0.1);
+}
+
+.inventory-table tr.in-stock {
+    background: rgba(40, 167, 69, 0.05);
+}
+
+/* Report Actions */
+.report-actions {
+    margin-top: 30px;
+    text-align: center;
+}
+
+.report-actions .btn {
+    margin: 0 10px;
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Mobile Responsiveness for New Elements */
+@media (max-width: 768px) {
+    .error-actions {
+        flex-direction: column;
+    }
+
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .critical-error {
+        padding: 20px;
+    }
+
+    .loading-state, .error-state, .empty-state {
+        padding: 40px 20px;
+    }
+}

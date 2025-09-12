@@ -16,24 +16,36 @@ export default class OrdersView {
             origin: '',
             vendor: ''
         };
-        this.selectedOrders = new Set(); // За bulk операции
+        this.selectedOrders = new Set(); // For bulk operations
     }
 
     async render() {
-        const stats = this.reportsModule.getMonthlyStats();
-        const orders = await this.ordersModule.filterOrders(this.filters); // NOW ASYNC
+        try {
+            // ALL DATA LOADING IS NOW ASYNC
+            const stats = await this.reportsModule.getMonthlyStats();
+            const orders = await this.ordersModule.filterOrders(this.filters);
 
-        return `
-        <div class="orders-view">
-            ${this.renderStats(stats)}
-            ${this.renderControls()}
-            ${this.renderBulkActions()}
-            ${this.renderFilters()}
-            ${this.renderTable(orders)}
-        </div>
-    `;
+            return `
+            <div class="orders-view">
+                ${this.renderStats(stats)}
+                ${this.renderControls()}
+                ${this.renderBulkActions()}
+                ${await this.renderFilters()} 
+                ${this.renderTable(orders)}
+            </div>
+        `;
+
+        } catch (error) {
+            console.error('❌ Failed to render orders view:', error);
+            return `
+                <div class="error-state">
+                    <h3>❌ Failed to load orders</h3>
+                    <p>Error: ${error.message}</p>
+                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                </div>
+            `;
+        }
     }
-
 
     renderBulkActions() {
         return `
@@ -69,7 +81,9 @@ export default class OrdersView {
                 <table class="orders-table">
                     <thead>
                         <tr>
-                            <th style="width: 40px;"></th>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all">
+                            </th>
                             <th>Дата</th>
                             <th>Клиент</th>
                             <th>Телефон</th>
@@ -92,8 +106,6 @@ export default class OrdersView {
             </div>
         `;
     }
-
-// js/ui/views/OrdersView.js - Complete renderOrderRow method replacement
 
     renderOrderRow(order) {
         const statusClass = this.ordersModule.getStatusClass(order.status);
@@ -153,10 +165,8 @@ export default class OrdersView {
     }
 
     attachListeners() {
-        // Existing listeners...
+        // All existing listeners made async
         this.attachExistingListeners();
-
-        // Bulk operation listeners
         this.attachBulkListeners();
     }
 
@@ -189,18 +199,17 @@ export default class OrdersView {
             });
         });
 
-        // ДОБАВЕТЕ ТЕЗИ НОВИ LISTENERS ТУК:
         // Bulk action buttons
-        document.getElementById('apply-bulk-status')?.addEventListener('click', () => {
-            this.applyBulkStatus();
+        document.getElementById('apply-bulk-status')?.addEventListener('click', async () => {
+            await this.applyBulkStatus();
         });
 
         document.getElementById('clear-selection')?.addEventListener('click', () => {
             this.clearSelection();
         });
 
-        document.getElementById('bulk-delete')?.addEventListener('click', () => {
-            this.bulkDelete();
+        document.getElementById('bulk-delete')?.addEventListener('click', async () => {
+            await this.bulkDelete();
         });
     }
 
@@ -267,7 +276,7 @@ export default class OrdersView {
             });
 
             this.selectedOrders.clear();
-            await this.refresh(); // Refresh to show changes
+            await this.refresh();
             this.updateBulkUI();
         }
     }
@@ -285,7 +294,7 @@ export default class OrdersView {
 
             for (const orderId of orderIds) {
                 try {
-                    await this.ordersModule.delete(orderId); // NOW ASYNC
+                    await this.ordersModule.delete(orderId);
                     deleted++;
                 } catch (error) {
                     console.error(`❌ Error deleting order ${orderId}:`, error);
@@ -299,11 +308,10 @@ export default class OrdersView {
                 type: 'success'
             });
 
-            await this.refresh(); // NOW ASYNC
+            await this.refresh();
             this.updateBulkUI();
         }
     }
-
 
     clearSelection() {
         this.selectedOrders.clear();
@@ -312,9 +320,8 @@ export default class OrdersView {
         this.updateBulkUI();
     }
 
-    // Останалите методи остават същите...
+    // All existing listeners made async
     attachExistingListeners() {
-        // Копирайте всички съществуващи listeners тук
         // New order button
         document.getElementById('new-order-btn')?.addEventListener('click', () => {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
@@ -322,31 +329,31 @@ export default class OrdersView {
 
         // Status filters
         document.querySelectorAll('[data-filter-status]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => { // MAKE ASYNC
                 this.filters.status = e.target.dataset.filterStatus;
-                this.refresh();
+                await this.refresh(); // ADD AWAIT
             });
         });
 
-        // Search input
+        // Search input - DEBOUNCED ASYNC
         document.getElementById('searchInput')?.addEventListener('input', (e) => {
             this.filters.search = e.target.value;
-            this.debouncedRefresh();
+            this.debouncedRefresh(); // This calls refresh() which is now async
         });
 
         // Origin filter
-        document.getElementById('filterOrigin')?.addEventListener('change', (e) => {
+        document.getElementById('filterOrigin')?.addEventListener('change', async (e) => { // MAKE ASYNC
             this.filters.origin = e.target.value;
-            this.refresh();
+            await this.refresh(); // ADD AWAIT
         });
 
         // Vendor filter
-        document.getElementById('filterVendor')?.addEventListener('change', (e) => {
+        document.getElementById('filterVendor')?.addEventListener('change', async (e) => { // MAKE ASYNC
             this.filters.vendor = e.target.value;
-            this.refresh();
+            await this.refresh(); // ADD AWAIT
         });
 
-        // Order actions
+        // Order actions - ALL ASYNC
         document.querySelectorAll('[data-action="edit"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const orderId = parseInt(e.target.dataset.id);
@@ -362,12 +369,16 @@ export default class OrdersView {
         });
 
         document.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', async (e) => { // ADD async here
+            btn.addEventListener('click', async (e) => { // MAKE ASYNC
                 const orderId = parseInt(e.target.dataset.id);
                 if (confirm('Сигурни ли сте, че искате да изтриете тази поръчка?')) {
                     try {
-                        await this.ordersModule.delete(orderId); // ADD await
-                        await this.refresh(); // ADD await
+                        await this.ordersModule.delete(orderId); // ADD AWAIT
+                        await this.refresh(); // ADD AWAIT
+                        this.eventBus.emit('notification:show', {
+                            message: 'Поръчката е изтрита успешно!',
+                            type: 'success'
+                        });
                     } catch (error) {
                         console.error('❌ Delete failed:', error);
                         this.eventBus.emit('notification:show', {
@@ -380,8 +391,7 @@ export default class OrdersView {
         });
     }
 
-// js/ui/views/OrdersView.js - Replace the refresh() method
-
+    // COMPLETE ASYNC REFRESH
     async refresh() {
         this.selectedOrders.clear();
         const container = document.getElementById('view-container');
@@ -412,7 +422,7 @@ export default class OrdersView {
         }
     }
 
-// Добави нов метод за smart refresh
+    // Smart refresh for event handling
     async smartRefresh(eventData) {
         if (eventData && eventData.createdInMonth) {
             const currentMonth = this.state.get('currentMonth');
@@ -434,7 +444,7 @@ export default class OrdersView {
             }
         }
 
-        await this.refresh(); // NOW ASYNC
+        await this.refresh();
     }
 
     formatMonth(monthKey) {
@@ -480,30 +490,45 @@ export default class OrdersView {
         `;
     }
 
-    renderFilters() {
-        const settings = this.state.get('settings');
-        return `
-            <div class="filter-section">
-                <div class="filter-group">
-                    <label>Търсене:</label>
-                    <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+    // MAKE FILTERS ASYNC to load settings
+    async renderFilters() {
+        try {
+            const settings = await this.modules.settings.getSettings();
+
+            return `
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Търсене:</label>
+                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                    </div>
+                    <div class="filter-group">
+                        <label>Източник:</label>
+                        <select id="filterOrigin">
+                            <option value="">Всички</option>
+                            ${settings.origins.map(o => `<option value="${o}">${o}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Доставчик:</label>
+                        <select id="filterVendor">
+                            <option value="">Всички</option>
+                            ${settings.vendors.map(v => `<option value="${v}">${v}</option>`).join('')}
+                        </select>
+                    </div>
                 </div>
-                <div class="filter-group">
-                    <label>Източник:</label>
-                    <select id="filterOrigin">
-                        <option value="">Всички</option>
-                        ${settings.origins.map(o => `<option value="${o}">${o}</option>`).join('')}
-                    </select>
+            `;
+        } catch (error) {
+            console.error('❌ Failed to load filter settings:', error);
+            return `
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Търсене:</label>
+                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                    </div>
+                    <div class="error-message">Failed to load filter options</div>
                 </div>
-                <div class="filter-group">
-                    <label>Доставчик:</label>
-                    <select id="filterVendor">
-                        <option value="">Всички</option>
-                        ${settings.vendors.map(v => `<option value="${v}">${v}</option>`).join('')}
-                    </select>
-                </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     formatDate(dateStr) {

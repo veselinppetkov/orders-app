@@ -1,16 +1,19 @@
 export class ReportsModule {
-    constructor(state, eventBus) {
+    constructor(state, eventBus, ordersModule) {  // ADD ordersModule dependency
         this.state = state;
         this.eventBus = eventBus;
+        this.ordersModule = ordersModule;  // NEW: Direct access to orders
     }
 
-    getMonthlyStats(month = null) {
+    async getMonthlyStats(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData');
-        const monthData = monthlyData[targetMonth] || { orders: [], expenses: [] };
 
-        const orders = monthData.orders || [];
-        const expenses = monthData.expenses || [];
+        // GET ORDERS FROM SUPABASE, not localStorage
+        const orders = await this.ordersModule.getOrders(targetMonth);
+
+        // GET EXPENSES from localStorage (still there)
+        const monthlyData = this.state.get('monthlyData');
+        const expenses = monthlyData[targetMonth]?.expenses || [];
 
         const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
         const revenue = orders.reduce((sum, o) => sum + o.sellBGN, 0);
@@ -26,9 +29,12 @@ export class ReportsModule {
         };
     }
 
-    getAllTimeStats() {
+    async getAllTimeStats() {
+        // GET ALL ORDERS from Supabase
+        const allOrders = await this.ordersModule.getAllOrders();
+
+        // GET ALL EXPENSES from localStorage
         const monthlyData = this.state.get('monthlyData');
-        const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
         const allExpenses = Object.values(monthlyData).flatMap(m => m.expenses || []);
 
         const totalRevenue = allOrders.reduce((sum, o) => sum + o.sellBGN, 0);
@@ -45,27 +51,33 @@ export class ReportsModule {
         };
     }
 
-    getReportByOrigin() {
-        const monthlyData = this.state.get('monthlyData');
-        const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
-
+    async getReportByOrigin() {
+        const allOrders = await this.ordersModule.getAllOrders();
         return this.aggregateBy(allOrders, 'origin');
     }
 
-    getReportByVendor() {
-        const monthlyData = this.state.get('monthlyData');
-        const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
-
+    async getReportByVendor() {
+        const allOrders = await this.ordersModule.getAllOrders();
         return this.aggregateBy(allOrders, 'vendor');
     }
 
-    getReportByMonth() {
+    async getReportByMonth() {
+        const allOrders = await this.ordersModule.getAllOrders();
         const monthlyData = this.state.get('monthlyData');
         const report = {};
 
-        Object.entries(monthlyData).forEach(([month, data]) => {
-            const orders = data.orders || [];
-            const expenses = data.expenses || [];
+        // Group orders by month
+        const ordersByMonth = {};
+        allOrders.forEach(order => {
+            const month = order.date.substring(0, 7); // "2024-01"
+            if (!ordersByMonth[month]) ordersByMonth[month] = [];
+            ordersByMonth[month].push(order);
+        });
+
+        // Build report combining orders and expenses
+        Object.keys(ordersByMonth).forEach(month => {
+            const orders = ordersByMonth[month];
+            const expenses = monthlyData[month]?.expenses || [];
 
             report[month] = {
                 count: orders.length,
@@ -78,10 +90,8 @@ export class ReportsModule {
         return report;
     }
 
-    getTopClients(limit = 10) {
-        const monthlyData = this.state.get('monthlyData');
-        const allOrders = Object.values(monthlyData).flatMap(m => m.orders || []);
-
+    async getTopClients(limit = 10) {
+        const allOrders = await this.ordersModule.getAllOrders();
         const clientStats = this.aggregateBy(allOrders, 'client');
 
         return Object.entries(clientStats)
@@ -90,6 +100,7 @@ export class ReportsModule {
             .map(([client, stats]) => ({ client, ...stats }));
     }
 
+    // Helper method unchanged
     aggregateBy(orders, field) {
         return orders.reduce((acc, order) => {
             const key = order[field];

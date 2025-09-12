@@ -2,15 +2,15 @@ import {ModalsManager} from "./components/ModalsManager.js";
 import { DataProtectionDashboard } from "./components/DataProtectionDashboard.js";
 
 export class UIManager {
-    constructor(modules, state, eventBus, router, undoRedo) {  // Добави undoRedo параметър
+    constructor(modules, state, eventBus, router, undoRedo) {
         this.modules = modules;
         this.state = state;
         this.eventBus = eventBus;
         this.router = router;
-        this.undoRedo = undoRedo;  // Запази референцията
+        this.undoRedo = undoRedo;
         this.currentView = null;
 
-        // Инициализираме месеците БЕЗ да пипаме данните
+        // Initialize months without touching data
         this.initializeMonths();
 
         this.protectionDashboard = new DataProtectionDashboard(this.modules.orders.storage, eventBus);
@@ -22,7 +22,7 @@ export class UIManager {
     }
 
     initializeMonths() {
-        // Зареждаме запазените месеци
+        // Load saved months
         let savedMonths = null;
         try {
             const saved = localStorage.getItem('orderSystem_availableMonths');
@@ -33,12 +33,12 @@ export class UIManager {
             console.error('Error loading months:', e);
         }
 
-        // Ако няма, генерираме default
+        // Generate default if none exist
         if (!savedMonths || savedMonths.length === 0) {
             savedMonths = this.generateDefaultMonths();
         }
 
-        // Премахваме дубликати
+        // Remove duplicates
         const uniqueMonths = [];
         const seenKeys = new Set();
 
@@ -49,14 +49,12 @@ export class UIManager {
             }
         }
 
-        // Сортираме
+        // Sort by date
         uniqueMonths.sort((a, b) => a.key.localeCompare(b.key));
 
         this.availableMonths = uniqueMonths;
         this.state.set('availableMonths', uniqueMonths);
         localStorage.setItem('orderSystem_availableMonths', JSON.stringify(uniqueMonths));
-
-        // НЕ викаме ensureCurrentMonth тук - то ще се извика в init()
     }
 
     generateDefaultMonths() {
@@ -73,9 +71,9 @@ export class UIManager {
         return months;
     }
 
-    init() {
-        // ВАЖНО: Проверяваме месеца СЛЕД като данните са заредени
-        this.ensureCurrentMonth();
+    async init() {
+        // Check month AFTER data is loaded
+        await this.ensureCurrentMonth();
 
         this.render();
         this.attachGlobalListeners();
@@ -84,7 +82,7 @@ export class UIManager {
         this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
         this.eventBus.on('modal:open', (data) => this.openModal(data));
 
-        this.switchView('orders');
+        await this.switchView('orders');
     }
 
     startDataProtectionMonitoring() {
@@ -103,22 +101,22 @@ export class UIManager {
         }, 5 * 60 * 1000); // 5 minutes
     }
 
-    ensureCurrentMonth() {
+    async ensureCurrentMonth() {
         const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData') || {};
 
         console.log('Ensuring current month:', currentMonth, 'with orders:', monthlyData[currentMonth]?.orders?.length || 0);
 
-        // НЕ създаваме нова структура ако вече има данни!
+        // Don't create new structure if data already exists!
         if (!monthlyData[currentMonth]) {
             monthlyData[currentMonth] = { orders: [], expenses: [] };
             this.state.set('monthlyData', monthlyData);
 
-            // Инициализираме expenses САМО за нов месец
-            this.modules.expenses.initializeMonth(currentMonth);
+            // Initialize expenses ONLY for new month
+            await this.modules.expenses.initializeMonth(currentMonth);
         } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
-            // Добавяме expenses САМО ако липсват, БЕЗ да пипаме orders
-            this.modules.expenses.addDefaultExpenses(currentMonth);
+            // Add expenses ONLY if missing, WITHOUT touching orders
+            await this.modules.expenses.addDefaultExpenses(currentMonth);
         }
     }
 
@@ -202,7 +200,7 @@ export class UIManager {
             const canUndo = this.undoRedo.canUndo();
             const canRedo = this.undoRedo.canRedo();
 
-            // Обновяваме бутоните
+            // Update buttons
             if (undoBtn) {
                 undoBtn.disabled = !canUndo;
                 undoBtn.classList.toggle('disabled', !canUndo);
@@ -213,14 +211,14 @@ export class UIManager {
                 redoBtn.classList.toggle('disabled', !canRedo);
             }
 
-            // Обновяваме брояча
+            // Update counter
             if (undoCount) undoCount.textContent = this.undoRedo.getUndoCount();
             if (redoCount) redoCount.textContent = this.undoRedo.getRedoCount();
         }
     }
 
     attachGlobalListeners() {
-        // Undo/Redo бутони
+        // Undo/Redo buttons
         document.getElementById('undo-btn')?.addEventListener('click', () => {
             this.undoRedo.undo();
             this.updateUndoRedoButtons();
@@ -231,9 +229,14 @@ export class UIManager {
             this.updateUndoRedoButtons();
         });
 
-        // Останалите съществуващи listeners...
+        // Month selector - MAKE ASYNC
         document.getElementById('monthSelector')?.addEventListener('change', async (e) => {
             const newMonth = e.target.value;
+
+            // CLEAR CACHE when switching months
+            this.modules.orders.clearCache();
+            this.modules.clients.clearCache();
+
             this.state.set('currentMonth', newMonth);
             localStorage.setItem('orderSystem_currentMonth', newMonth);
 
@@ -241,7 +244,7 @@ export class UIManager {
             if (!monthlyData[newMonth]) {
                 monthlyData[newMonth] = { orders: [], expenses: [] };
                 this.state.set('monthlyData', monthlyData);
-                this.modules.expenses.initializeMonth(newMonth);
+                await this.modules.expenses.initializeMonth(newMonth);
             }
 
             const currentViewName = this.router.getCurrentView();
@@ -249,6 +252,7 @@ export class UIManager {
             this.updateUndoRedoButtons();
         });
 
+        // Add month button - MAKE ASYNC
         document.getElementById('add-month-btn')?.addEventListener('click', async () => {
             const selector = document.getElementById('monthSelector');
             const lastMonth = this.availableMonths[this.availableMonths.length - 1];
@@ -282,7 +286,7 @@ export class UIManager {
             monthlyData[monthKey] = { orders: [], expenses: [] };
             this.state.set('monthlyData', monthlyData);
 
-            this.modules.expenses.initializeMonth(monthKey);
+            await this.modules.expenses.initializeMonth(monthKey);
 
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
@@ -291,98 +295,21 @@ export class UIManager {
             this.updateUndoRedoButtons();
         });
 
+        // Tab navigation
         document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
+            tab.addEventListener('click', async (e) => {
                 const view = e.target.dataset.view;
                 this.router.navigate(view);
             });
         });
 
-        // Обновяваме бутоните при всяко действие
+        // Update buttons on events
         this.eventBus.on('order:created', () => this.updateUndoRedoButtons());
         this.eventBus.on('order:updated', () => this.updateUndoRedoButtons());
         this.eventBus.on('order:deleted', () => this.updateUndoRedoButtons());
         this.eventBus.on('client:created', () => this.updateUndoRedoButtons());
         this.eventBus.on('client:updated', () => this.updateUndoRedoButtons());
         this.eventBus.on('client:deleted', () => this.updateUndoRedoButtons());
-    }
-
-    // Всички останали методи остават същите...
-    initializeMonths() {
-        // Зареждаме запазените месеци
-        let savedMonths = null;
-        try {
-            const saved = localStorage.getItem('orderSystem_availableMonths');
-            if (saved) {
-                savedMonths = JSON.parse(saved);
-            }
-        } catch (e) {
-            console.error('Error loading months:', e);
-        }
-
-        // Ако няма, генерираме default
-        if (!savedMonths || savedMonths.length === 0) {
-            savedMonths = this.generateDefaultMonths();
-        }
-
-        // Премахваме дубликати
-        const uniqueMonths = [];
-        const seenKeys = new Set();
-
-        for (const month of savedMonths) {
-            if (!seenKeys.has(month.key)) {
-                seenKeys.add(month.key);
-                uniqueMonths.push(month);
-            }
-        }
-
-        // Сортираме
-        uniqueMonths.sort((a, b) => a.key.localeCompare(b.key));
-
-        this.availableMonths = uniqueMonths;
-        this.state.set('availableMonths', uniqueMonths);
-        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(uniqueMonths));
-    }
-
-    generateDefaultMonths() {
-        const months = [];
-        const currentDate = new Date();
-
-        for (let i = 3; i >= 0; i--) {
-            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-            months.push({
-                key: this.formatMonthKey(date),
-                name: this.formatMonthName(date)
-            });
-        }
-        return months;
-    }
-
-    init() {
-        this.ensureCurrentMonth();
-        this.render();
-        this.attachGlobalListeners();
-
-        this.eventBus.on('route:change', (view) => this.switchView(view));
-        this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
-        this.eventBus.on('modal:open', (data) => this.openModal(data));
-
-        this.switchView('orders');
-    }
-
-    ensureCurrentMonth() {
-        const currentMonth = this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData') || {};
-
-        console.log('Ensuring current month:', currentMonth, 'with orders:', monthlyData[currentMonth]?.orders?.length || 0);
-
-        if (!monthlyData[currentMonth]) {
-            monthlyData[currentMonth] = { orders: [], expenses: [] };
-            this.state.set('monthlyData', monthlyData);
-            this.modules.expenses.initializeMonth(currentMonth);
-        } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
-            this.modules.expenses.addDefaultExpenses(currentMonth);
-        }
     }
 
     formatMonthKey(date) {
@@ -397,13 +324,24 @@ export class UIManager {
         return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
 
-// FIND this method and REPLACE it:
+    // UPDATED: Make view switching completely async
     async switchView(viewName) {
         document.querySelectorAll('.tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === viewName);
         });
 
+        const container = document.getElementById('view-container');
+        if (!container) return;
+
         try {
+            // Show loading state
+            container.innerHTML = `
+                <div class="loading-state">
+                    <h3>📦 Loading ${viewName}...</h3>
+                    <p>Fetching data from database...</p>
+                </div>
+            `;
+
             const moduleName = viewName === 'inventory' ? 'InventoryView' :
                 viewName.charAt(0).toUpperCase() + viewName.slice(1) + 'View';
 
@@ -412,31 +350,32 @@ export class UIManager {
 
             this.currentView = new ViewClass(this.modules, this.state, this.eventBus);
 
-            const container = document.getElementById('view-container');
-            if (container) {
-                // Check if render method is async
-                const renderResult = this.currentView.render();
+            // Always treat render as potentially async
+            const renderResult = this.currentView.render();
+            let content;
 
-                if (renderResult instanceof Promise) {
-                    // Async render - show loading first
-                    container.innerHTML = `
-                    <div class="loading-state">
-                        <h3>Loading...</h3>
-                    </div>
-                `;
+            if (renderResult instanceof Promise) {
+                content = await renderResult;
+            } else {
+                content = renderResult;
+            }
 
-                    const content = await renderResult;
-                    container.innerHTML = content;
-                } else {
-                    // Sync render
-                    container.innerHTML = renderResult;
-                }
+            container.innerHTML = content;
 
+            // Attach listeners
+            if (this.currentView.attachListeners) {
                 this.currentView.attachListeners();
             }
+
         } catch (error) {
-            console.error(`Error loading view ${viewName}:`, error);
-            this.showNotification('Грешка при зареждане на изгледа', 'error');
+            console.error(`❌ Error loading view ${viewName}:`, error);
+            container.innerHTML = `
+                <div class="error-state">
+                    <h3>❌ Failed to load ${viewName}</h3>
+                    <p>Error: ${error.message}</p>
+                    <button onclick="window.app.ui.switchView('${viewName}')" class="btn">🔄 Retry</button>
+                </div>
+            `;
         }
     }
 
@@ -452,15 +391,15 @@ export class UIManager {
         setTimeout(() => notification.remove(), 3000);
     }
 
-    openModal(data) {
+    async openModal(data) {
         if (this.modals) {
-            this.modals.open(data);
+            await this.modals.open(data); // NOW ASYNC
         }
     }
 
-    urgentExport() {
+    async urgentExport() {
         try {
-            this.modules.orders.storage.exportData();
+            await this.modules.orders.storage.exportData();
             localStorage.setItem('lastManualExport', Date.now().toString());
             this.showNotification('📤 Emergency export completed!', 'success');
 
@@ -476,7 +415,7 @@ export class UIManager {
         }
     }
 
-    forceBackup() {
+    async forceBackup() {
         try {
             const criticalKeys = ['monthlyData', 'clientsData', 'settings', 'inventory'];
             let backed = 0;
@@ -534,7 +473,7 @@ export class UIManager {
         container.querySelector('.modal').classList.add('active');
     }
 
-    restoreFromBackup(key, timestamp) {
+    async restoreFromBackup(key, timestamp) {
         if (confirm(`Are you sure you want to restore ${key} from backup created at ${new Date(timestamp).toLocaleString()}?`)) {
             try {
                 const backupKey = `backup_orderSystem_${key}_${timestamp}`;
@@ -548,7 +487,7 @@ export class UIManager {
 
                     // Refresh current view
                     if (this.currentView?.refresh) {
-                        this.currentView.refresh();
+                        await this.currentView.refresh();
                     }
                 } else {
                     throw new Error('Backup not found');

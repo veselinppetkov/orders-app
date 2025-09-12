@@ -26,77 +26,90 @@ export default class SettingsView {
         return text.split('\n').map(s => s.trim()).filter(Boolean);
     }
 
-    render() {
-        const s = (this.settingsModule?.getSettings?.() ?? {});
+    async render() {
+        try {
+            // GET SETTINGS FROM SUPABASE/ASYNC
+            const s = await this.settingsModule.getSettings() || {};
 
-        const usdRate = this._escape(s.usdRate ?? 0);
-        const factoryShipping = this._escape(s.factoryShipping ?? 0);
-        const origins = Array.isArray(s.origins) ? s.origins : (typeof s.origins === 'string' ? s.origins.split('\n') : []);
-        const vendors = Array.isArray(s.vendors) ? s.vendors : (typeof s.vendors === 'string' ? s.vendors.split('\n') : []);
+            const usdRate = this._escape(s.usdRate ?? 0);
+            const factoryShipping = this._escape(s.factoryShipping ?? 0);
+            const origins = Array.isArray(s.origins) ? s.origins : (typeof s.origins === 'string' ? s.origins.split('\n') : []);
+            const vendors = Array.isArray(s.vendors) ? s.vendors : (typeof s.vendors === 'string' ? s.vendors.split('\n') : []);
 
-        return `
-      <div class="settings-view">
-        <h2>⚙️ Настройки на системата</h2>
+            return `
+          <div class="settings-view">
+            <h2>⚙️ Настройки на системата</h2>
 
-        <div class="settings-grid">
-          <div class="settings-card">
-            <h3>💱 Валутен курс</h3>
-            <div class="form-group">
-              <label>Курс USD → BGN:</label>
-              <input type="number" id="usdRate" value="${usdRate}" step="0.01">
+            <div class="settings-grid">
+              <div class="settings-card">
+                <h3>💱 Валутен курс</h3>
+                <div class="form-group">
+                  <label>Курс USD → BGN:</label>
+                  <input type="number" id="usdRate" value="${usdRate}" step="0.01">
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>🚚 Доставка</h3>
+                <div class="form-group">
+                  <label>Стандартна доставка (USD):</label>
+                  <input type="number" id="factoryShipping" value="${factoryShipping}" step="0.1">
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>📍 Източници</h3>
+                <div class="form-group">
+                  <label>Списък (по един на ред):</label>
+                  <textarea id="originsList" rows="8">${this._escape(origins.join('\n'))}</textarea>
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>👥 Доставчици</h3>
+                <div class="form-group">
+                  <label>Списък (по един на ред):</label>
+                  <textarea id="vendorsList" rows="8">${this._escape(vendors.join('\n'))}</textarea>
+                </div>
+              </div>
+            </div>
+
+            <br>
+            <button class="btn success" id="save-settings">💾 Запази настройките</button>
+
+            <div class="settings-card" style="margin-top:30px;border-color:#17a2b8;">
+              <h3>📁 Backup & Restore</h3>
+              <div style="display:flex;gap:15px;flex-wrap:wrap;">
+                <button class="btn info" id="export-data">📤 Експорт данни (JSON)</button>
+                <div>
+                  <input type="file" id="importFile" accept=".json" style="display:none;">
+                  <button class="btn info" id="import-data">📥 Импорт данни (JSON)</button>
+                </div>
+              </div>
+              <p style="margin-top:10px;font-size:12px;color:#6c757d;">
+                Експортирайте всички данни като JSON файл за backup или прехвърляне на друго устройство.
+              </p>
             </div>
           </div>
+        `;
 
-          <div class="settings-card">
-            <h3>🚚 Доставка</h3>
-            <div class="form-group">
-              <label>Стандартна доставка (USD):</label>
-              <input type="number" id="factoryShipping" value="${factoryShipping}" step="0.1">
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>📍 Източници</h3>
-            <div class="form-group">
-              <label>Списък (по един на ред):</label>
-              <textarea id="originsList" rows="8">${this._escape(origins.join('\n'))}</textarea>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>👥 Доставчици</h3>
-            <div class="form-group">
-              <label>Списък (по един на ред):</label>
-              <textarea id="vendorsList" rows="8">${this._escape(vendors.join('\n'))}</textarea>
-            </div>
-          </div>
-        </div>
-
-        <br>
-        <button class="btn success" id="save-settings">💾 Запази настройките</button>
-
-        <div class="settings-card" style="margin-top:30px;border-color:#17a2b8;">
-          <h3>📁 Backup & Restore</h3>
-          <div style="display:flex;gap:15px;flex-wrap:wrap;">
-            <button class="btn info" id="export-data">📤 Експорт данни (JSON)</button>
-            <div>
-              <input type="file" id="importFile" accept=".json" style="display:none;">
-              <button class="btn info" id="import-data">📥 Импорт данни (JSON)</button>
-            </div>
-          </div>
-          <p style="margin-top:10px;font-size:12px;color:#6c757d;">
-            Експортирайте всички данни като JSON файл за backup или прехвърляне на друго устройство.
-          </p>
-        </div>
-      </div>
-    `;
+        } catch (error) {
+            console.error('❌ Failed to load settings:', error);
+            return `
+                <div class="error-state">
+                    <h3>❌ Failed to load settings</h3>
+                    <p>Error: ${error.message}</p>
+                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                </div>
+            `;
+        }
     }
 
     attachListeners() {
         const $ = (id) => document.getElementById(id);
 
-        // Save settings
-        $('save-settings')?.addEventListener('click', () => {
+        // Save settings - MAKE ASYNC
+        $('save-settings')?.addEventListener('click', async () => {
             const settings = {
                 usdRate: this._num($('usdRate')?.value, 0),
                 factoryShipping: this._num($('factoryShipping')?.value, 0),
@@ -105,15 +118,16 @@ export default class SettingsView {
             };
 
             try {
-                this.settingsModule.updateSettings(settings);
+                // ASYNC SETTINGS UPDATE
+                await this.settingsModule.updateSettings(settings);
                 this.eventBus?.emit('notification:show', { message: 'Настройките са запазени!', type: 'success' });
             } catch (err) {
                 console.error(err);
-                this.eventBus?.emit('notification:show', { message: 'Грешка при запазване!', type: 'error' });
+                this.eventBus?.emit('notification:show', { message: 'Грешка при запазване: ' + err.message, type: 'error' });
             }
         });
 
-        // Export data (await to avoid "ignored promise" warning)
+        // Export data - MAKE ASYNC
         $('export-data')?.addEventListener('click', async () => {
             try {
                 await this.storage.exportData();
@@ -170,5 +184,33 @@ export default class SettingsView {
                 e.target.value = '';
             }
         });
+    }
+
+    // ADD ASYNC REFRESH METHOD
+    async refresh() {
+        const container = document.getElementById('view-container');
+        if (container) {
+            // Show loading
+            container.innerHTML = `
+                <div class="loading-state">
+                    <h3>⚙️ Loading settings...</h3>
+                </div>
+            `;
+
+            try {
+                const content = await this.render();
+                container.innerHTML = content;
+                this.attachListeners();
+            } catch (error) {
+                console.error('❌ Failed to refresh settings view:', error);
+                container.innerHTML = `
+                    <div class="error-state">
+                        <h3>❌ Failed to load settings</h3>
+                        <p>Error: ${error.message}</p>
+                        <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                    </div>
+                `;
+            }
+        }
     }
 }

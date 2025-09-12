@@ -37,38 +37,66 @@ export class ModalsManager {
         });
     }
 
-    open(data) {
+    async open(data) {
         this.currentModal = data;
         const container = document.getElementById('modal-container');
 
-        let modalContent = '';
-        switch(data.type) {
-            case 'order':
-                modalContent = this.renderOrderModal(data);
-                break;
-            case 'client':
-                modalContent = this.renderClientModal(data);
-                break;
-            case 'inventory':
-                modalContent = this.renderInventoryModal(data);
-                break;
-            case 'expense':
-                modalContent = this.renderExpenseModal(data);
-                break;
-            case 'image':
-                modalContent = this.renderImageModal(data);
-                break;
-            case 'clientProfile':
-                modalContent = this.renderClientProfileModal(data);
-                break;
-            default:
-                return;
-        }
-
-        container.innerHTML = modalContent;
+        // Show loading state
+        container.innerHTML = `
+            <div class="modal">
+                <div class="modal-content">
+                    <div class="loading-state">
+                        <h3>Loading...</h3>
+                    </div>
+                </div>
+            </div>
+        `;
         container.querySelector('.modal').classList.add('active');
 
-        this.attachModalListeners();
+        try {
+            let modalContent = '';
+            switch(data.type) {
+                case 'order':
+                    modalContent = await this.renderOrderModal(data);
+                    break;
+                case 'client':
+                    modalContent = await this.renderClientModal(data);
+                    break;
+                case 'inventory':
+                    modalContent = this.renderInventoryModal(data);
+                    break;
+                case 'expense':
+                    modalContent = this.renderExpenseModal(data);
+                    break;
+                case 'image':
+                    modalContent = this.renderImageModal(data);
+                    break;
+                case 'clientProfile':
+                    modalContent = await this.renderClientProfileModal(data);
+                    break;
+                default:
+                    this.close();
+                    return;
+            }
+
+            container.innerHTML = modalContent;
+            container.querySelector('.modal').classList.add('active');
+            this.attachModalListeners();
+
+        } catch (error) {
+            console.error('❌ Failed to open modal:', error);
+            container.innerHTML = `
+                <div class="modal">
+                    <div class="modal-content">
+                        <div class="error-state">
+                            <h3>❌ Failed to load modal</h3>
+                            <p>Error: ${error.message}</p>
+                            <button onclick="window.app.ui.modals.close()" class="btn">Close</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     close() {
@@ -84,23 +112,28 @@ export class ModalsManager {
         }
     }
 
-    renderOrderModal(data) {
+    async renderOrderModal(data) {
         const isEdit = data.mode === 'edit';
         const isDuplicate = data.mode === 'duplicate';
-        const order = (isEdit || isDuplicate) ? this.modules.orders.getOrders().find(o => o.id === data.id) : null;
 
-// За дублиране, създаваме нов обект с reset-нати полета
+        // Get order data for edit/duplicate
+        let order = null;
+        if (isEdit || isDuplicate) {
+            const result = await this.modules.orders.findOrderById(data.id);
+            order = result?.order || null;
+        }
+
+        // For duplicate, reset certain fields
         const formData = isDuplicate && order ? {
             ...order,
-            id: null, // премахваме ID за да се създаде нов
-            // date: запазва оригиналната дата
-            status: 'Очакван', // reset статус
-            notes: '', // изчистваме бележките
-            imageData: null // премахваме снимката
+            id: null,
+            status: 'Очакван',
+            notes: '',
+            imageData: null
         } : order;
 
-        const settings = this.state.get('settings');
-        const clients = this.modules.clients.getAllClients();
+        const settings = await this.modules.settings.getSettings();
+        const clients = await this.modules.clients.getAllClients();
 
         return `
         <div class="modal">
@@ -237,10 +270,10 @@ export class ModalsManager {
     `;
     }
 
-    renderClientModal(data) {
+    async renderClientModal(data) {
         const isEdit = data.mode === 'edit';
-        const client = isEdit ? this.modules.clients.getClient(data.id) : null;
-        const settings = this.state.get('settings');
+        const client = isEdit ? await this.modules.clients.getClient(data.id) : null;
+        const settings = await this.modules.settings.getSettings();
 
         return `
             <div class="modal">
@@ -348,7 +381,7 @@ export class ModalsManager {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>${isEdit ? '✏️ Редактиране на кутия' : '📦 Нова кутия'}</h2>
-                    <button class="modal-close" id="close-modal">✕</button>
+                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
                 </div>
                 
                 <form id="inventory-form" class="modal-form">
@@ -388,7 +421,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" id="cancel-btn">Отказ</button>
+                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази' : 'Добави'}
                         </button>
@@ -416,10 +449,10 @@ export class ModalsManager {
     `;
     }
 
-    renderClientProfileModal(data) {
-        const client = this.modules.clients.getClient(data.id);
-        const stats = this.modules.clients.getClientStats(client.name);
-        const orders = this.modules.clients.getClientOrders(client.name);
+    async renderClientProfileModal(data) {
+        const client = await this.modules.clients.getClient(data.id);
+        const stats = await this.modules.clients.getClientStats(client.name);
+        const orders = await this.modules.clients.getClientOrders(client.name);
 
         return `
             <div class="modal">
@@ -465,28 +498,28 @@ export class ModalsManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-${orders.map(o => `
-    <tr>
-        <td>${new Date(o.date).toLocaleDateString('bg-BG')}</td>
-        <td class="image-cell">
-            ${o.imageData ?
+                                    ${orders.map(o => `
+                                        <tr>
+                                            <td>${new Date(o.date).toLocaleDateString('bg-BG')}</td>
+                                            <td class="image-cell">
+                                                ${o.imageData ?
             `<img src="${o.imageData}" 
-                     class="model-image" 
-                     alt="${o.model}" 
-                     title="${o.model}"
-                     onclick="window.app.ui.modals.open({
-                         type: 'image',
-                         imageSrc: '${o.imageData}',
-                         title: '${o.model}',
-                         caption: 'Клиент: ${o.client} | Дата: ${new Date(o.date).toLocaleDateString('bg-BG')}'
-                     })">` :
+                                                         class="model-image" 
+                                                         alt="${o.model}" 
+                                                         title="${o.model}"
+                                                         onclick="window.app.ui.modals.open({
+                                                             type: 'image',
+                                                             imageSrc: '${o.imageData}',
+                                                             title: '${o.model}',
+                                                             caption: 'Клиент: ${o.client} | Дата: ${new Date(o.date).toLocaleDateString('bg-BG')}'
+                                                         })">` :
             `<div class="no-image-placeholder">${o.model}</div>`
         }
-        </td>
-        <td>${o.sellBGN.toFixed(2)} лв</td>
-        <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
-    </tr>
-`).join('')}
+                                            </td>
+                                            <td>${o.sellBGN.toFixed(2)} лв</td>
+                                            <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
+                                        </tr>
+                                    `).join('')}
                                 </tbody>
                             </table>
                         ` : '<p>Няма поръчки</p>'}
@@ -507,11 +540,13 @@ ${orders.map(o => `
         // Order form
         const orderForm = document.getElementById('order-form');
         if (orderForm) {
-            orderForm.addEventListener('submit', (e) => this.handleOrderSubmit(e));
+            orderForm.addEventListener('submit', async (e) => {
+                await this.handleOrderSubmit(e);
+            });
 
             // Client field change
-            document.getElementById('orderClient')?.addEventListener('input', (e) => {
-                this.updateClientHint(e.target.value);
+            document.getElementById('orderClient')?.addEventListener('input', async (e) => {
+                await this.updateClientHint(e.target.value);
             });
 
             // Image upload
@@ -520,26 +555,40 @@ ${orders.map(o => `
             });
         }
 
-        const inventoryForm = document.getElementById('inventory-form');
-        if (inventoryForm) {
-            inventoryForm.addEventListener('submit', (e) => this.handleInventorySubmit(e));
-        }
-
         // Client form
         const clientForm = document.getElementById('client-form');
         if (clientForm) {
-            clientForm.addEventListener('submit', (e) => this.handleClientSubmit(e));
+            clientForm.addEventListener('submit', async (e) => {
+                await this.handleClientSubmit(e);
+            });
         }
 
         // Expense form
         const expenseForm = document.getElementById('expense-form');
         if (expenseForm) {
-            expenseForm.addEventListener('submit', (e) => this.handleExpenseSubmit(e));
+            expenseForm.addEventListener('submit', async (e) => {
+                await this.handleExpenseSubmit(e);
+            });
+        }
+
+        // Inventory form
+        const inventoryForm = document.getElementById('inventory-form');
+        if (inventoryForm) {
+            inventoryForm.addEventListener('submit', async (e) => {
+                await this.handleInventorySubmit(e);
+            });
         }
     }
 
-    handleOrderSubmit(e) {
+    async handleOrderSubmit(e) {
         e.preventDefault();
+
+        // Get existing image data for edit mode
+        let existingImageData = null;
+        if (this.currentModal.mode === 'edit') {
+            const result = await this.modules.orders.findOrderById(this.currentModal.id);
+            existingImageData = result?.order?.imageData || null;
+        }
 
         const orderData = {
             date: document.getElementById('orderDate').value,
@@ -555,33 +604,40 @@ ${orders.map(o => `
             status: document.getElementById('orderStatus').value,
             fullSet: document.getElementById('orderFullSet').checked,
             notes: document.getElementById('orderNotes').value,
-            imageData: this.tempImageData || (this.currentModal.mode === 'edit' ?
-                this.modules.orders.getOrders().find(o => o.id === this.currentModal.id)?.imageData : null)
+            imageData: this.tempImageData || existingImageData
         };
 
-        let result;
-        if (this.currentModal.mode === 'edit') {
-            result = this.modules.orders.update(this.currentModal.id, orderData);
-            this.eventBus.emit('notification:show', { message: 'Поръчката е актуализирана!', type: 'success' });
-        } else {
-            // Both 'create' and 'duplicate' create new orders
-            result = this.modules.orders.create(orderData);
-            const message = this.currentModal.mode === 'duplicate' ?
-                'Копието на поръчката е създадено!' : 'Поръчката е добавена!';
-            this.eventBus.emit('notification:show', { message, type: 'success' });
-        }
+        try {
+            let result;
+            if (this.currentModal.mode === 'edit') {
+                result = await this.modules.orders.update(this.currentModal.id, orderData);
+                this.eventBus.emit('notification:show', { message: 'Поръчката е актуализирана!', type: 'success' });
+            } else {
+                result = await this.modules.orders.create(orderData);
+                const message = this.currentModal.mode === 'duplicate' ?
+                    'Копието на поръчката е създадено!' : 'Поръчката е добавена!';
+                this.eventBus.emit('notification:show', { message, type: 'success' });
+            }
 
-        this.close();
+            this.close();
 
-        // Използвай smartRefresh ако е достъпно
-        if (window.app.ui.currentView?.smartRefresh) {
-            window.app.ui.currentView.smartRefresh(result);
-        } else if (window.app.ui.currentView?.refresh) {
-            window.app.ui.currentView.refresh();
+            // Refresh view
+            if (window.app.ui.currentView?.smartRefresh) {
+                await window.app.ui.currentView.smartRefresh(result);
+            } else if (window.app.ui.currentView?.refresh) {
+                await window.app.ui.currentView.refresh();
+            }
+
+        } catch (error) {
+            console.error('❌ Order submit failed:', error);
+            this.eventBus.emit('notification:show', {
+                message: 'Грешка при запазване: ' + error.message,
+                type: 'error'
+            });
         }
     }
 
-    handleClientSubmit(e) {
+    async handleClientSubmit(e) {
         e.preventDefault();
 
         const clientData = {
@@ -593,23 +649,31 @@ ${orders.map(o => `
             notes: document.getElementById('clientNotes').value
         };
 
-        if (this.currentModal.mode === 'edit') {
-            this.modules.clients.update(this.currentModal.id, clientData);
-            this.eventBus.emit('notification:show', { message: 'Клиентът е актуализиран!', type: 'success' });
-        } else {
-            this.modules.clients.create(clientData);
-            this.eventBus.emit('notification:show', { message: 'Клиентът е създаден!', type: 'success' });
-        }
+        try {
+            if (this.currentModal.mode === 'edit') {
+                await this.modules.clients.update(this.currentModal.id, clientData);
+                this.eventBus.emit('notification:show', { message: 'Клиентът е актуализиран!', type: 'success' });
+            } else {
+                await this.modules.clients.create(clientData);
+                this.eventBus.emit('notification:show', { message: 'Клиентът е създаден!', type: 'success' });
+            }
 
-        this.close();
+            this.close();
 
-        // Refresh current view
-        if (window.app.ui.currentView?.refresh) {
-            window.app.ui.currentView.refresh();
+            if (window.app.ui.currentView?.refresh) {
+                await window.app.ui.currentView.refresh();
+            }
+
+        } catch (error) {
+            console.error('❌ Client submit failed:', error);
+            this.eventBus.emit('notification:show', {
+                message: 'Грешка при запазване: ' + error.message,
+                type: 'error'
+            });
         }
     }
 
-    handleExpenseSubmit(e) {
+    async handleExpenseSubmit(e) {
         e.preventDefault();
 
         const expenseData = {
@@ -618,23 +682,31 @@ ${orders.map(o => `
             note: document.getElementById('expenseNote').value
         };
 
-        if (this.currentModal.mode === 'edit') {
-            this.modules.expenses.update(this.currentModal.id, expenseData);
-            this.eventBus.emit('notification:show', { message: 'Разходът е актуализиран!', type: 'success' });
-        } else {
-            this.modules.expenses.create(expenseData);
-            this.eventBus.emit('notification:show', { message: 'Разходът е добавен!', type: 'success' });
-        }
+        try {
+            if (this.currentModal.mode === 'edit') {
+                await this.modules.expenses.update(this.currentModal.id, expenseData);
+                this.eventBus.emit('notification:show', { message: 'Разходът е актуализиран!', type: 'success' });
+            } else {
+                await this.modules.expenses.create(expenseData);
+                this.eventBus.emit('notification:show', { message: 'Разходът е добавен!', type: 'success' });
+            }
 
-        this.close();
+            this.close();
 
-        // Refresh current view
-        if (window.app.ui.currentView?.refresh) {
-            window.app.ui.currentView.refresh();
+            if (window.app.ui.currentView?.refresh) {
+                await window.app.ui.currentView.refresh();
+            }
+
+        } catch (error) {
+            console.error('❌ Expense submit failed:', error);
+            this.eventBus.emit('notification:show', {
+                message: 'Грешка при запазване: ' + error.message,
+                type: 'error'
+            });
         }
     }
 
-    handleInventorySubmit(e) {
+    async handleInventorySubmit(e) {
         e.preventDefault();
 
         const itemData = {
@@ -646,18 +718,27 @@ ${orders.map(o => `
             ordered: document.getElementById('itemOrdered').value
         };
 
-        if (this.currentModal.mode === 'edit') {
-            this.modules.inventory.updateItem(this.currentModal.id, itemData);
-            this.eventBus.emit('notification:show', { message: 'Кутията е актуализирана!', type: 'success' });
-        } else {
-            this.modules.inventory.createItem(itemData);
-            this.eventBus.emit('notification:show', { message: 'Кутията е добавена!', type: 'success' });
-        }
+        try {
+            if (this.currentModal.mode === 'edit') {
+                await this.modules.inventory.updateItem(this.currentModal.id, itemData);
+                this.eventBus.emit('notification:show', { message: 'Кутията е актуализирана!', type: 'success' });
+            } else {
+                await this.modules.inventory.createItem(itemData);
+                this.eventBus.emit('notification:show', { message: 'Кутията е добавена!', type: 'success' });
+            }
 
-        this.close();
+            this.close();
 
-        if (window.app.ui.currentView?.refresh) {
-            window.app.ui.currentView.refresh();
+            if (window.app.ui.currentView?.refresh) {
+                await window.app.ui.currentView.refresh();
+            }
+
+        } catch (error) {
+            console.error('❌ Inventory submit failed:', error);
+            this.eventBus.emit('notification:show', {
+                message: 'Грешка при запазване: ' + error.message,
+                type: 'error'
+            });
         }
     }
 
@@ -703,31 +784,36 @@ ${orders.map(o => `
         }
     }
 
-    updateClientHint(clientName) {
+    async updateClientHint(clientName) {
         const hint = document.getElementById('client-hint');
         if (!hint) return;
 
-        const client = this.modules.clients.getClientByName(clientName);
-        if (client) {
-            const stats = this.modules.clients.getClientStats(client.name);
-            hint.innerHTML = `
-                📞 ${client.phone || 'Няма тел.'} | 
-                📊 ${stats.totalOrders} поръчки | 
-                💰 ${stats.totalRevenue.toFixed(2)} лв
-            `;
-            hint.style.display = 'block';
+        try {
+            const client = await this.modules.clients.getClientByName(clientName);
+            if (client) {
+                const stats = await this.modules.clients.getClientStats(client.name);
+                hint.innerHTML = `
+                    📞 ${client.phone || 'Няма тел.'} | 
+                    📊 ${stats.totalOrders} поръчки | 
+                    💰 ${stats.totalRevenue.toFixed(2)} лв
+                `;
+                hint.style.display = 'block';
 
-            // Auto-fill phone if empty
-            const phoneField = document.getElementById('orderPhone');
-            if (phoneField && !phoneField.value && client.phone) {
-                phoneField.value = client.phone;
+                // Auto-fill phone if empty
+                const phoneField = document.getElementById('orderPhone');
+                if (phoneField && !phoneField.value && client.phone) {
+                    phoneField.value = client.phone;
+                }
+            } else {
+                hint.style.display = 'none';
             }
-        } else {
+        } catch (error) {
+            console.error('❌ Client hint update failed:', error);
             hint.style.display = 'none';
         }
     }
 
-    quickAddClient() {
+    async quickAddClient() {
         const clientName = document.getElementById('orderClient').value;
         if (!clientName) {
             this.eventBus.emit('notification:show', {
@@ -737,43 +823,56 @@ ${orders.map(o => `
             return;
         }
 
-        // Проверка дали клиентът вече съществува
-        const existingClient = this.modules.clients.getClientByName(clientName);
-        if (existingClient) {
-            this.eventBus.emit('notification:show', {
-                message: 'Клиентът вече съществува',
-                type: 'info'
+        try {
+            // Check if client already exists
+            const existingClient = await this.modules.clients.getClientByName(clientName);
+            if (existingClient) {
+                this.eventBus.emit('notification:show', {
+                    message: 'Клиентът вече съществува',
+                    type: 'info'
+                });
+                return;
+            }
+
+            // Create client
+            const newClient = await this.modules.clients.create({
+                name: clientName,
+                phone: document.getElementById('orderPhone').value || '',
+                preferredSource: document.getElementById('orderOrigin').value || '',
+                notes: 'Добавен от поръчка'
             });
-            return;
+
+            this.eventBus.emit('notification:show', {
+                message: `Клиент "${clientName}" е добавен!`,
+                type: 'success'
+            });
+
+            // Update datalist
+            await this.updateClientsDatalist();
+
+        } catch (error) {
+            console.error('❌ Quick add client failed:', error);
+            this.eventBus.emit('notification:show', {
+                message: 'Грешка при създаване на клиент: ' + error.message,
+                type: 'error'
+            });
         }
-
-        // Директно създаване на клиент
-        const newClient = this.modules.clients.create({
-            name: clientName,
-            phone: document.getElementById('orderPhone').value || '',
-            preferredSource: document.getElementById('orderOrigin').value || '',
-            notes: 'Добавен от поръчка'
-        });
-
-        this.eventBus.emit('notification:show', {
-            message: `Клиент "${clientName}" е добавен!`,
-            type: 'success'
-        });
-
-        // Обновяване на datalist
-        this.updateClientsDatalist();
     }
 
-    updateClientsDatalist() {
+    async updateClientsDatalist() {
         const datalist = document.getElementById('clients-list');
         if (datalist) {
-            datalist.innerHTML = '';
-            const clients = this.modules.clients.getAllClients();
-            clients.forEach(client => {
-                const option = document.createElement('option');
-                option.value = client.name;
-                datalist.appendChild(option);
-            });
+            try {
+                datalist.innerHTML = '';
+                const clients = await this.modules.clients.getAllClients();
+                clients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.name;
+                    datalist.appendChild(option);
+                });
+            } catch (error) {
+                console.error('❌ Update clients datalist failed:', error);
+            }
         }
     }
 
