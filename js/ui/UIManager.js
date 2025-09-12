@@ -1,4 +1,5 @@
 import {ModalsManager} from "./components/ModalsManager.js";
+import { DataProtectionDashboard } from "./components/DataProtectionDashboard.js";
 
 export class UIManager {
     constructor(modules, state, eventBus, router, undoRedo) {  // Добави undoRedo параметър
@@ -11,6 +12,9 @@ export class UIManager {
 
         // Инициализираме месеците БЕЗ да пипаме данните
         this.initializeMonths();
+
+        this.protectionDashboard = new DataProtectionDashboard(this.modules.orders.storage, eventBus);
+        this.startDataProtectionMonitoring();
 
         this.modals = new ModalsManager(modules, state, eventBus);
         window.app = window.app || {};
@@ -83,6 +87,22 @@ export class UIManager {
         this.switchView('orders');
     }
 
+    startDataProtectionMonitoring() {
+        // Start export reminder system
+        this.protectionDashboard.checkExportReminder();
+
+        // Monitor storage health every 5 minutes
+        setInterval(() => {
+            const health = this.modules.orders.storage.getStorageHealth();
+            if (health.status === 'error' || health.status === 'warning') {
+                this.showNotification(
+                    `⚠️ Storage ${health.status}: ${health.error || 'Space running low'}`,
+                    'warning'
+                );
+            }
+        }, 5 * 60 * 1000); // 5 minutes
+    }
+
     ensureCurrentMonth() {
         const currentMonth = this.state.get('currentMonth');
         const monthlyData = this.state.get('monthlyData') || {};
@@ -106,15 +126,19 @@ export class UIManager {
         const app = document.getElementById('app');
         const currentMonth = this.state.get('currentMonth');
 
+        // ADD protection widget to header
+        const protectionWidget = this.protectionDashboard.createStatusWidget();
+
         app.innerHTML = `
-            <div class="container">
-                <header class="header">
-                    <div class="header-content">
-                        <div class="header-title">
-                            <h1>📦 Система за управление на поръчки</h1>
-                            <p>Професионално решение за следене на вашите поръчки</p>
-                        </div>
-                        
+        <div class="container">
+            <header class="header">
+                <div class="header-content">
+                    <div class="header-title">
+                        <h1>📦 Система за управление на поръчки</h1>
+                        <p>Професионално решение за следене на вашите поръчки</p>
+                    </div>
+                    
+                    <div class="header-controls">
                         <!-- Undo/Redo бутони -->
                         <div class="undo-redo-controls">
                             <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
@@ -129,38 +153,42 @@ export class UIManager {
                                 <span id="undo-count">0</span> / <span id="redo-count">0</span>
                             </div>
                         </div>
+                        
+                        <!-- ADD Protection Widget -->
+                        ${protectionWidget}
                     </div>
-                    
-                    <div class="month-selector">
-                        <label>Избери месец:</label>
-                        <select id="monthSelector">
-                            ${this.availableMonths.map(m => `
-                                <option value="${m.key}" ${m.key === currentMonth ? 'selected' : ''}>
-                                    ${m.name}
-                                </option>
-                            `).join('')}
-                        </select>
-                        <button class="btn btn-white" id="add-month-btn">➕ Нов месец</button>
-                    </div>
-                </header>
+                </div>
                 
-                <nav class="tabs">
-                    <button class="tab active" data-view="orders">📋 Поръчки</button>
-                    <button class="tab" data-view="clients">👥 Клиенти</button>
-                    <button class="tab" data-view="inventory">📦 Инвентар</button>
-                    <button class="tab" data-view="expenses">💰 Разходи</button>
-                    <button class="tab" data-view="reports">📊 Отчети</button>
-                    <button class="tab" data-view="settings">⚙️ Настройки</button>
-                </nav>
-                
-                <main id="view-container" class="view-container"></main>
-            </div>
+                <div class="month-selector">
+                    <label>Избери месец:</label>
+                    <select id="monthSelector">
+                        ${this.availableMonths.map(m => `
+                            <option value="${m.key}" ${m.key === currentMonth ? 'selected' : ''}>
+                                ${m.name}
+                            </option>
+                        `).join('')}
+                    </select>
+                    <button class="btn btn-white" id="add-month-btn">➕ Нов месец</button>
+                </div>
+            </header>
             
-            <div id="modal-container"></div>
-            <div id="notification-container"></div>
-        `;
+            <!-- Rest of existing content -->
+            <nav class="tabs">
+                <button class="tab active" data-view="orders">📋 Поръчки</button>
+                <button class="tab" data-view="clients">👥 Клиенти</button>
+                <button class="tab" data-view="inventory">📦 Инвентар</button>
+                <button class="tab" data-view="expenses">💰 Разходи</button>
+                <button class="tab" data-view="reports">📊 Отчети</button>
+                <button class="tab" data-view="settings">⚙️ Настройки</button>
+            </nav>
+            
+            <main id="view-container" class="view-container"></main>
+        </div>
+        
+        <div id="modal-container"></div>
+        <div id="notification-container"></div>
+    `;
 
-        // Обновяваме състоянието на бутоните
         this.updateUndoRedoButtons();
     }
 
@@ -409,6 +437,107 @@ export class UIManager {
     openModal(data) {
         if (this.modals) {
             this.modals.open(data);
+        }
+    }
+
+    urgentExport() {
+        try {
+            this.modules.orders.storage.exportData();
+            localStorage.setItem('lastManualExport', Date.now().toString());
+            this.showNotification('📤 Emergency export completed!', 'success');
+
+            // Refresh protection widget
+            setTimeout(() => {
+                const widget = document.getElementById('data-protection-widget');
+                if (widget) {
+                    widget.outerHTML = this.protectionDashboard.createStatusWidget();
+                }
+            }, 1000);
+        } catch (error) {
+            this.showNotification('❌ Export failed: ' + error.message, 'error');
+        }
+    }
+
+    forceBackup() {
+        try {
+            const criticalKeys = ['monthlyData', 'clientsData', 'settings', 'inventory'];
+            let backed = 0;
+
+            criticalKeys.forEach(key => {
+                const data = this.state.get(key);
+                if (data) {
+                    this.modules.orders.storage.createRollingBackup(key);
+                    backed++;
+                }
+            });
+
+            this.showNotification(`💾 Force backup completed for ${backed} data types`, 'success');
+        } catch (error) {
+            this.showNotification('❌ Backup failed: ' + error.message, 'error');
+        }
+    }
+
+    cleanupStorage() {
+        try {
+            this.modules.orders.storage.emergencyCleanup();
+            this.showNotification('🧹 Storage cleanup completed', 'success');
+
+            // Refresh widget
+            setTimeout(() => {
+                const widget = document.getElementById('data-protection-widget');
+                if (widget) {
+                    widget.outerHTML = this.protectionDashboard.createStatusWidget();
+                }
+            }, 1000);
+        } catch (error) {
+            this.showNotification('❌ Cleanup failed: ' + error.message, 'error');
+        }
+    }
+
+    testRecovery() {
+        try {
+            const backups = this.modules.orders.storage.listBackups();
+            const backupCount = Object.values(backups).reduce((sum, arr) => sum + arr.length, 0);
+
+            if (backupCount > 0) {
+                this.showNotification(`✅ Recovery test passed: ${backupCount} backups available`, 'success');
+            } else {
+                this.showNotification('⚠️ No backups found for recovery', 'warning');
+            }
+        } catch (error) {
+            this.showNotification('❌ Recovery test failed: ' + error.message, 'error');
+        }
+    }
+
+    showBackupManager() {
+        const modalContent = this.protectionDashboard.createBackupManagerModal();
+        const container = document.getElementById('modal-container');
+        container.innerHTML = modalContent;
+        container.querySelector('.modal').classList.add('active');
+    }
+
+    restoreFromBackup(key, timestamp) {
+        if (confirm(`Are you sure you want to restore ${key} from backup created at ${new Date(timestamp).toLocaleString()}?`)) {
+            try {
+                const backupKey = `backup_orderSystem_${key}_${timestamp}`;
+                const backupData = localStorage.getItem(backupKey);
+
+                if (backupData) {
+                    const parsed = JSON.parse(backupData);
+                    this.state.set(key, parsed);
+                    this.modules.orders.storage.save(key, parsed);
+                    this.showNotification(`✅ ${key} restored from backup`, 'success');
+
+                    // Refresh current view
+                    if (this.currentView?.refresh) {
+                        this.currentView.refresh();
+                    }
+                } else {
+                    throw new Error('Backup not found');
+                }
+            } catch (error) {
+                this.showNotification(`❌ Restore failed: ${error.message}`, 'error');
+            }
         }
     }
 }

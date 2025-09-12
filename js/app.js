@@ -20,6 +20,10 @@ export class App {
         this.eventBus = new EventBus();
         this.router = new Router(this.eventBus);
 
+        this.unsavedChanges = false;
+        this.lastAutoSave = Date.now();
+        this.emergencyExportAttempts = 0;
+
         // Business modules
         this.modules = {
             orders: new OrdersModule(this.state, this.storage, this.eventBus),
@@ -56,6 +60,12 @@ export class App {
         window.undoRedo = this.undoRedo;
 
         console.log('Application initialized successfully');
+
+        this.setupBrowserProtection();
+        this.startEmergencyProtection();
+        this.setupVisibilityProtection();
+
+        console.log('🔒 Data protection systems activated');
     }
 
     async loadData() {
@@ -137,6 +147,272 @@ export class App {
         window.addEventListener('beforeunload', () => {
             this.autoSave();
         });
+    }
+
+    setupBrowserProtection() {
+        // Warn before closing tab/browser with unsaved changes
+        window.addEventListener('beforeunload', (e) => {
+            const health = this.storage.getStorageHealth();
+            const lastSave = localStorage.getItem('orderSystem_lastSave');
+            const timeSinceLastSave = lastSave ? Date.now() - parseInt(lastSave) : 999999;
+
+            // Show warning if:
+            // 1. Unsaved changes exist, OR
+            // 2. No save in last 5 minutes, OR
+            // 3. Storage health is critical
+            if (this.unsavedChanges ||
+                timeSinceLastSave > 5 * 60 * 1000 ||
+                health.status === 'error') {
+
+                const message = '⚠️ You have unsaved changes! Data may be lost.';
+                e.preventDefault();
+                e.returnValue = message;
+
+                // Attempt emergency export
+                this.attemptEmergencyExport();
+
+                return message;
+            }
+        });
+
+        // Track unsaved changes
+        this.eventBus.on('order:created', () => this.markUnsaved());
+        this.eventBus.on('order:updated', () => this.markUnsaved());
+        this.eventBus.on('order:deleted', () => this.markUnsaved());
+        this.eventBus.on('client:created', () => this.markUnsaved());
+        this.eventBus.on('client:updated', () => this.markUnsaved());
+        this.eventBus.on('client:deleted', () => this.markUnsaved());
+
+        console.log('🔒 Browser protection activated');
+    }
+
+    // EMERGENCY EXPORT SYSTEM
+    startEmergencyProtection() {
+        // Auto-export every 10 minutes as emergency backup
+        setInterval(() => {
+            try {
+                this.createEmergencyBackup();
+            } catch (error) {
+                console.error('❌ Emergency backup failed:', error);
+            }
+        }, 10 * 60 * 1000); // 10 minutes
+
+        // Monitor for critical storage issues
+        setInterval(() => {
+            const health = this.storage.getStorageHealth();
+            if (health.status === 'error') {
+                this.handleCriticalStorageFailure();
+            }
+        }, 30 * 1000); // Every 30 seconds
+    }
+
+    // PAGE VISIBILITY PROTECTION - Save when tab becomes hidden
+    setupVisibilityProtection() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Tab is hidden - emergency save
+                this.emergencyAutoSave();
+                console.log('🔒 Emergency save on tab hide');
+            }
+        });
+
+        // Save on focus loss (clicking outside browser)
+        window.addEventListener('blur', () => {
+            this.emergencyAutoSave();
+            console.log('🔒 Emergency save on focus loss');
+        });
+    }
+
+    // MARK DATA AS UNSAVED
+    markUnsaved() {
+        this.unsavedChanges = true;
+        this.lastAutoSave = Date.now();
+
+        // Auto-save after 3 seconds of no activity
+        clearTimeout(this.autoSaveTimeout);
+        this.autoSaveTimeout = setTimeout(() => {
+            this.emergencyAutoSave();
+            this.unsavedChanges = false;
+        }, 3000);
+    }
+
+    // EMERGENCY AUTO-SAVE
+    emergencyAutoSave() {
+        try {
+            this.autoSave();
+            this.unsavedChanges = false;
+            console.log('💾 Emergency auto-save completed');
+        } catch (error) {
+            console.error('❌ Emergency auto-save failed:', error);
+            this.handleCriticalStorageFailure();
+        }
+    }
+
+    // CREATE EMERGENCY BACKUP
+    createEmergencyBackup() {
+        try {
+            const state = this.state.getState();
+            const emergencyData = {
+                monthlyData: state.monthlyData || {},
+                clientsData: state.clientsData || {},
+                settings: state.settings || {},
+                inventory: state.inventory || {},
+                timestamp: Date.now(),
+                type: 'emergency_auto_backup'
+            };
+
+            // Store in separate emergency backup slot
+            const backupKey = 'emergency_backup_' + Date.now();
+            localStorage.setItem(backupKey, JSON.stringify(emergencyData));
+
+            // Keep only last 3 emergency backups
+            this.cleanEmergencyBackups();
+
+            console.log('🚨 Emergency backup created:', backupKey);
+        } catch (error) {
+            console.error('❌ Emergency backup creation failed:', error);
+        }
+    }
+
+    // CLEAN OLD EMERGENCY BACKUPS
+    cleanEmergencyBackups() {
+        try {
+            const emergencyKeys = Object.keys(localStorage)
+                .filter(key => key.startsWith('emergency_backup_'))
+                .sort()
+                .reverse(); // Newest first
+
+            // Keep only 3 most recent
+            if (emergencyKeys.length > 3) {
+                const toDelete = emergencyKeys.slice(3);
+                toDelete.forEach(key => localStorage.removeItem(key));
+                console.log(`🧹 Cleaned ${toDelete.length} old emergency backups`);
+            }
+        } catch (error) {
+            console.warn('⚠️ Emergency backup cleanup failed:', error);
+        }
+    }
+
+    // CRITICAL STORAGE FAILURE HANDLER
+    handleCriticalStorageFailure() {
+        this.emergencyExportAttempts++;
+
+        if (this.emergencyExportAttempts <= 3) { // Max 3 attempts
+            try {
+                // Attempt immediate export
+                this.storage.exportData();
+
+                // Show critical warning
+                this.showCriticalWarning();
+
+                console.log('🚨 Critical storage failure - emergency export attempted');
+            } catch (error) {
+                console.error('❌ Critical failure export failed:', error);
+
+                if (this.emergencyExportAttempts >= 3) {
+                    this.showFinalWarning();
+                }
+            }
+        }
+    }
+
+    // EMERGENCY EXPORT ON TAB CLOSE
+    attemptEmergencyExport() {
+        try {
+            // Synchronous emergency save to localStorage backup
+            const state = this.state.getState();
+            const emergencyData = {
+                ...state,
+                emergencyTimestamp: Date.now(),
+                reason: 'tab_close_protection'
+            };
+
+            localStorage.setItem('EMERGENCY_BACKUP_TAB_CLOSE', JSON.stringify(emergencyData));
+            console.log('🚨 Emergency tab-close backup saved');
+        } catch (error) {
+            console.error('❌ Tab-close emergency backup failed:', error);
+        }
+    }
+
+    // SHOW CRITICAL WARNING MODAL
+    showCriticalWarning() {
+        const warningHtml = `
+            <div class="critical-warning" id="critical-warning">
+                <h3>🚨 CRITICAL: Data Protection Alert</h3>
+                <p>Storage issues detected! Your data is at risk.</p>
+                <p><strong>Immediate action required:</strong></p>
+                <div class="actions">
+                    <button class="btn" onclick="window.app.urgentExport()">Export Data Now</button>
+                    <button class="btn" onclick="document.getElementById('critical-warning').remove()">Dismiss</button>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', warningHtml);
+
+        // Auto-remove after 30 seconds
+        setTimeout(() => {
+            const warning = document.getElementById('critical-warning');
+            if (warning) warning.remove();
+        }, 30000);
+    }
+
+    // FINAL WARNING (ALL ATTEMPTS FAILED)
+    showFinalWarning() {
+        const warningHtml = `
+            <div class="critical-warning" id="final-warning">
+                <h3>💀 FINAL WARNING: Data Loss Imminent</h3>
+                <p>All automatic protection systems have failed!</p>
+                <p><strong>COPY YOUR DATA MANUALLY NOW</strong></p>
+                <div class="actions">
+                    <button class="btn" onclick="window.app.showRawData()">Show Raw Data</button>
+                    <button class="btn" onclick="window.location.reload()">Reload App</button>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', warningHtml);
+    }
+
+    // SHOW RAW DATA (LAST RESORT)
+    showRawData() {
+        const state = this.state.getState();
+        const rawData = JSON.stringify(state, null, 2);
+
+        const textarea = document.createElement('textarea');
+        textarea.value = rawData;
+        textarea.style.cssText = `
+            position: fixed; top: 10px; left: 10px; 
+            width: 80%; height: 80%; 
+            z-index: 10002; background: white; 
+            border: 2px solid red; font-family: monospace;
+        `;
+
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        alert('EMERGENCY: Raw data displayed. COPY ALL TEXT and save to file manually!');
+    }
+
+    // URGENT EXPORT (PUBLIC METHOD)
+    urgentExport() {
+        try {
+            this.storage.exportData();
+            localStorage.setItem('lastManualExport', Date.now().toString());
+
+            // Remove warning if exists
+            const warning = document.getElementById('critical-warning');
+            if (warning) warning.remove();
+
+            if (this.ui && this.ui.showNotification) {
+                this.ui.showNotification('📤 Emergency export completed successfully!', 'success');
+            }
+        } catch (error) {
+            if (this.ui && this.ui.showNotification) {
+                this.ui.showNotification('❌ Emergency export failed: ' + error.message, 'error');
+            }
+            this.showRawData(); // Last resort
+        }
     }
 
     autoSave() {
