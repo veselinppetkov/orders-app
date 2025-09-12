@@ -15,40 +15,33 @@ export class OrdersModule {
 
     // CREATE ORDER - Now saves to Supabase
     async create(orderData) {
+        // Optimistic update - show in UI immediately
+        const optimisticOrder = this.prepareOrder(orderData);
+        optimisticOrder.id = 'temp_' + Date.now();
+        optimisticOrder._isOptimistic = true;
+
+        // Update cache immediately
+        const orderMonth = this.getOrderMonth(optimisticOrder.date);
+        this.updateOrdersCache(orderMonth, 'add', optimisticOrder);
+
+        this.eventBus.emit('order:created', {
+            order: optimisticOrder,
+            isOptimistic: true
+        });
+
         try {
-            console.log('📝 Creating order in Supabase:', orderData.client);
+            // Save to Supabase
+            const savedOrder = await this.supabase.createOrder(orderData);
 
-            // Emit before event for undo/redo
-            this.eventBus.emit('order:before-created', orderData);
+            // Replace optimistic with real order
+            this.replaceOptimisticOrder(optimisticOrder.id, savedOrder);
 
-            // Prepare order data
-            const order = this.prepareOrder(orderData);
-
-            // Save to Supabase database
-            const savedOrder = await this.supabase.createOrder(order);
-
-            // Update cache
-            const orderMonth = this.getOrderMonth(savedOrder.date);
-            this.updateOrdersCache(orderMonth, 'add', savedOrder);
-
-            // Also save to localStorage as backup (during transition)
-            this.saveToLocalStorageBackup(savedOrder);
-
-            this.eventBus.emit('order:created', {
-                order: savedOrder,
-                createdInMonth: orderMonth,
-                isVisibleInCurrentMonth: orderMonth === this.state.get('currentMonth')
-            });
-
-            console.log('✅ Order created successfully in Supabase:', savedOrder.id);
             return savedOrder;
-
         } catch (error) {
-            console.error('❌ Failed to create order in Supabase:', error);
-
-            // Fallback to localStorage
-            console.log('🔄 Falling back to localStorage...');
-            return this.createInLocalStorage(orderData);
+            // Remove optimistic order on failure
+            this.removeOptimisticOrder(optimisticOrder.id);
+            this.eventBus.emit('order:create-failed', { error, orderData });
+            throw error;
         }
     }
 
@@ -233,48 +226,7 @@ export class OrdersModule {
     }
 
     // LOCALSTORAGE BACKUP METHODS (for transition period)
-    saveToLocalStorageBackup(order) {
-        try {
-            const monthlyData = this.state.get('monthlyData') || {};
-            const orderMonth = this.getOrderMonth(order.date);
 
-            if (!monthlyData[orderMonth]) {
-                monthlyData[orderMonth] = { orders: [], expenses: [] };
-            }
-
-            // Find and update, or add new
-            const existingIndex = monthlyData[orderMonth].orders.findIndex(o => o.id === order.id);
-            if (existingIndex !== -1) {
-                monthlyData[orderMonth].orders[existingIndex] = order;
-            } else {
-                monthlyData[orderMonth].orders.push(order);
-            }
-
-            this.state.set('monthlyData', monthlyData);
-            this.storage.save('monthlyData', monthlyData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup failed:', error);
-        }
-    }
-
-    removeFromLocalStorageBackup(orderId) {
-        try {
-            const monthlyData = this.state.get('monthlyData') || {};
-
-            for (const [month, data] of Object.entries(monthlyData)) {
-                if (data.orders) {
-                    data.orders = data.orders.filter(o => o.id !== orderId);
-                }
-            }
-
-            this.state.set('monthlyData', monthlyData);
-            this.storage.save('monthlyData', monthlyData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup removal failed:', error);
-        }
-    }
 
     // FALLBACK METHODS (localStorage operations)
     createInLocalStorage(orderData) {

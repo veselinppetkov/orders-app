@@ -6,6 +6,7 @@ export default class OrdersView {
         this.ordersModule = modules.orders;
         this.clientsModule = modules.clients;
         this.reportsModule = modules.reports;
+        this.settingsModule = modules.settings;
         this.state = state;
         this.eventBus = eventBus;
         this.debouncedRefresh = DebounceUtils.debounce(() => this.refresh(), 300);
@@ -493,7 +494,7 @@ export default class OrdersView {
     // MAKE FILTERS ASYNC to load settings
     async renderFilters() {
         try {
-            const settings = await this.modules.settings.getSettings();
+            const settings = await this.settingsModule.getSettings();
 
             return `
                 <div class="filter-section">

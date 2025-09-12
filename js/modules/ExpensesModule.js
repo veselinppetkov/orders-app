@@ -1,8 +1,9 @@
 export class ExpensesModule {
-    constructor(state, storage, eventBus) {
+    constructor(state, storage, eventBus, supabase) {
         this.state = state;
         this.storage = storage;
         this.eventBus = eventBus;
+        this.supabase = supabase;
         this.defaultExpenses = [
             { id: 1, name: 'IG Campaign', amount: 1780, note: 'Instagram реклама кампания' },
             { id: 2, name: 'Assurance', amount: 590, note: 'Застраховка' },
@@ -59,10 +60,15 @@ export class ExpensesModule {
         }
     }
 
-    getExpenses(month = null) {
-        const targetMonth = month || this.state.get('currentMonth');
-        const monthlyData = this.state.get('monthlyData') || {};
-        return monthlyData[targetMonth]?.expenses || [];
+    async getExpenses(month = null) {
+        try {
+            // Try Supabase first
+            const expenses = await this.supabase.getExpenses(month);
+            return expenses;
+        } catch (error) {
+            // Fallback to localStorage
+            return this.getExpensesFromLocalStorage(month);
+        }
     }
 
     create(expenseData) {
