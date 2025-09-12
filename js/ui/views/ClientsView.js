@@ -1,7 +1,10 @@
+import { DebounceUtils } from '../../utils/DebounceUtils.js';
+
 export default class ClientsView {
     constructor(modules, state, eventBus) {
         this.clientsModule = modules.clients;
         this.state = state;
+        this.debouncedRefresh = DebounceUtils.debounce(() => this.refresh(), 300);
         this.eventBus = eventBus;
         this.sortBy = 'name';
         this.searchTerm = '';
@@ -22,7 +25,7 @@ export default class ClientsView {
                 <div class="filter-section">
                     <div class="filter-group">
                         <label>Търсене клиент:</label>
-                        <input type="text" id="searchClient" placeholder="Име на клиент...">
+                        <input type="text" id="searchClient" placeholder="Име на клиент..." value="${this.searchTerm}">
                     </div>
                     <div class="filter-group">
                         <label>Сортиране:</label>
@@ -106,7 +109,7 @@ export default class ClientsView {
         // Search
         document.getElementById('searchClient')?.addEventListener('input', (e) => {
             this.searchTerm = e.target.value;
-            this.refresh();
+            this.debouncedRefresh();
         });
 
         // Sort
@@ -139,11 +142,33 @@ export default class ClientsView {
         });
     }
 
+// js/ui/views/ClientsView.js - Replace the refresh() method
+
     refresh() {
+        // Store current focus info before DOM destruction
+        const focusedElement = document.activeElement;
+        const focusId = focusedElement?.id;
+        const selectionStart = focusedElement?.selectionStart;
+        const selectionEnd = focusedElement?.selectionEnd;
+        const isSearchInput = focusId === 'searchClient';
+
+        // Re-render
         const container = document.getElementById('view-container');
         if (container) {
             container.innerHTML = this.render();
             this.attachListeners();
+
+            // Restore focus if it was on search input
+            if (isSearchInput) {
+                const newSearchInput = document.getElementById('searchClient');
+                if (newSearchInput) {
+                    newSearchInput.focus();
+                    // Restore cursor position
+                    if (typeof selectionStart === 'number') {
+                        newSearchInput.setSelectionRange(selectionStart, selectionEnd);
+                    }
+                }
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+import { DebounceUtils } from '../../utils/DebounceUtils.js';
+
 export default class OrdersView {
     constructor(modules, state, eventBus) {
         this.ordersModule = modules.orders;
@@ -5,6 +7,7 @@ export default class OrdersView {
         this.reportsModule = modules.reports;
         this.state = state;
         this.eventBus = eventBus;
+        this.debouncedRefresh = DebounceUtils.debounce(() => this.refresh(), 300);
         this.storage = modules.orders.storage;
         this.filters = {
             status: 'all',
@@ -309,7 +312,7 @@ export default class OrdersView {
         // Search input
         document.getElementById('searchInput')?.addEventListener('input', (e) => {
             this.filters.search = e.target.value;
-            this.refresh();
+            this.debouncedRefresh();
         });
 
         // Origin filter
@@ -350,12 +353,34 @@ export default class OrdersView {
         });
     }
 
+// js/ui/views/OrdersView.js - Replace the refresh() method
+
     refresh() {
-        this.selectedOrders.clear(); // Clear selection on refresh
+        // Store current focus info before DOM destruction
+        const focusedElement = document.activeElement;
+        const focusId = focusedElement?.id;
+        const selectionStart = focusedElement?.selectionStart;
+        const selectionEnd = focusedElement?.selectionEnd;
+        const isSearchInput = focusId === 'searchInput';
+
+        // Clear selection and re-render
+        this.selectedOrders.clear();
         const container = document.getElementById('view-container');
         if (container) {
             container.innerHTML = this.render();
             this.attachListeners();
+
+            // Restore focus if it was on search input
+            if (isSearchInput) {
+                const newSearchInput = document.getElementById('searchInput');
+                if (newSearchInput) {
+                    newSearchInput.focus();
+                    // Restore cursor position
+                    if (typeof selectionStart === 'number') {
+                        newSearchInput.setSelectionRange(selectionStart, selectionEnd);
+                    }
+                }
+            }
         }
     }
 
@@ -434,7 +459,7 @@ export default class OrdersView {
             <div class="filter-section">
                 <div class="filter-group">
                     <label>Търсене:</label>
-                    <input type="text" id="searchInput" placeholder="Клиент, модел...">
+                    <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
                 </div>
                 <div class="filter-group">
                     <label>Източник:</label>
