@@ -397,6 +397,7 @@ export class UIManager {
         return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
 
+// FIND this method and REPLACE it:
     async switchView(viewName) {
         document.querySelectorAll('.tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === viewName);
@@ -413,7 +414,24 @@ export class UIManager {
 
             const container = document.getElementById('view-container');
             if (container) {
-                container.innerHTML = this.currentView.render();
+                // Check if render method is async
+                const renderResult = this.currentView.render();
+
+                if (renderResult instanceof Promise) {
+                    // Async render - show loading first
+                    container.innerHTML = `
+                    <div class="loading-state">
+                        <h3>Loading...</h3>
+                    </div>
+                `;
+
+                    const content = await renderResult;
+                    container.innerHTML = content;
+                } else {
+                    // Sync render
+                    container.innerHTML = renderResult;
+                }
+
                 this.currentView.attachListeners();
             }
         } catch (error) {

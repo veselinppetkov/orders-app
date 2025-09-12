@@ -611,3 +611,42 @@ tr:hover {
 .undo-btn, .redo-btn {
     position: relative;
 }
+
+/* Loading and Error States */
+.loading-state, .error-state {
+    text-align: center;
+    padding: 50px 20px;
+    color: #6c757d;
+}
+
+.loading-state h3 {
+    color: #667eea;
+    margin-bottom: 10px;
+}
+
+.error-state h3 {
+    color: #dc3545;
+    margin-bottom: 10px;
+}
+
+.error-state .btn {
+    margin-top: 15px;
+}
+
+/* Loading animation */
+.loading-state::after {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

@@ -19,20 +19,21 @@ export default class OrdersView {
         this.selectedOrders = new Set(); // За bulk операции
     }
 
-    render() {
+    async render() {
         const stats = this.reportsModule.getMonthlyStats();
-        const orders = this.ordersModule.filterOrders(this.filters);
+        const orders = await this.ordersModule.filterOrders(this.filters); // NOW ASYNC
 
         return `
-            <div class="orders-view">
-                ${this.renderStats(stats)}
-                ${this.renderControls()}
-                ${this.renderBulkActions()}
-                ${this.renderFilters()}
-                ${this.renderTable(orders)}
-            </div>
-        `;
+        <div class="orders-view">
+            ${this.renderStats(stats)}
+            ${this.renderControls()}
+            ${this.renderBulkActions()}
+            ${this.renderFilters()}
+            ${this.renderTable(orders)}
+        </div>
+    `;
     }
+
 
     renderBulkActions() {
         return `
@@ -225,7 +226,7 @@ export default class OrdersView {
         }
     }
 
-    applyBulkStatus() {
+    async applyBulkStatus() {
         const newStatus = document.getElementById('bulk-status').value;
         if (!newStatus) {
             this.eventBus.emit('notification:show', {
@@ -237,67 +238,72 @@ export default class OrdersView {
 
         if (confirm(`Промяна на статуса на ${this.selectedOrders.size} поръчки на "${newStatus}"?`)) {
             let updated = 0;
+            const orderIds = Array.from(this.selectedOrders);
 
-            // Директно обновяване в localStorage
-            const monthlyData = JSON.parse(localStorage.getItem('orderSystem_monthlyData'));
-            const currentMonth = this.state.get('currentMonth');
-
-            this.selectedOrders.forEach(orderId => {
-                const orderIndex = monthlyData[currentMonth].orders.findIndex(o => o.id === orderId);
-                if (orderIndex !== -1) {
-                    monthlyData[currentMonth].orders[orderIndex].status = newStatus;
-                    updated++;
-                }
-            });
-
-            // Запазване
-            localStorage.setItem('orderSystem_monthlyData', JSON.stringify(monthlyData));
-
-            // Обновяване на state
-            this.state.set('monthlyData', monthlyData);
-
+            // Show progress
             this.eventBus.emit('notification:show', {
-                message: `Статусът на ${updated} поръчки е променен`,
-                type: 'success'
+                message: `🔄 Обновяване на ${orderIds.length} поръчки...`,
+                type: 'info'
             });
 
-            // Презареждане на цялото view
-            this.selectedOrders.clear();
-            window.app.ui.switchView('orders');
-        }
-    }
-
-    bulkDelete() {
-        if (confirm(`Сигурни ли сте, че искате да изтриете ${this.selectedOrders.size} поръчки?`)) {
-            let deleted = 0;
-            const orderIds = Array.from(this.selectedOrders); // Convert to array first
-
-            // Delete each order individually to ensure proper state management
-            orderIds.forEach(orderId => {
+            for (const orderId of orderIds) {
                 try {
-                    this.ordersModule.delete(orderId);
-                    deleted++;
+                    // Find the order first
+                    const result = await this.ordersModule.findOrderById(orderId);
+                    if (result && result.order) {
+                        // Update with new status
+                        const updatedOrderData = { ...result.order, status: newStatus };
+                        await this.ordersModule.update(orderId, updatedOrderData);
+                        updated++;
+                    }
                 } catch (error) {
-                    console.error(`Error deleting order ${orderId}:`, error);
+                    console.error(`❌ Error updating order ${orderId}:`, error);
                 }
-            });
+            }
 
-            // Clear selection immediately
-            this.selectedOrders.clear();
-
-            // Show notification
             this.eventBus.emit('notification:show', {
-                message: `${deleted} поръчки бяха изтрити`,
+                message: `✅ Статусът на ${updated} поръчки е променен`,
                 type: 'success'
             });
 
-            // Force immediate UI refresh without timeout
-            this.refresh();
-
-            // Update bulk UI state
+            this.selectedOrders.clear();
+            await this.refresh(); // Refresh to show changes
             this.updateBulkUI();
         }
     }
+
+    async bulkDelete() {
+        if (confirm(`Сигурни ли сте, че искате да изтриете ${this.selectedOrders.size} поръчки?`)) {
+            let deleted = 0;
+            const orderIds = Array.from(this.selectedOrders);
+
+            // Show progress for bulk operations
+            this.eventBus.emit('notification:show', {
+                message: `🔄 Изтриване на ${orderIds.length} поръчки...`,
+                type: 'info'
+            });
+
+            for (const orderId of orderIds) {
+                try {
+                    await this.ordersModule.delete(orderId); // NOW ASYNC
+                    deleted++;
+                } catch (error) {
+                    console.error(`❌ Error deleting order ${orderId}:`, error);
+                }
+            }
+
+            this.selectedOrders.clear();
+
+            this.eventBus.emit('notification:show', {
+                message: `✅ ${deleted} поръчки бяха изтрити`,
+                type: 'success'
+            });
+
+            await this.refresh(); // NOW ASYNC
+            this.updateBulkUI();
+        }
+    }
+
 
     clearSelection() {
         this.selectedOrders.clear();
@@ -356,11 +362,19 @@ export default class OrdersView {
         });
 
         document.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => { // ADD async here
                 const orderId = parseInt(e.target.dataset.id);
                 if (confirm('Сигурни ли сте, че искате да изтриете тази поръчка?')) {
-                    this.ordersModule.delete(orderId);
-                    this.refresh();
+                    try {
+                        await this.ordersModule.delete(orderId); // ADD await
+                        await this.refresh(); // ADD await
+                    } catch (error) {
+                        console.error('❌ Delete failed:', error);
+                        this.eventBus.emit('notification:show', {
+                            message: 'Грешка при изтриване: ' + error.message,
+                            type: 'error'
+                        });
+                    }
                 }
             });
         });
@@ -368,38 +382,38 @@ export default class OrdersView {
 
 // js/ui/views/OrdersView.js - Replace the refresh() method
 
-    refresh() {
-        // Store current focus info before DOM destruction
-        const focusedElement = document.activeElement;
-        const focusId = focusedElement?.id;
-        const selectionStart = focusedElement?.selectionStart;
-        const selectionEnd = focusedElement?.selectionEnd;
-        const isSearchInput = focusId === 'searchInput';
-
-        // Clear selection and re-render
+    async refresh() {
         this.selectedOrders.clear();
         const container = document.getElementById('view-container');
         if (container) {
-            container.innerHTML = this.render();
-            this.attachListeners();
+            // Show loading state
+            container.innerHTML = `
+            <div class="loading-state">
+                <h3>📦 Loading orders...</h3>
+                <p>Fetching data from database...</p>
+            </div>
+        `;
 
-            // Restore focus if it was on search input
-            if (isSearchInput) {
-                const newSearchInput = document.getElementById('searchInput');
-                if (newSearchInput) {
-                    newSearchInput.focus();
-                    // Restore cursor position
-                    if (typeof selectionStart === 'number') {
-                        newSearchInput.setSelectionRange(selectionStart, selectionEnd);
-                    }
-                }
+            try {
+                // Load async content
+                const content = await this.render();
+                container.innerHTML = content;
+                this.attachListeners();
+            } catch (error) {
+                console.error('❌ Failed to refresh orders view:', error);
+                container.innerHTML = `
+                <div class="error-state">
+                    <h3>❌ Failed to load orders</h3>
+                    <p>Error: ${error.message}</p>
+                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                </div>
+            `;
             }
         }
     }
 
 // Добави нов метод за smart refresh
-    smartRefresh(eventData) {
-        // Ако поръчката е създадена/обновена в друг месец, покажи предупреждение
+    async smartRefresh(eventData) {
         if (eventData && eventData.createdInMonth) {
             const currentMonth = this.state.get('currentMonth');
             if (eventData.createdInMonth !== currentMonth) {
@@ -420,7 +434,7 @@ export default class OrdersView {
             }
         }
 
-        this.refresh();
+        await this.refresh(); // NOW ASYNC
     }
 
     formatMonth(monthKey) {
