@@ -1,54 +1,227 @@
-// js/core/SupabaseService.js - Complete Supabase Integration
+// js/core/SupabaseService.js - REWRITTEN FOR RELIABLE CLOUD STORAGE
 
 export class SupabaseService {
     constructor() {
-        // 🚨 REPLACE THESE WITH YOUR ACTUAL VALUES FROM SUPABASE DASHBOARD
-        const SUPABASE_URL = 'https://xxpdogtyvnqfmnmphycp.supabase.co';     // https://xxxxxxxxx.supabase.co
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cGRvZ3R5dm5xZm1ubXBoeWNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2OTAyNTksImV4cCI6MjA3MzI2NjI1OX0.lL8ewSJBOav9Rfz7XjFaOwQONhez8T11FU5vM2ITDZ4'; // eyJhbG...long string
+        // Configuration - Replace with your actual values
+        this.config = {
+            url: 'https://xxpdogtyvnqfmnmphycp.supabase.co',
+            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cGRvZ3R5dm5xZm1ubXBoeWNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2OTAyNTksImV4cCI6MjA3MzI2NjI1OX0.lL8ewSJBOav9Rfz7XjFaOwQONhez8T11FU5vM2ITDZ4',
+            bucket: 'order-images'
+        };
 
-        // Initialize Supabase client
-        this.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        this.bucket = 'order-images'; // Storage bucket name
+        // Connection state
+        this.isConnected = false;
+        this.connectionTested = false;
+        this.lastConnectionTest = 0;
+        this.connectionTestInterval = 5 * 60 * 1000; // Test every 5 minutes
 
-        console.log('🚀 Supabase service initialized');
-        this.testConnection();
+        // Retry configuration
+        this.retryConfig = {
+            maxRetries: 3,
+            baseDelay: 1000,
+            maxDelay: 10000,
+            backoffFactor: 2
+        };
+
+        // Rate limiting
+        this.requestQueue = [];
+        this.activeRequests = 0;
+        this.maxConcurrentRequests = 5;
+
+        // Statistics
+        this.stats = {
+            requestCount: 0,
+            successCount: 0,
+            errorCount: 0,
+            totalResponseTime: 0,
+            avgResponseTime: 0
+        };
+
+        this.initialize();
     }
 
-    // Test database connection
-    async testConnection() {
+    initialize() {
         try {
+            // Initialize Supabase client
+            if (typeof supabase === 'undefined') {
+                console.warn('⚠️ Supabase client not loaded - cloud features disabled');
+                return;
+            }
+
+            this.supabase = supabase.createClient(this.config.url, this.config.anonKey);
+
+            console.log('🚀 SupabaseService initialized');
+
+            // Test connection in background
+            this.testConnectionAsync();
+
+        } catch (error) {
+            console.error('❌ SupabaseService initialization failed:', error);
+        }
+    }
+
+    // CONNECTION MANAGEMENT
+    async testConnection() {
+        const now = Date.now();
+
+        // Use cached result if recent
+        if (this.connectionTested && (now - this.lastConnectionTest) < this.connectionTestInterval) {
+            return this.isConnected;
+        }
+
+        try {
+            if (!this.supabase) {
+                throw new Error('Supabase client not initialized');
+            }
+
+            const startTime = performance.now();
+
+            // Simple connection test
             const { data, error } = await this.supabase
                 .from('settings')
-                .select('*')
+                .select('id')
                 .limit(1);
 
-            if (error) throw error;
-            console.log('✅ Supabase connection successful');
+            const responseTime = performance.now() - startTime;
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows, which is OK
+                throw error;
+            }
+
+            this.isConnected = true;
+            this.connectionTested = true;
+            this.lastConnectionTest = now;
+
+            console.log(`✅ Supabase connection test passed (${responseTime.toFixed(0)}ms)`);
             return true;
+
         } catch (error) {
-            console.error('❌ Supabase connection failed:', error);
+            this.isConnected = false;
+            this.connectionTested = true;
+            this.lastConnectionTest = now;
+
+            console.warn('⚠️ Supabase connection test failed:', error.message);
             return false;
         }
     }
 
-    // ========================================
-    // ORDERS METHODS
-    // ========================================
+    async testConnectionAsync() {
+        // Non-blocking connection test
+        setTimeout(async () => {
+            await this.testConnection();
+        }, 1000);
+    }
 
+    // REQUEST EXECUTION with retry logic
+    async executeRequest(operation, maxRetries = this.retryConfig.maxRetries) {
+        let lastError;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                // Rate limiting
+                await this.waitForSlot();
+
+                const startTime = performance.now();
+                this.activeRequests++;
+
+                // Execute the operation
+                const result = await operation();
+
+                // Update statistics
+                const responseTime = performance.now() - startTime;
+                this.updateStats(true, responseTime);
+
+                return result;
+
+            } catch (error) {
+                lastError = error;
+
+                // Update statistics
+                this.updateStats(false, 0);
+
+                // Don't retry on certain errors
+                if (this.isNonRetryableError(error)) {
+                    throw error;
+                }
+
+                // Wait before retry (exponential backoff)
+                if (attempt < maxRetries) {
+                    const delay = Math.min(
+                        this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffFactor, attempt),
+                        this.retryConfig.maxDelay
+                    );
+
+                    console.warn(`⚠️ Request failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, error.message);
+                    await this.sleep(delay);
+                }
+
+            } finally {
+                this.activeRequests--;
+                this.processQueue();
+            }
+        }
+
+        throw lastError;
+    }
+
+    async waitForSlot() {
+        if (this.activeRequests < this.maxConcurrentRequests) {
+            return;
+        }
+
+        // Add to queue and wait
+        return new Promise((resolve) => {
+            this.requestQueue.push(resolve);
+        });
+    }
+
+    processQueue() {
+        if (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrentRequests) {
+            const next = this.requestQueue.shift();
+            next();
+        }
+    }
+
+    isNonRetryableError(error) {
+        // Don't retry on authentication, permission, or validation errors
+        const nonRetryableCodes = [
+            'PGRST301', // Permission denied
+            'PGRST204', // Invalid JSON
+            '42P01',    // Table doesn't exist
+            '23505'     // Unique constraint violation
+        ];
+
+        return nonRetryableCodes.includes(error.code) ||
+            error.message.includes('permission') ||
+            error.message.includes('authentication');
+    }
+
+    updateStats(success, responseTime) {
+        this.stats.requestCount++;
+
+        if (success) {
+            this.stats.successCount++;
+            this.stats.totalResponseTime += responseTime;
+            this.stats.avgResponseTime = this.stats.totalResponseTime / this.stats.successCount;
+        } else {
+            this.stats.errorCount++;
+        }
+    }
+
+    // ORDERS OPERATIONS
     async createOrder(orderData) {
-        try {
-            console.log('📝 Creating order:', orderData.client);
+        return this.executeRequest(async () => {
+            console.log('📝 Creating order in Supabase:', orderData.client);
 
-            // Upload image if present
+            // Handle image upload first if present
             let imageUrl = null;
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
-                console.log('📷 Uploading image...');
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${Date.now()}`);
             }
 
             const { data, error } = await this.supabase
                 .from('orders')
-                .insert({
+                .insert([{
                     date: orderData.date,
                     client: orderData.client,
                     phone: orderData.phone || '',
@@ -64,62 +237,59 @@ export class SupabaseService {
                     full_set: orderData.fullSet || false,
                     notes: orderData.notes || '',
                     image_url: imageUrl
-                })
+                }])
                 .select()
                 .single();
 
             if (error) throw error;
 
-            console.log('✅ Order created successfully:', data.id);
-            return this.transformOrderFromDB(data);
-        } catch (error) {
-            console.error('❌ Create order failed:', error);
-            throw error;
-        }
+            const transformedOrder = this.transformOrderFromDB(data);
+            console.log('✅ Order created successfully:', transformedOrder.id);
+            return transformedOrder;
+        });
     }
 
     async getOrders(month = null) {
-        try {
-            console.log('📂 Loading orders for month:', month || 'all');
+        return this.executeRequest(async () => {
+            console.log('📂 Loading orders from Supabase, month:', month || 'all');
 
             let query = this.supabase
                 .from('orders')
                 .select('*')
                 .order('date', { ascending: false });
 
-            // Filter by month if specified
+            // Apply month filter if specified
             if (month) {
-                const startDate = `${month}-01`;
-                // Calculate last day of month properly
                 const [year, monthNum] = month.split('-');
+                const startDate = `${year}-${monthNum}-01`;
+
+                // Calculate last day of month
                 const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
-                const endDate = `${month}-${lastDay.toString().padStart(2, '0')}`;
+                const endDate = `${year}-${monthNum}-${lastDay.toString().padStart(2, '0')}`;
+
                 query = query.gte('date', startDate).lte('date', endDate);
             }
 
             const { data, error } = await query;
             if (error) throw error;
 
-            console.log(`✅ Loaded ${data.length} orders`);
-            return data.map(order => this.transformOrderFromDB(order));
-        } catch (error) {
-            console.error('❌ Get orders failed:', error);
-            return [];
-        }
+            const transformedOrders = data.map(order => this.transformOrderFromDB(order));
+            console.log(`✅ Loaded ${transformedOrders.length} orders`);
+            return transformedOrders;
+        });
     }
 
     async updateOrder(orderId, orderData) {
-        try {
-            console.log('✏️ Updating order:', orderId);
+        return this.executeRequest(async () => {
+            console.log('✏️ Updating order in Supabase:', orderId);
 
             // Handle image update
-            let imageUrl = orderData.imageUrl; // Keep existing URL
+            let imageUrl = orderData.imageUrl; // Keep existing
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
-                // New image uploaded
-                console.log('📷 Uploading new image...');
+                // Upload new image
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${orderId}-${Date.now()}`);
 
-                // Delete old image if exists and is different
+                // Clean up old image if different
                 if (orderData.imageUrl && orderData.imageUrl !== imageUrl) {
                     await this.deleteImage(orderData.imageUrl);
                 }
@@ -150,17 +320,15 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            const transformedOrder = this.transformOrderFromDB(data);
             console.log('✅ Order updated successfully');
-            return this.transformOrderFromDB(data);
-        } catch (error) {
-            console.error('❌ Update order failed:', error);
-            throw error;
-        }
+            return transformedOrder;
+        });
     }
 
     async deleteOrder(orderId) {
-        try {
-            console.log('🗑️ Deleting order:', orderId);
+        return this.executeRequest(async () => {
+            console.log('🗑️ Deleting order from Supabase:', orderId);
 
             // Get order to delete associated image
             const { data: order } = await this.supabase
@@ -169,12 +337,7 @@ export class SupabaseService {
                 .eq('id', orderId)
                 .single();
 
-            // Delete image if exists
-            if (order?.image_url) {
-                await this.deleteImage(order.image_url);
-            }
-
-            // Delete order from database
+            // Delete the order record
             const { error } = await this.supabase
                 .from('orders')
                 .delete()
@@ -182,116 +345,64 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Delete associated image if exists
+            if (order?.image_url) {
+                await this.deleteImage(order.image_url);
+            }
+
             console.log('✅ Order deleted successfully');
             return true;
-        } catch (error) {
-            console.error('❌ Delete order failed:', error);
-            throw error;
-        }
+        });
     }
 
-    // ========================================
-    // IMAGE METHODS
-    // ========================================
-
-    async uploadImage(base64Data, filename) {
-        try {
-            console.log('📤 Uploading image:', filename);
-
-            // Convert base64 to blob
-            const response = await fetch(base64Data);
-            const blob = await response.blob();
-
-            // Create unique filename with extension
-            const extension = blob.type.split('/')[1] || 'jpg';
-            const filePath = `${filename}.${extension}`;
-
-            const { data, error } = await this.supabase.storage
-                .from(this.bucket)
-                .upload(filePath, blob, {
-                    cacheControl: '3600',
-                    upsert: true // Overwrite if exists
-                });
-
-            if (error) throw error;
-
-            // Get public URL
-            const { data: { publicUrl } } = this.supabase.storage
-                .from(this.bucket)
-                .getPublicUrl(filePath);
-
-            console.log('✅ Image uploaded successfully');
-            return publicUrl;
-        } catch (error) {
-            console.error('❌ Image upload failed:', error);
-            return null;
-        }
-    }
-
-    async deleteImage(imageUrl) {
-        try {
-            if (!imageUrl || !imageUrl.includes(this.bucket)) return;
-
-            // Extract filename from URL
-            const urlParts = imageUrl.split('/');
-            const filename = urlParts[urlParts.length - 1];
-
-            const { error } = await this.supabase.storage
-                .from(this.bucket)
-                .remove([filename]);
-
-            if (error) throw error;
-            console.log('✅ Image deleted:', filename);
-        } catch (error) {
-            console.error('❌ Image deletion failed:', error);
-        }
-    }
-
-    // ========================================
-    // CLIENTS METHODS
-    // ========================================
-
+    // CLIENTS OPERATIONS
     async createClient(clientData) {
-        try {
+        return this.executeRequest(async () => {
+            console.log('📝 Creating client in Supabase:', clientData.name);
+
             const { data, error } = await this.supabase
                 .from('clients')
-                .insert({
+                .insert([{
                     name: clientData.name,
                     phone: clientData.phone || '',
                     email: clientData.email || '',
                     address: clientData.address || '',
                     preferred_source: clientData.preferredSource || '',
                     notes: clientData.notes || ''
-                })
+                }])
                 .select()
                 .single();
 
             if (error) throw error;
-            return this.transformClientFromDB(data);
-        } catch (error) {
-            console.error('❌ Create client failed:', error);
-            throw error;
-        }
+
+            const transformedClient = this.transformClientFromDB(data);
+            console.log('✅ Client created successfully');
+            return transformedClient;
+        });
     }
 
     async getClients() {
-        try {
+        return this.executeRequest(async () => {
+            console.log('📂 Loading clients from Supabase');
+
             const { data, error } = await this.supabase
                 .from('clients')
                 .select('*')
                 .order('name');
 
             if (error) throw error;
-            return data.map(client => this.transformClientFromDB(client));
-        } catch (error) {
-            console.error('❌ Get clients failed:', error);
-            return [];
-        }
+
+            const transformedClients = data.map(client => this.transformClientFromDB(client));
+            console.log(`✅ Loaded ${transformedClients.length} clients`);
+            return transformedClients;
+        });
     }
 
     async updateClient(clientId, clientData) {
-        try {
-            const dbId = parseInt(clientId.replace('client_', '')); // Remove prefix
+        return this.executeRequest(async () => {
+            console.log('✏️ Updating client in Supabase:', clientId);
+
+            const dbId = this.extractDbId(clientId);
 
             const { data, error } = await this.supabase
                 .from('clients')
@@ -308,16 +419,16 @@ export class SupabaseService {
                 .single();
 
             if (error) throw error;
-            return this.transformClientFromDB(data);
-        } catch (error) {
-            console.error('❌ Update client failed:', error);
-            throw error;
-        }
+
+            const transformedClient = this.transformClientFromDB(data);
+            console.log('✅ Client updated successfully');
+            return transformedClient;
+        });
     }
 
     async deleteClient(clientId) {
-        try {
-            const dbId = parseInt(clientId.replace('client_', ''));
+        return this.executeRequest(async () => {
+            const dbId = this.extractDbId(clientId);
 
             const { error } = await this.supabase
                 .from('clients')
@@ -325,41 +436,39 @@ export class SupabaseService {
                 .eq('id', dbId);
 
             if (error) throw error;
+
+            console.log('✅ Client deleted successfully');
             return true;
-        } catch (error) {
-            console.error('❌ Delete client failed:', error);
-            throw error;
-        }
+        });
     }
 
-    // ========================================
-    // SETTINGS METHODS
-    // ========================================
-
+    // SETTINGS OPERATIONS
     async getSettings() {
-        try {
+        return this.executeRequest(async () => {
+            console.log('⚙️ Loading settings from Supabase');
+
             const { data, error } = await this.supabase
                 .from('settings')
                 .select('data')
                 .eq('id', 1)
                 .single();
 
-            if (error && error.code !== 'PGRST116') throw error;
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
+                throw error;
+            }
 
-            return data?.data || {
-                usdRate: 1.71,
-                factoryShipping: 1.5,
-                origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
-                vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
-            };
-        } catch (error) {
-            console.error('❌ Get settings failed:', error);
-            return null;
-        }
+            const settings = data?.data || this.getDefaultSettings();
+            settings.source = 'supabase';
+
+            console.log('✅ Settings loaded from Supabase');
+            return settings;
+        });
     }
 
     async saveSettings(settings) {
-        try {
+        return this.executeRequest(async () => {
+            console.log('💾 Saving settings to Supabase');
+
             const { data, error } = await this.supabase
                 .from('settings')
                 .upsert({ id: 1, data: settings })
@@ -367,18 +476,74 @@ export class SupabaseService {
                 .single();
 
             if (error) throw error;
+
+            console.log('✅ Settings saved to Supabase');
             return data.data;
+        });
+    }
+
+    // IMAGE OPERATIONS
+    async uploadImage(base64Data, filename) {
+        return this.executeRequest(async () => {
+            console.log('📤 Uploading image:', filename);
+
+            // Convert base64 to blob
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+
+            // Create unique filename
+            const extension = blob.type.split('/')[1] || 'jpg';
+            const filePath = `${filename}.${extension}`;
+
+            const { data, error } = await this.supabase.storage
+                .from(this.config.bucket)
+                .upload(filePath, blob, {
+                    cacheControl: '3600',
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            // Get public URL
+            const { data: { publicUrl } } = this.supabase.storage
+                .from(this.config.bucket)
+                .getPublicUrl(filePath);
+
+            console.log('✅ Image uploaded successfully');
+            return publicUrl;
+        });
+    }
+
+    async deleteImage(imageUrl) {
+        if (!imageUrl || !imageUrl.includes(this.config.bucket)) {
+            return; // Not our image
+        }
+
+        try {
+            // Extract filename from URL
+            const urlParts = imageUrl.split('/');
+            const filename = urlParts[urlParts.length - 1];
+
+            const { error } = await this.supabase.storage
+                .from(this.config.bucket)
+                .remove([filename]);
+
+            if (error) throw error;
+
+            console.log('✅ Image deleted:', filename);
+
         } catch (error) {
-            console.error('❌ Save settings failed:', error);
-            throw error;
+            console.warn('⚠️ Image deletion failed:', error);
+            // Don't fail the operation if image deletion fails
         }
     }
 
-    // ========================================
-    // TRANSFORM METHODS (Convert DB format to App format)
-    // ========================================
-
+    // DATA TRANSFORMATION
     transformOrderFromDB(dbOrder) {
+        // Calculate derived fields
+        const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
+        const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
+
         return {
             id: dbOrder.id,
             date: dbOrder.date,
@@ -392,19 +557,19 @@ export class SupabaseService {
             rate: parseFloat(dbOrder.rate),
             extrasBGN: parseFloat(dbOrder.extras_bgn),
             sellBGN: parseFloat(dbOrder.sell_bgn),
-            totalBGN: parseFloat(dbOrder.total_bgn),
-            balanceBGN: parseFloat(dbOrder.balance_bgn),
+            totalBGN: parseFloat(totalBGN.toFixed(2)),
+            balanceBGN: parseFloat(balanceBGN.toFixed(2)),
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',
-            imageData: dbOrder.image_url, // URL instead of base64
+            imageData: dbOrder.image_url, // For compatibility
             imageUrl: dbOrder.image_url
         };
     }
 
     transformClientFromDB(dbClient) {
         return {
-            id: 'client_' + dbClient.id, // Keep compatible with existing code
+            id: 'client_' + dbClient.id, // Maintain compatibility
             name: dbClient.name,
             phone: dbClient.phone || '',
             email: dbClient.email || '',
@@ -415,73 +580,116 @@ export class SupabaseService {
         };
     }
 
-    // ========================================
-    // MIGRATION HELPER METHODS
-    // ========================================
+    // UTILITY METHODS
+    extractDbId(clientId) {
+        // Extract database ID from client_123 format
+        if (typeof clientId === 'string' && clientId.startsWith('client_')) {
+            return parseInt(clientId.replace('client_', ''));
+        }
+        return parseInt(clientId);
+    }
 
-    async migrateFromLocalStorage() {
+    getDefaultSettings() {
+        return {
+            usdRate: 1.71,
+            factoryShipping: 1.5,
+            origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
+            vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
+        };
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // STATUS AND DEBUGGING
+    getConnectionStatus() {
+        return {
+            isConnected: this.isConnected,
+            lastTest: this.lastConnectionTest,
+            testAge: Date.now() - this.lastConnectionTest,
+            nextTest: this.lastConnectionTest + this.connectionTestInterval
+        };
+    }
+
+    getStatistics() {
+        return {
+            ...this.stats,
+            successRate: this.stats.requestCount > 0 ?
+                (this.stats.successCount / this.stats.requestCount * 100).toFixed(1) + '%' : '0%',
+            activeRequests: this.activeRequests,
+            queueLength: this.requestQueue.length
+        };
+    }
+
+    debugSupabase() {
+        const status = this.getConnectionStatus();
+        const stats = this.getStatistics();
+
+        console.group('🔍 SUPABASE DEBUG');
+        console.log('Connection:', status);
+        console.log('Statistics:', stats);
+        console.log('Config:', {
+            url: this.config.url,
+            bucket: this.config.bucket,
+            hasClient: !!this.supabase
+        });
+        console.groupEnd();
+    }
+
+    // HEALTH CHECK
+    async healthCheck() {
         try {
-            console.log('🚀 Starting localStorage migration...');
+            const connected = await this.testConnection();
+            const stats = this.getStatistics();
 
-            // Get localStorage data
-            const monthlyData = JSON.parse(localStorage.getItem('orderSystem_monthlyData') || '{}');
-            const clientsData = JSON.parse(localStorage.getItem('orderSystem_clientsData') || '{}');
-            const settings = JSON.parse(localStorage.getItem('orderSystem_settings') || '{}');
+            let status = 'healthy';
+            const issues = [];
 
-            let migrated = { orders: 0, clients: 0, settings: 0 };
-
-            // Migrate settings first
-            if (Object.keys(settings).length > 0) {
-                await this.saveSettings(settings);
-                migrated.settings = 1;
-                console.log('✅ Settings migrated');
+            if (!connected) {
+                status = 'disconnected';
+                issues.push('No connection to Supabase');
             }
 
-            // Migrate clients
-            for (const client of Object.values(clientsData)) {
-                try {
-                    await this.createClient({
-                        name: client.name,
-                        phone: client.phone,
-                        email: client.email,
-                        address: client.address,
-                        preferredSource: client.preferredSource,
-                        notes: client.notes
-                    });
-                    migrated.clients++;
-                } catch (error) {
-                    console.warn('⚠️ Client migration failed:', client.name, error);
-                }
-            }
-            console.log(`✅ ${migrated.clients} clients migrated`);
-
-            // Migrate orders (this will take the longest due to images)
-            for (const [month, data] of Object.entries(monthlyData)) {
-                if (data.orders && data.orders.length > 0) {
-                    console.log(`📦 Migrating ${data.orders.length} orders from ${month}...`);
-
-                    for (const order of data.orders) {
-                        try {
-                            await this.createOrder(order);
-                            migrated.orders++;
-
-                            // Show progress for every 10 orders
-                            if (migrated.orders % 10 === 0) {
-                                console.log(`📈 Migration progress: ${migrated.orders} orders completed`);
-                            }
-                        } catch (error) {
-                            console.warn('⚠️ Order migration failed:', order.client, error);
-                        }
-                    }
-                }
+            if (stats.successRate < 80 && this.stats.requestCount > 10) {
+                status = 'degraded';
+                issues.push(`Low success rate: ${stats.successRate}`);
             }
 
-            console.log(`🎉 Migration completed: ${migrated.orders} orders, ${migrated.clients} clients, ${migrated.settings} settings`);
-            return migrated;
+            if (this.activeRequests >= this.maxConcurrentRequests) {
+                status = 'overloaded';
+                issues.push('Request queue full');
+            }
+
+            return {
+                status,
+                connected,
+                issues,
+                stats,
+                timestamp: Date.now()
+            };
 
         } catch (error) {
-            console.error('❌ Migration failed:', error);
-            throw error;
+            return {
+                status: 'error',
+                connected: false,
+                issues: [error.message],
+                timestamp: Date.now()
+            };
         }
+    }
+
+    // CLEANUP
+    destroy() {
+        console.log('🗑️ Destroying SupabaseService...');
+
+        // Clear queues
+        this.requestQueue = [];
+
+        // Reset state
+        this.isConnected = false;
+        this.connectionTested = false;
+
+        console.log('✅ SupabaseService destroyed');
     }
 }
