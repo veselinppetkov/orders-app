@@ -7,116 +7,119 @@ export default class ExpensesView {
 
     async render() {
         try {
-            // EXPENSES ARE STILL LOCAL (not migrated to Supabase yet)
-            const expenses = this.expensesModule.getExpenses();
-            const total = this.expensesModule.getTotalExpenses();
+            // FIXED: Await async methods
+            const expenses = await this.expensesModule.getExpenses();
+            const total = await this.expensesModule.getTotalExpenses();
             const currentMonth = this.state.get('currentMonth');
 
             return `
-                <div class="expenses-view">
-                    <h2>💰 Месечни разходи</h2>
-                    <p style="margin-bottom: 20px; color: #6c757d;">
-                        Управлявайте постоянните месечни разходи на бизнеса за <strong>${this.formatMonth(currentMonth)}</strong>
-                    </p>
-                    
-                    <div class="controls">
-                        <button class="btn" id="new-expense-btn">➕ Добави разход</button>
-                        <button class="btn secondary" id="reset-expenses-btn">🔄 Възстанови defaults</button>
+            <div class="expenses-view">
+                <h2>💰 Месечни разходи</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">
+                    Управлявайте постоянните месечни разходи на бизнеса за <strong>${this.formatMonth(currentMonth)}</strong>
+                </p>
+                
+                <div class="controls">
+                    <button class="btn" id="new-expense-btn">➕ Добави разход</button>
+                    <button class="btn secondary" id="reset-expenses-btn">🔄 Възстанови defaults</button>
+                </div>
+                
+                ${expenses.length > 0 ? `
+                    <div class="expenses-list">
+                        ${expenses.map(expense => this.renderExpenseItem(expense)).join('')}
                     </div>
                     
-                    ${expenses.length > 0 ? `
-                        <div class="expenses-list">
-                            ${expenses.map(expense => this.renderExpenseItem(expense)).join('')}
+                    <div class="total-expenses">
+                        <h3>Общо месечни разходи за ${this.formatMonth(currentMonth)}:</h3>
+                        <div class="total-amount">${total.toFixed(2)} лв</div>
+                        <div class="total-info">
+                            <small>${expenses.length} позиции • Средно ${(total / expenses.length).toFixed(2)} лв на позиция</small>
                         </div>
-                        
-                        <div class="total-expenses">
-                            <h3>Общо месечни разходи за ${this.formatMonth(currentMonth)}:</h3>
-                            <div class="total-amount">${total.toFixed(2)} лв</div>
-                            <div class="total-info">
-                                <small>${expenses.length} позиции • Средно ${(total / expenses.length).toFixed(2)} лв на позиция</small>
-                            </div>
-                        </div>
-                    ` : `
-                        <div class="empty-state">
-                            <h3>Няма добавени разходи</h3>
-                            <p>Започнете като добавите първия си месечен разход</p>
-                            <button class="btn" onclick="document.getElementById('new-expense-btn').click()">➕ Добави разход</button>
-                        </div>
-                    `}
-                    
-                    <div class="expenses-insights">
-                        <h3>📊 Анализ на разходите</h3>
-                        <div class="insights-grid">
-                            <div class="insight-card">
-                                <div class="insight-label">Най-голям разход</div>
-                                <div class="insight-value">
-                                    ${expenses.length > 0 ?
+                    </div>
+                ` : `
+                    <div class="empty-state">
+                        <h3>Няма добавени разходи</h3>
+                        <p>Започнете като добавите първия си месечен разход</p>
+                        <button class="btn" onclick="document.getElementById('new-expense-btn').click()">➕ Добави разход</button>
+                    </div>
+                `}
+                
+                <div class="expenses-insights">
+                    <h3>📊 Анализ на разходите</h3>
+                    <div class="insights-grid">
+                        <div class="insight-card">
+                            <div class="insight-label">Най-голям разход</div>
+                            <div class="insight-value">
+                                ${expenses.length > 0 ?
                 (() => {
                     const maxExpense = expenses.reduce((max, exp) => exp.amount > max.amount ? exp : max, expenses[0]);
                     return `${maxExpense.name} (${maxExpense.amount.toFixed(2)} лв)`;
                 })()
                 : 'Няма данни'
             }
-                                </div>
                             </div>
-                            <div class="insight-card">
-                                <div class="insight-label">Процент от общо</div>
-                                <div class="insight-value">
-                                    ${expenses.length > 0 && total > 0 ?
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Процент от общо</div>
+                            <div class="insight-value">
+                                ${expenses.length > 0 && total > 0 ?
                 `${((expenses.reduce((max, exp) => exp.amount > max.amount ? exp : max, expenses[0]).amount / total) * 100).toFixed(1)}%`
                 : 'Няма данни'
             }
-                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
+            </div>
+        `;
 
         } catch (error) {
             console.error('❌ Failed to render expenses view:', error);
             return `
-                <div class="error-state">
-                    <h3>❌ Failed to load expenses</h3>
-                    <p>Error: ${error.message}</p>
-                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
-                </div>
-            `;
+            <div class="error-state">
+                <h3>❌ Failed to load expenses</h3>
+                <p>Error: ${error.message}</p>
+                <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+            </div>
+        `;
         }
     }
 
     renderExpenseItem(expense) {
-        const isDefaultExpense = expense.id < 100; // Default expenses have low IDs
+        const isDefaultExpense = expense.id < 100;
 
         return `
-            <div class="expense-item ${isDefaultExpense ? 'default-expense' : 'custom-expense'}">
-                <div class="expense-info">
-                    <div class="expense-header">
-                        <div class="expense-name">${expense.name}</div>
-                        ${isDefaultExpense ? '<span class="expense-badge default">Default</span>' : '<span class="expense-badge custom">Custom</span>'}
-                    </div>
-                    <div class="expense-amount">${expense.amount.toFixed(2)} лв</div>
-                    ${expense.note ? `<div class="expense-note">${expense.note}</div>` : ''}
-                    
-                    <div class="expense-stats">
-                        <small>
-                            ${this.calculateExpensePercentage(expense)} от общите разходи
-                        </small>
-                    </div>
+        <div class="expense-item ${isDefaultExpense ? 'default-expense' : 'custom-expense'}">
+            <div class="expense-info">
+                <div class="expense-header">
+                    <div class="expense-name">${expense.name}</div>
+                    ${isDefaultExpense ? '<span class="expense-badge default">Default</span>' : '<span class="expense-badge custom">Custom</span>'}
                 </div>
-                <div class="expense-actions">
-                    <button class="btn btn-sm" data-action="edit" data-id="${expense.id}" title="Редактиране">✏️</button>
-                    <button class="btn btn-sm danger" data-action="delete" data-id="${expense.id}" title="Изтриване" 
-                            ${isDefaultExpense ? 'onclick="return confirm(\'Сигурни ли сте, че искате да изтриете този default разход?\')"' : ''}>
-                        🗑️
-                    </button>
+                <div class="expense-amount">${expense.amount.toFixed(2)} лв</div>
+                ${expense.note ? `<div class="expense-note">${expense.note}</div>` : ''}
+                
+                <div class="expense-stats">
+                    <small>
+                        <!-- Calculate percentage inline to avoid async complexity -->
+                        ${this.calculatePercentageSync(expense)} от общите разходи
+                    </small>
                 </div>
             </div>
-        `;
+            <div class="expense-actions">
+                <button class="btn btn-sm" data-action="edit" data-id="${expense.id}" title="Редактиране">✏️</button>
+                <button class="btn btn-sm danger" data-action="delete" data-id="${expense.id}" title="Изтриване">🗑️</button>
+            </div>
+        </div>
+    `;
     }
 
-    calculateExpensePercentage(expense) {
-        const total = this.expensesModule.getTotalExpenses();
+    calculatePercentageSync(expense) {
+        // Calculate total from expenses in memory instead of calling async method
+        const currentMonth = this.state.get('currentMonth');
+        const monthlyData = this.state.get('monthlyData') || {};
+        const expenses = monthlyData[currentMonth]?.expenses || [];
+        const total = expenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+
         if (total === 0) return '0%';
         return `${((expense.amount / total) * 100).toFixed(1)}%`;
     }

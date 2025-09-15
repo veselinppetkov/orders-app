@@ -430,3 +430,56 @@ input:focus, select:focus, textarea:focus {
 .btn.info:hover {
     background: #138496;
 }
+
+/* Add this CSS to css/components.css or css/main.css */
+
+/* Override the reports grid to make 3 columns fill the page */
+.reports-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
+    gap: 25px; /* Slightly more gap for better spacing */
+    margin-top: 20px;
+}
+
+/* Make sure report cards don't have a max width */
+.report-card {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 15px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    min-height: 400px; /* Ensure consistent height */
+}
+
+.report-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-color: #667eea;
+}
+
+.report-card h3 {
+    margin-bottom: 15px;
+    color: #495057;
+    font-size: 18px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 1200px) {
+    .reports-grid {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns on medium screens */
+    }
+}
+
+@media (max-width: 768px) {
+    .reports-grid {
+        grid-template-columns: 1fr; /* 1 column on mobile */
+        gap: 15px;
+    }
+
+    .report-card {
+        min-height: auto;
+    }
+}
+

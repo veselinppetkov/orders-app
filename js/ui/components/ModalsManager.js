@@ -66,7 +66,7 @@ export class ModalsManager {
                     modalContent = this.renderInventoryModal(data);
                     break;
                 case 'expense':
-                    modalContent = this.renderExpenseModal(data);
+                    modalContent = await this.renderExpenseModal(data);  // FIXED
                     break;
                 case 'image':
                     modalContent = this.renderImageModal(data);
@@ -332,44 +332,52 @@ export class ModalsManager {
         `;
     }
 
-    renderExpenseModal(data) {
+// Fix for ModalsManager.js - Replace renderExpenseModal method
+
+    async renderExpenseModal(data) {
         const isEdit = data.mode === 'edit';
-        const expense = isEdit ? this.modules.expenses.getExpenses().find(e => e.id === data.id) : null;
+
+        // FIX: Make this async and await the getExpenses call
+        let expense = null;
+        if (isEdit) {
+            const expenses = await this.modules.expenses.getExpenses();
+            expense = expenses.find(e => e.id === data.id);
+        }
 
         return `
-            <div class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>${isEdit ? '✏️ Редактиране на разход' : '💰 Нов разход'}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+        <div class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>${isEdit ? '✏️ Редактиране на разход' : '💰 Нов разход'}</h2>
+                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                </div>
+                
+                <form id="expense-form" class="modal-form">
+                    <div class="form-group">
+                        <label>Име на разхода:</label>
+                        <input type="text" id="expenseName" value="${expense?.name || ''}" required>
                     </div>
                     
-                    <form id="expense-form" class="modal-form">
-                        <div class="form-group">
-                            <label>Име на разхода:</label>
-                            <input type="text" id="expenseName" value="${expense?.name || ''}" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Сума (BGN):</label>
-                            <input type="number" id="expenseAmount" value="${expense?.amount || ''}" step="0.01" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Бележка:</label>
-                            <textarea id="expenseNote" rows="3">${expense?.note || ''}</textarea>
-                        </div>
-                        
-                        <div class="form-actions">
-                            <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
-                            <button type="submit" class="btn primary">
-                                ${isEdit ? 'Запази промените' : 'Добави разход'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    <div class="form-group">
+                        <label>Сума (BGN):</label>
+                        <input type="number" id="expenseAmount" value="${expense?.amount || ''}" step="0.01" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Бележка:</label>
+                        <textarea id="expenseNote" rows="3">${expense?.note || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="submit" class="btn primary">
+                            ${isEdit ? 'Запази промените' : 'Добави разход'}
+                        </button>
+                    </div>
+                </form>
             </div>
-        `;
+        </div>
+    `;
     }
 
     renderInventoryModal(data) {

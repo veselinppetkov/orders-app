@@ -1,3 +1,5 @@
+// js/ui/views/ReportsView.js - CLEANED VERSION
+
 export default class ReportsView {
     constructor(modules, state, eventBus) {
         this.reportsModule = modules.reports;
@@ -12,7 +14,7 @@ export default class ReportsView {
             const originReport = await this.reportsModule.getReportByOrigin();
             const vendorReport = await this.reportsModule.getReportByVendor();
             const monthlyReport = await this.reportsModule.getReportByMonth();
-            const topClients = await this.reportsModule.getTopClients(5);
+            // REMOVED: const topClients = await this.reportsModule.getTopClients(5);
 
             return `
                 <div class="reports-view">
@@ -53,15 +55,12 @@ export default class ReportsView {
                             ${this.renderMonthlyTable(monthlyReport)}
                         </div>
                         
-                        <div class="report-card">
-                            <h3>🏆 Топ клиенти</h3>
-                            ${this.renderTopClients(topClients)}
-                        </div>
+                        <!-- REMOVED: Top Clients section -->
                     </div>
                     
                     <div class="report-actions">
                         <button class="btn" id="refresh-reports">🔄 Обнови отчетите</button>
-                        <button class="btn secondary" id="export-reports">📤 Експорт в CSV</button>
+                        <!-- REMOVED: CSV Export button -->
                     </div>
                 </div>
             `;
@@ -78,9 +77,9 @@ export default class ReportsView {
         }
     }
 
-    renderReportTable(data, label) {
+    renderReportTable(data, labelTitle) {
         if (!data || Object.keys(data).length === 0) {
-            return `<p class="no-data">Няма данни за показване</p>`;
+            return `<p class="no-data">Няма данни за ${labelTitle.toLowerCase()}</p>`;
         }
 
         const sorted = Object.entries(data).sort((a, b) => b[1].profit - a[1].profit);
@@ -89,19 +88,21 @@ export default class ReportsView {
             <table class="report-table">
                 <thead>
                     <tr>
-                        <th>${label}</th>
-                        <th>Брой</th>
+                        <th>${labelTitle}</th>
+                        <th>Поръчки</th>
                         <th>Приходи</th>
                         <th>Печалба</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${sorted.map(([key, val]) => `
+                    ${sorted.map(([key, value]) => `
                         <tr>
                             <td><strong>${key}</strong></td>
-                            <td>${val.count}</td>
-                            <td>${val.revenue.toFixed(2)} лв</td>
-                            <td><strong>${val.profit.toFixed(2)} лв</strong></td>
+                            <td>${value.count}</td>
+                            <td>${value.revenue.toFixed(2)} лв</td>
+                            <td class="${value.profit >= 0 ? 'profit-positive' : 'profit-negative'}">
+                                <strong>${value.profit.toFixed(2)} лв</strong>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -136,14 +137,14 @@ export default class ReportsView {
                     </tr>
                 </thead>
                 <tbody>
-                    ${sorted.map(([month, val]) => {
-            const netProfit = val.profit - val.expenses;
+                    ${sorted.map(([month, value]) => {
+            const netProfit = value.profit - value.expenses;
             return `
                             <tr>
                                 <td><strong>${this.formatMonth(month)}</strong></td>
-                                <td>${val.count}</td>
-                                <td>${val.revenue.toFixed(2)} лв</td>
-                                <td>${val.expenses.toFixed(2)} лв</td>
+                                <td>${value.count}</td>
+                                <td>${value.revenue.toFixed(2)} лв</td>
+                                <td>${value.expenses.toFixed(2)} лв</td>
                                 <td class="${netProfit >= 0 ? 'profit-positive' : 'profit-negative'}">
                                     <strong>${netProfit.toFixed(2)} лв</strong>
                                 </td>
@@ -164,38 +165,7 @@ export default class ReportsView {
         `;
     }
 
-    renderTopClients(clients) {
-        if (!clients || clients.length === 0) {
-            return `<p class="no-data">Няма клиентски данни</p>`;
-        }
-
-        return `
-            <table class="report-table">
-                <thead>
-                    <tr>
-                        <th>Позиция</th>
-                        <th>Клиент</th>
-                        <th>Поръчки</th>
-                        <th>Приходи</th>
-                        <th>Печалба</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${clients.map((c, index) => `
-                        <tr>
-                            <td class="rank-cell">
-                                <span class="rank ${index < 3 ? 'top-rank' : ''}">${index + 1}</span>
-                            </td>
-                            <td><strong>${c.client}</strong></td>
-                            <td>${c.count}</td>
-                            <td>${c.revenue.toFixed(2)} лв</td>
-                            <td><strong>${c.profit.toFixed(2)} лв</strong></td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
-    }
+    // REMOVED: renderTopClients method completely
 
     formatMonth(monthKey) {
         const [year, month] = monthKey.split('-');
@@ -204,7 +174,7 @@ export default class ReportsView {
     }
 
     attachListeners() {
-        // Refresh reports button
+        // Refresh reports button (KEEP THIS)
         document.getElementById('refresh-reports')?.addEventListener('click', async () => {
             this.eventBus.emit('notification:show', {
                 message: '🔄 Обновяване на отчетите...',
@@ -225,96 +195,12 @@ export default class ReportsView {
             }
         });
 
-        // Export reports button
-        document.getElementById('export-reports')?.addEventListener('click', async () => {
-            try {
-                await this.exportReportsToCSV();
-                this.eventBus.emit('notification:show', {
-                    message: '📤 Отчетите са експортирани успешно!',
-                    type: 'success'
-                });
-            } catch (error) {
-                this.eventBus.emit('notification:show', {
-                    message: '❌ Грешка при експорт: ' + error.message,
-                    type: 'error'
-                });
-            }
-        });
+        // REMOVED: Export reports button event listener
     }
 
-    async exportReportsToCSV() {
-        try {
-            const allTimeStats = await this.reportsModule.getAllTimeStats();
-            const originReport = await this.reportsModule.getReportByOrigin();
-            const vendorReport = await this.reportsModule.getReportByVendor();
-            const monthlyReport = await this.reportsModule.getReportByMonth();
-            const topClients = await this.reportsModule.getTopClients(10);
+    // REMOVED: exportReportsToCSV method completely
 
-            let csvContent = '';
-
-            // Summary section
-            csvContent += 'ОБОБЩЕНИ СТАТИСТИКИ\n';
-            csvContent += `Общо поръчки,${allTimeStats.totalOrders}\n`;
-            csvContent += `Общо приходи,${allTimeStats.totalRevenue.toFixed(2)} лв\n`;
-            csvContent += `Нетна печалба,${allTimeStats.netProfit.toFixed(2)} лв\n`;
-            csvContent += `Средна печалба,${allTimeStats.avgProfit.toFixed(2)} лв\n\n`;
-
-            // Origins report
-            csvContent += 'ОТЧЕТ ПО ИЗТОЧНИЦИ\n';
-            csvContent += 'Източник,Брой,Приходи,Печалба\n';
-            Object.entries(originReport)
-                .sort((a, b) => b[1].profit - a[1].profit)
-                .forEach(([origin, data]) => {
-                    csvContent += `${origin},${data.count},${data.revenue.toFixed(2)},${data.profit.toFixed(2)}\n`;
-                });
-            csvContent += '\n';
-
-            // Vendors report
-            csvContent += 'ОТЧЕТ ПО ДОСТАВЧИЦИ\n';
-            csvContent += 'Доставчик,Брой,Приходи,Печалба\n';
-            Object.entries(vendorReport)
-                .sort((a, b) => b[1].profit - a[1].profit)
-                .forEach(([vendor, data]) => {
-                    csvContent += `${vendor},${data.count},${data.revenue.toFixed(2)},${data.profit.toFixed(2)}\n`;
-                });
-            csvContent += '\n';
-
-            // Monthly report
-            csvContent += 'МЕСЕЧЕН ОТЧЕТ\n';
-            csvContent += 'Месец,Поръчки,Приходи,Разходи,Нетна печалба\n';
-            Object.entries(monthlyReport)
-                .sort((a, b) => b[0].localeCompare(a[0]))
-                .forEach(([month, data]) => {
-                    const netProfit = data.profit - data.expenses;
-                    csvContent += `${this.formatMonth(month)},${data.count},${data.revenue.toFixed(2)},${data.expenses.toFixed(2)},${netProfit.toFixed(2)}\n`;
-                });
-            csvContent += '\n';
-
-            // Top clients
-            csvContent += 'ТОП КЛИЕНТИ\n';
-            csvContent += 'Позиция,Клиент,Поръчки,Приходи,Печалба\n';
-            topClients.forEach((client, index) => {
-                csvContent += `${index + 1},${client.client},${client.count},${client.revenue.toFixed(2)},${client.profit.toFixed(2)}\n`;
-            });
-
-            // Create and download file
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `reports_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-        } catch (error) {
-            console.error('❌ Export to CSV failed:', error);
-            throw error;
-        }
-    }
-
-    // ASYNC REFRESH METHOD
+    // ASYNC REFRESH METHOD (KEEP THIS)
     async refresh() {
         const container = document.getElementById('view-container');
         if (container) {
