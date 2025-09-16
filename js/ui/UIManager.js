@@ -1,5 +1,4 @@
 import {ModalsManager} from "./components/ModalsManager.js";
-import { DataProtectionDashboard } from "./components/DataProtectionDashboard.js";
 
 export class UIManager {
     constructor(modules, state, eventBus, router, undoRedo) {
@@ -12,9 +11,6 @@ export class UIManager {
 
         // Initialize months without touching data
         this.initializeMonths();
-
-        this.protectionDashboard = new DataProtectionDashboard(this.modules.orders.storage, eventBus);
-        this.startDataProtectionMonitoring();
 
         this.modals = new ModalsManager(modules, state, eventBus);
         window.app = window.app || {};
@@ -85,21 +81,6 @@ export class UIManager {
         await this.switchView('orders');
     }
 
-    startDataProtectionMonitoring() {
-        // Start export reminder system
-        this.protectionDashboard.checkExportReminder();
-
-        // Monitor storage health every 5 minutes
-        setInterval(() => {
-            const health = this.modules.orders.storage.getStorageHealth();
-            if (health.status === 'error' || health.status === 'warning') {
-                this.showNotification(
-                    `⚠️ Storage ${health.status}: ${health.error || 'Space running low'}`,
-                    'warning'
-                );
-            }
-        }, 5 * 60 * 1000); // 5 minutes
-    }
 
     async ensureCurrentMonth() {
         const currentMonth = this.state.get('currentMonth');
@@ -124,8 +105,7 @@ export class UIManager {
         const app = document.getElementById('app');
         const currentMonth = this.state.get('currentMonth');
 
-        // ADD protection widget to header
-        const protectionWidget = this.protectionDashboard.createStatusWidget();
+        // REMOVED: protection widget references
 
         app.innerHTML = `
         <div class="container">
@@ -151,9 +131,6 @@ export class UIManager {
                                 <span id="undo-count">0</span> / <span id="redo-count">0</span>
                             </div>
                         </div>
-                        
-                        <!-- ADD Protection Widget -->
-                        ${protectionWidget}
                     </div>
                 </div>
                 
@@ -393,84 +370,8 @@ export class UIManager {
 
     async openModal(data) {
         if (this.modals) {
-            await this.modals.open(data); // NOW ASYNC
+            await this.modals.open(data);
         }
-    }
-
-    async urgentExport() {
-        try {
-            await this.modules.orders.storage.exportData();
-            localStorage.setItem('lastManualExport', Date.now().toString());
-            this.showNotification('📤 Emergency export completed!', 'success');
-
-            // Refresh protection widget
-            setTimeout(() => {
-                const widget = document.getElementById('data-protection-widget');
-                if (widget) {
-                    widget.outerHTML = this.protectionDashboard.createStatusWidget();
-                }
-            }, 1000);
-        } catch (error) {
-            this.showNotification('❌ Export failed: ' + error.message, 'error');
-        }
-    }
-
-    async forceBackup() {
-        try {
-            const criticalKeys = ['monthlyData', 'clientsData', 'settings', 'inventory'];
-            let backed = 0;
-
-            criticalKeys.forEach(key => {
-                const data = this.state.get(key);
-                if (data) {
-                    this.modules.orders.storage.createRollingBackup(key);
-                    backed++;
-                }
-            });
-
-            this.showNotification(`💾 Force backup completed for ${backed} data types`, 'success');
-        } catch (error) {
-            this.showNotification('❌ Backup failed: ' + error.message, 'error');
-        }
-    }
-
-    cleanupStorage() {
-        try {
-            this.modules.orders.storage.emergencyCleanup();
-            this.showNotification('🧹 Storage cleanup completed', 'success');
-
-            // Refresh widget
-            setTimeout(() => {
-                const widget = document.getElementById('data-protection-widget');
-                if (widget) {
-                    widget.outerHTML = this.protectionDashboard.createStatusWidget();
-                }
-            }, 1000);
-        } catch (error) {
-            this.showNotification('❌ Cleanup failed: ' + error.message, 'error');
-        }
-    }
-
-    testRecovery() {
-        try {
-            const backups = this.modules.orders.storage.listBackups();
-            const backupCount = Object.values(backups).reduce((sum, arr) => sum + arr.length, 0);
-
-            if (backupCount > 0) {
-                this.showNotification(`✅ Recovery test passed: ${backupCount} backups available`, 'success');
-            } else {
-                this.showNotification('⚠️ No backups found for recovery', 'warning');
-            }
-        } catch (error) {
-            this.showNotification('❌ Recovery test failed: ' + error.message, 'error');
-        }
-    }
-
-    showBackupManager() {
-        const modalContent = this.protectionDashboard.createBackupManagerModal();
-        const container = document.getElementById('modal-container');
-        container.innerHTML = modalContent;
-        container.querySelector('.modal').classList.add('active');
     }
 
     async restoreFromBackup(key, timestamp) {

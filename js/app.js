@@ -240,6 +240,7 @@ export class App {
     }
 
     // STEP 5: Protection Systems
+
     setupApplicationProtection() {
         console.log('🔒 Setting up application protection...');
 
@@ -256,7 +257,7 @@ export class App {
     }
 
     setupDataProtection() {
-        // Auto-save on critical events
+        // KEEP: Auto-save on critical events (this is not backup system)
         const autoSaveEvents = [
             'order:created', 'order:updated', 'order:deleted',
             'client:created', 'client:updated', 'client:deleted',
@@ -268,8 +269,8 @@ export class App {
             this.eventBus.on(event, () => this.performAutoSave());
         });
 
-        // Periodic auto-save
-        setInterval(() => this.performAutoSave(), 30000); // Every 30 seconds
+        // KEEP: Periodic auto-save (this is not backup system)
+        setInterval(() => this.performAutoSave(), 30000);
     }
 
     setupBrowserProtection() {
