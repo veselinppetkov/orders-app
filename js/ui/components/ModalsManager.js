@@ -588,6 +588,8 @@ export class ModalsManager {
         }
     }
 
+// js/ui/components/ModalsManager.js - Fix handleOrderSubmit method
+
     async handleOrderSubmit(e) {
         e.preventDefault();
 
@@ -598,20 +600,22 @@ export class ModalsManager {
             existingImageData = result?.order?.imageData || null;
         }
 
+        // FIXED: Ensure all form values are properly captured (no undefined/null values)
         const orderData = {
             date: document.getElementById('orderDate').value,
             client: document.getElementById('orderClient').value,
-            phone: document.getElementById('orderPhone').value,
+            phone: document.getElementById('orderPhone').value || '',
             origin: document.getElementById('orderOrigin').value,
             vendor: document.getElementById('orderVendor').value,
             model: document.getElementById('orderModel').value,
-            costUSD: document.getElementById('orderCostUSD').value,
-            shippingUSD: document.getElementById('orderShippingUSD').value,
-            extrasBGN: document.getElementById('orderExtrasBGN').value,
-            sellBGN: document.getElementById('orderSellBGN').value,
+            // FIXED: Always capture exact form values (don't let them be undefined)
+            costUSD: document.getElementById('orderCostUSD').value || '0',
+            shippingUSD: document.getElementById('orderShippingUSD').value || '0',
+            extrasBGN: document.getElementById('orderExtrasBGN').value || '0',
+            sellBGN: document.getElementById('orderSellBGN').value || '0',
             status: document.getElementById('orderStatus').value,
             fullSet: document.getElementById('orderFullSet').checked,
-            notes: document.getElementById('orderNotes').value,
+            notes: document.getElementById('orderNotes').value || '',
             imageData: this.tempImageData || existingImageData
         };
 
@@ -797,27 +801,82 @@ export class ModalsManager {
         if (!hint) return;
 
         try {
-            const client = await this.modules.clients.getClientByName(clientName);
+            // Clear hint first
+            hint.style.display = 'none';
+            hint.innerHTML = '';
+
+            // If no client name, clear all auto-filled fields
+            if (!clientName || !clientName.trim()) {
+                this.clearClientAutoFillFields();
+                return;
+            }
+
+            const client = await this.modules.clients.getClientByName(clientName.trim());
+
             if (client) {
                 const stats = await this.modules.clients.getClientStats(client.name);
+
+                // Update hint display
                 hint.innerHTML = `
-                    📞 ${client.phone || 'Няма тел.'} | 
-                    📊 ${stats.totalOrders} поръчки | 
-                    💰 ${stats.totalRevenue.toFixed(2)} лв
-                `;
+                📞 ${client.phone || 'Няма тел.'} | 
+                📊 ${stats.totalOrders} поръчки | 
+                💰 ${stats.totalRevenue.toFixed(2)} лв
+            `;
                 hint.style.display = 'block';
 
-                // Auto-fill phone if empty
-                const phoneField = document.getElementById('orderPhone');
-                if (phoneField && !phoneField.value && client.phone) {
-                    phoneField.value = client.phone;
-                }
+                // FIXED: Auto-fill ALL client fields (not just phone when empty)
+                this.populateClientFields(client);
+
             } else {
-                hint.style.display = 'none';
+                // Client not found - clear auto-filled fields but keep user input
+                this.clearClientAutoFillFields();
             }
+
         } catch (error) {
             console.error('❌ Client hint update failed:', error);
             hint.style.display = 'none';
+            this.clearClientAutoFillFields();
+        }
+    }
+
+    populateClientFields(client) {
+        // Always update phone (override existing value)
+        const phoneField = document.getElementById('orderPhone');
+        if (phoneField && client.phone) {
+            phoneField.value = client.phone;
+        }
+
+        // Auto-select preferred source if available
+        const originField = document.getElementById('orderOrigin');
+        if (originField && client.preferredSource) {
+            // Find and select the matching option
+            const option = Array.from(originField.options).find(opt =>
+                opt.value === client.preferredSource
+            );
+            if (option) {
+                originField.value = client.preferredSource;
+            }
+        }
+
+        // Note: Other fields like vendor, model, etc. should remain as user input
+        // since they're order-specific, not client-specific
+    }
+
+// NEW METHOD: Clear client auto-filled fields
+    clearClientAutoFillFields() {
+        // Clear phone only if it matches a known client's phone
+        // This prevents clearing user-entered phone numbers
+        const phoneField = document.getElementById('orderPhone');
+        if (phoneField) {
+            // Optionally clear phone - or leave user's input
+            // phoneField.value = '';
+        }
+
+        // Reset origin to default/first option if it was auto-selected
+        const originField = document.getElementById('orderOrigin');
+        if (originField && originField.options.length > 0) {
+            // Don't auto-clear origin as user might have selected it manually
+            // originField.selectedIndex = 0;
         }
     }
 

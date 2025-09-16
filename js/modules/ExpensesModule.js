@@ -324,12 +324,11 @@ export class ExpensesModule {
 
             const expenses = monthlyData[targetMonth]?.expenses || [];
 
-            // Sort expenses: defaults first, then custom by creation date
+            // FIXED: Sort by amount (highest to lowest) instead of defaults first
             return expenses.sort((a, b) => {
-                if (a.isDefault && !b.isDefault) return -1;
-                if (!a.isDefault && b.isDefault) return 1;
-                if (a.isDefault && b.isDefault) return a.id - b.id;
-                return (b.createdAt || '').localeCompare(a.createdAt || '');
+                const amountA = parseFloat(a.amount) || 0;
+                const amountB = parseFloat(b.amount) || 0;
+                return amountB - amountA; // Highest to lowest
             });
 
         } catch (error) {

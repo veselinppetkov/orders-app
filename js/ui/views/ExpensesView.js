@@ -42,34 +42,7 @@ export default class ExpensesView {
                         <p>Започнете като добавите първия си месечен разход</p>
                         <button class="btn" onclick="document.getElementById('new-expense-btn').click()">➕ Добави разход</button>
                     </div>
-                `}
-                
-                <div class="expenses-insights">
-                    <h3>📊 Анализ на разходите</h3>
-                    <div class="insights-grid">
-                        <div class="insight-card">
-                            <div class="insight-label">Най-голям разход</div>
-                            <div class="insight-value">
-                                ${expenses.length > 0 ?
-                (() => {
-                    const maxExpense = expenses.reduce((max, exp) => exp.amount > max.amount ? exp : max, expenses[0]);
-                    return `${maxExpense.name} (${maxExpense.amount.toFixed(2)} лв)`;
-                })()
-                : 'Няма данни'
-            }
-                            </div>
-                        </div>
-                        <div class="insight-card">
-                            <div class="insight-label">Процент от общо</div>
-                            <div class="insight-value">
-                                ${expenses.length > 0 && total > 0 ?
-                `${((expenses.reduce((max, exp) => exp.amount > max.amount ? exp : max, expenses[0]).amount / total) * 100).toFixed(1)}%`
-                : 'Няма данни'
-            }
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                `}                
             </div>
         `;
 
@@ -86,7 +59,8 @@ export default class ExpensesView {
     }
 
     renderExpenseItem(expense) {
-        const isDefaultExpense = expense.id < 100;
+        // FIXED: Proper badge logic - check isDefault property instead of ID range
+        const isDefaultExpense = expense.isDefault === true;
 
         return `
         <div class="expense-item ${isDefaultExpense ? 'default-expense' : 'custom-expense'}">
@@ -98,12 +72,7 @@ export default class ExpensesView {
                 <div class="expense-amount">${expense.amount.toFixed(2)} лв</div>
                 ${expense.note ? `<div class="expense-note">${expense.note}</div>` : ''}
                 
-                <div class="expense-stats">
-                    <small>
-                        <!-- Calculate percentage inline to avoid async complexity -->
-                        ${this.calculatePercentageSync(expense)} от общите разходи
-                    </small>
-                </div>
+                <!-- REMOVED: Percentage display as requested -->
             </div>
             <div class="expense-actions">
                 <button class="btn btn-sm" data-action="edit" data-id="${expense.id}" title="Редактиране">✏️</button>

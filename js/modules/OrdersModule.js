@@ -712,8 +712,39 @@ export class OrdersModule {
         }
     }
 
-    prepareOrder(data) {
-        const settings = this.state.get('settings');
+    // js/modules/OrdersModule.js - Fix prepareOrder method
+
+// js/modules/OrdersModule.js - Replace prepareOrder with async version and unify logic
+
+// UNIFIED ASYNC ORDER PREPARATION (used by create, update, duplicate)
+    async prepareOrder(data) {
+        // FIXED: Ensure settings are loaded before calculation
+        let settings = this.state.get('settings');
+
+        // If settings not loaded or invalid, load them first
+        if (!settings || !settings.usdRate || !settings.factoryShipping) {
+            try {
+                // Use the settings module to get fresh settings
+                const settingsModule = this.state.get('modules')?.settings;
+                if (settingsModule) {
+                    settings = await settingsModule.getSettings();
+                } else {
+                    // Fallback to default values
+                    settings = {
+                        usdRate: 1.71,
+                        factoryShipping: 1.5
+                    };
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load settings, using defaults:', error);
+                settings = {
+                    usdRate: 1.71,
+                    factoryShipping: 1.5
+                };
+            }
+        }
+
+        // Prepare order with guaranteed settings
         const order = {
             id: data.id || Date.now(),
             date: data.date,
@@ -723,20 +754,229 @@ export class OrdersModule {
             vendor: data.vendor,
             model: data.model,
             costUSD: parseFloat(data.costUSD) || 0,
-            shippingUSD: parseFloat(data.shippingUSD) || settings.factoryShipping,
-            rate: settings.usdRate,
+            // FIXED: Use form value if provided, otherwise use settings default
+            shippingUSD: (data.shippingUSD !== '' && data.shippingUSD !== undefined && data.shippingUSD !== null)
+                ? parseFloat(data.shippingUSD) || 0
+                : parseFloat(settings.factoryShipping) || 0,
+            rate: parseFloat(settings.usdRate) || 1.71,
             extrasBGN: parseFloat(data.extrasBGN) || 0,
-                sellBGN: Number.isNaN(parseFloat(data.sellBGN)) ? 0 : parseFloat(data.sellBGN),
+            sellBGN: parseFloat(data.sellBGN) || 0,
             status: data.status || 'Очакван',
             fullSet: data.fullSet || false,
             notes: data.notes || '',
             imageData: data.imageData || null
         };
 
+        // Calculate derived fields with guaranteed valid settings
         order.totalBGN = ((order.costUSD + order.shippingUSD) * order.rate) + order.extrasBGN;
         order.balanceBGN = order.sellBGN - Math.ceil(order.totalBGN);
 
         return order;
+    }
+
+// UPDATED CREATE METHOD - now uses async prepareOrder
+    async create(orderData) {
+        const operationId = `create_${Date.now()}`;
+        this.pendingOperations.add(operationId);
+
+        try {
+            // Validate input data
+            this.validateOrderData(orderData);
+
+            // Emit before-create event for undo/redo
+            this.eventBus.emit('order:before-created', orderData);
+
+            // FIXED: Use async order preparation (same as update logic)
+            const preparedOrder = await this.prepareOrder(orderData);
+
+            try {
+                // Create in Supabase first
+                const savedOrder = await this.supabase.createOrder(preparedOrder);
+                this.stats.supabaseOperations++;
+
+                // Update cache
+                this.addOrderToCache(savedOrder);
+
+                // Backup to localStorage
+                this.backupToLocalStorage(savedOrder);
+
+                // Emit successful creation
+                this.eventBus.emit('order:created', {
+                    order: savedOrder,
+                    operationId,
+                    createdInMonth: this.getOrderMonth(savedOrder.date),
+                    source: 'supabase'
+                });
+
+                console.log('✅ Order created successfully in Supabase:', savedOrder.id);
+                return savedOrder;
+
+            } catch (supabaseError) {
+                console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
+
+                // Fallback to localStorage with same prepared order
+                const localOrder = await this.createInLocalStorage(preparedOrder);
+                this.stats.fallbackOperations++;
+
+                // Update cache
+                this.addOrderToCache(localOrder);
+
+                // Emit fallback creation
+                this.eventBus.emit('order:created', {
+                    order: localOrder,
+                    operationId,
+                    createdInMonth: this.getOrderMonth(localOrder.date),
+                    source: 'localStorage'
+                });
+
+                console.log('✅ Order created in localStorage fallback:', localOrder.id);
+                return localOrder;
+            }
+
+        } catch (error) {
+            this.eventBus.emit('order:create-failed', { error, orderData, operationId });
+            throw error;
+
+        } finally {
+            this.pendingOperations.delete(operationId);
+        }
+    }
+
+// UPDATED UPDATE METHOD - now uses unified async prepareOrder
+    async update(orderId, orderData) {
+        const operationId = `update_${orderId}_${Date.now()}`;
+        this.pendingOperations.add(operationId);
+
+        try {
+            // Validate input data
+            this.validateOrderData(orderData);
+
+            // Find current order for comparison
+            const currentOrder = await this.findOrderById(orderId);
+            if (!currentOrder) {
+                throw new Error(`Order not found: ${orderId}`);
+            }
+
+            // Emit before-update event
+            this.eventBus.emit('order:before-updated', {
+                id: orderId,
+                currentOrder: currentOrder.order,
+                newData: orderData
+            });
+
+            // UNIFIED: Use same async preparation logic as create
+            const updatedOrder = await this.prepareOrder({ ...orderData, id: orderId });
+            const newMonth = this.getOrderMonth(updatedOrder.date);
+            const oldMonth = currentOrder.month;
+
+            try {
+                // Update in Supabase
+                const savedOrder = await this.supabase.updateOrder(orderId, updatedOrder);
+                this.stats.supabaseOperations++;
+
+                // Update cache
+                this.updateOrderInCache(savedOrder, oldMonth, newMonth);
+
+                // Backup to localStorage
+                this.backupToLocalStorage(savedOrder);
+
+                // Emit successful update
+                this.eventBus.emit('order:updated', {
+                    order: savedOrder,
+                    operationId,
+                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
+                    source: 'supabase'
+                });
+
+                console.log('✅ Order updated successfully in Supabase:', orderId);
+                return savedOrder;
+
+            } catch (supabaseError) {
+                console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
+
+                // Fallback with same prepared order
+                const localOrder = await this.updateInLocalStorage(orderId, updatedOrder);
+                this.stats.fallbackOperations++;
+
+                // Update cache
+                this.updateOrderInCache(localOrder, oldMonth, newMonth);
+
+                // Emit fallback update
+                this.eventBus.emit('order:updated', {
+                    order: localOrder,
+                    operationId,
+                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
+                    source: 'localStorage'
+                });
+
+                console.log('✅ Order updated in localStorage fallback:', orderId);
+                return localOrder;
+            }
+
+        } catch (error) {
+            this.eventBus.emit('order:update-failed', { error, orderId, orderData, operationId });
+            throw error;
+
+        } finally {
+            this.pendingOperations.delete(operationId);
+        }
+    }
+
+// UPDATED LOCAL STORAGE METHODS - now work with pre-prepared orders
+    async createInLocalStorage(preparedOrder) {
+        const month = this.getOrderMonth(preparedOrder.date);
+
+        const monthlyData = this.state.get('monthlyData');
+        this.ensureMonthExists(month, monthlyData);
+
+        monthlyData[month].orders.push(preparedOrder);
+
+        this.storage.save('monthlyData', monthlyData);
+        this.state.set('monthlyData', monthlyData);
+
+        return preparedOrder;
+    }
+
+    async updateInLocalStorage(orderId, preparedOrder) {
+        const newMonth = this.getOrderMonth(preparedOrder.date);
+        const monthlyData = this.state.get('monthlyData');
+
+        // Find and update/move order
+        for (const [month, data] of Object.entries(monthlyData)) {
+            if (data.orders) {
+                const index = data.orders.findIndex(o => o.id === orderId);
+                if (index !== -1) {
+                    if (month === newMonth) {
+                        data.orders[index] = preparedOrder;
+                    } else {
+                        data.orders.splice(index, 1);
+                        this.ensureMonthExists(newMonth, monthlyData);
+                        monthlyData[newMonth].orders.push(preparedOrder);
+                    }
+                    break;
+                }
+            }
+        }
+
+        this.storage.save('monthlyData', monthlyData);
+        this.state.set('monthlyData', monthlyData);
+
+        return preparedOrder;
+    }
+
+// OPTIONAL: Add method to recalculate order with fresh settings
+    recalculateOrder(order) {
+        const settings = this.state.get('settings') || {};
+
+        // Use current settings for recalculation
+        const updatedOrder = { ...order };
+        updatedOrder.rate = parseFloat(settings.usdRate) || order.rate || 1.71;
+
+        // Recalculate derived fields
+        updatedOrder.totalBGN = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * updatedOrder.rate) + updatedOrder.extrasBGN;
+        updatedOrder.balanceBGN = updatedOrder.sellBGN - Math.ceil(updatedOrder.totalBGN);
+
+        return updatedOrder;
     }
 
     getOrderMonth(date) {
