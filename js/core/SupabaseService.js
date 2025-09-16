@@ -482,6 +482,289 @@ export class SupabaseService {
         });
     }
 
+    // Add to SupabaseService class
+
+// ============================================
+// EXPENSES - Matching YOUR schema
+// ============================================
+
+// In SupabaseService.js, update these methods:
+
+    async createExpense(expenseData) {
+        return this.executeRequest(async () => {
+            console.log('💰 Creating expense in Supabase:', expenseData.category || expenseData.name);
+
+            const { data, error } = await this.supabase
+                .from('expenses')
+                .insert([{
+                    month_key: expenseData.month,
+                    name: expenseData.category || expenseData.name, // Support both field names
+                    amount: parseFloat(expenseData.amount) || 0,
+                    note: expenseData.description || expenseData.note || ''
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Transform to match UI expectations - use 'name' field
+            return {
+                id: data.id,
+                month: data.month_key,
+                name: data.name,           // UI expects 'name'
+                category: data.name,        // Keep for compatibility
+                amount: parseFloat(data.amount),
+                description: data.note || '',
+                note: data.note || '',
+                isDefault: expenseData.isDefault || false
+            };
+        });
+    }
+
+    async getExpenses(month = null) {
+        return this.executeRequest(async () => {
+            console.log('📂 Loading expenses from Supabase', month ? `for ${month}` : '(all)');
+
+            let query = this.supabase
+                .from('expenses')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (month) {
+                query = query.eq('month_key', month);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            // Transform - include BOTH name and category fields
+            return data.map(exp => ({
+                id: exp.id,
+                month: exp.month_key,
+                name: exp.name,             // UI expects this
+                category: exp.name,         // Module might expect this
+                amount: parseFloat(exp.amount),
+                description: exp.note || '',
+                note: exp.note || '',
+                isDefault: false
+            }));
+        });
+    }
+
+    async updateExpense(expenseId, expenseData) {
+        return this.executeRequest(async () => {
+            console.log('✏️ Updating expense:', expenseId);
+
+            const { data, error } = await this.supabase
+                .from('expenses')
+                .update({
+                    name: expenseData.category || expenseData.name,
+                    amount: parseFloat(expenseData.amount),
+                    note: expenseData.description || expenseData.note || ''
+                })
+                .eq('id', expenseId)
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            return {
+                id: data.id,
+                month: data.month_key,
+                name: data.name,           // UI expects 'name'
+                category: data.name,        // Keep for compatibility
+                amount: parseFloat(data.amount),
+                description: data.note || '',
+                note: data.note || '',
+                isDefault: false
+            };
+        });
+    }
+
+    async deleteExpense(expenseId) {
+        return this.executeRequest(async () => {
+            console.log('🗑️ Deleting expense:', expenseId);
+
+            const { error } = await this.supabase
+                .from('expenses')
+                .delete()
+                .eq('id', expenseId);
+
+            if (error) throw error;
+            return true;
+        });
+    }
+
+// ============================================
+// INVENTORY - Matching YOUR schema
+// ============================================
+
+    async getInventory() {
+        return this.executeRequest(async () => {
+            console.log('📦 Loading inventory from Supabase');
+
+            const { data, error } = await this.supabase
+                .from('inventory')
+                .select('*')
+                .order('brand');
+
+            if (error) throw error;
+
+            // Convert to object format for compatibility
+            // Your app expects: { "box_123": {...}, "box_456": {...} }
+            // We'll use "box_" + database ID as the key
+            const inventory = {};
+            data.forEach(item => {
+                const inventoryId = `box_${item.id}`; // Create compatible ID
+                inventory[inventoryId] = {
+                    id: inventoryId,
+                    brand: item.brand,
+                    type: item.type,
+                    purchasePrice: parseFloat(item.purchase_price),
+                    sellPrice: parseFloat(item.sell_price),
+                    stock: parseInt(item.stock),
+                    ordered: parseInt(item.ordered),
+                    dbId: item.id  // Keep real DB ID for updates
+                };
+            });
+
+            console.log(`✅ Loaded ${Object.keys(inventory).length} inventory items`);
+            return inventory;
+        });
+    }
+
+    async createInventoryItem(itemData) {
+        return this.executeRequest(async () => {
+            console.log('📦 Creating inventory item:', itemData.brand);
+
+            // Don't send ID - let database auto-generate it
+            const { data, error } = await this.supabase
+                .from('inventory')
+                .insert([{
+                    brand: itemData.brand,
+                    type: itemData.type || 'стандарт',
+                    purchase_price: parseFloat(itemData.purchasePrice) || 0,
+                    sell_price: parseFloat(itemData.sellPrice) || 0,
+                    stock: parseInt(itemData.stock) || 0,
+                    ordered: parseInt(itemData.ordered) || 0
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Return with compatible ID format
+            const inventoryId = `box_${data.id}`;
+            return {
+                id: inventoryId,
+                brand: data.brand,
+                type: data.type,
+                purchasePrice: parseFloat(data.purchase_price),
+                sellPrice: parseFloat(data.sell_price),
+                stock: parseInt(data.stock),
+                ordered: parseInt(data.ordered),
+                dbId: data.id
+            };
+        });
+    }
+
+    async updateInventoryItem(itemId, itemData) {
+        return this.executeRequest(async () => {
+            console.log('✏️ Updating inventory item:', itemId);
+
+            // Extract real database ID
+            // itemId might be "box_123" or just "123"
+            let dbId;
+            if (typeof itemId === 'string' && itemId.startsWith('box_')) {
+                dbId = parseInt(itemId.replace('box_', ''));
+            } else if (itemData.dbId) {
+                dbId = itemData.dbId;
+            } else {
+                dbId = parseInt(itemId);
+            }
+
+            const updateData = {
+                updated_at: new Date().toISOString()
+            };
+
+            // Only update provided fields
+            if (itemData.brand !== undefined) updateData.brand = itemData.brand;
+            if (itemData.type !== undefined) updateData.type = itemData.type;
+            if (itemData.purchasePrice !== undefined) updateData.purchase_price = parseFloat(itemData.purchasePrice);
+            if (itemData.sellPrice !== undefined) updateData.sell_price = parseFloat(itemData.sellPrice);
+            if (itemData.stock !== undefined) updateData.stock = parseInt(itemData.stock);
+            if (itemData.ordered !== undefined) updateData.ordered = parseInt(itemData.ordered);
+
+            const { data, error } = await this.supabase
+                .from('inventory')
+                .update(updateData)
+                .eq('id', dbId)  // Use real DB ID
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            // Return with compatible ID format
+            const inventoryId = `box_${data.id}`;
+            return {
+                id: inventoryId,
+                brand: data.brand,
+                type: data.type,
+                purchasePrice: parseFloat(data.purchase_price),
+                sellPrice: parseFloat(data.sell_price),
+                stock: parseInt(data.stock),
+                ordered: parseInt(data.ordered),
+                dbId: data.id
+            };
+        });
+    }
+
+    async deleteInventoryItem(itemId) {
+        return this.executeRequest(async () => {
+            console.log('🗑️ Deleting inventory item:', itemId);
+
+            // Extract real database ID
+            let dbId;
+            if (typeof itemId === 'string' && itemId.startsWith('box_')) {
+                dbId = parseInt(itemId.replace('box_', ''));
+            } else {
+                dbId = parseInt(itemId);
+            }
+
+            const { error } = await this.supabase
+                .from('inventory')
+                .delete()
+                .eq('id', dbId);
+
+            if (error) throw error;
+            return true;
+        });
+    }
+
+// TRANSFORMERS
+    transformExpenseFromDB(dbExpense) {
+        return {
+            id: dbExpense.id,
+            month: dbExpense.month,
+            category: dbExpense.category,
+            amount: parseFloat(dbExpense.amount),
+            description: dbExpense.description || '',
+            isDefault: dbExpense.is_default || false
+        };
+    }
+
+    transformInventoryFromDB(dbItem) {
+        return {
+            id: dbItem.id,
+            brand: dbItem.brand,
+            type: dbItem.type,
+            purchasePrice: parseFloat(dbItem.purchase_price),
+            sellPrice: parseFloat(dbItem.sell_price),
+            stock: parseInt(dbItem.stock),
+            ordered: parseInt(dbItem.ordered)
+        };
+    }
+
     // IMAGE OPERATIONS
     async uploadImage(base64Data, filename) {
         return this.executeRequest(async () => {

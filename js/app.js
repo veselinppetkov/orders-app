@@ -194,8 +194,8 @@ export class App {
             this.modules = {
                 orders: new OrdersModule(this.state, this.storage, this.eventBus, this.supabase),
                 clients: new ClientsModule(this.state, this.storage, this.eventBus, this.supabase),
-                inventory: new InventoryModule(this.state, this.storage, this.eventBus),
-                expenses: new ExpensesModule(this.state, this.storage, this.eventBus, this.supabase),
+                inventory: new InventoryModule(this.state, this.storage, this.eventBus, this.supabase), // Add supabase
+                expenses: new ExpensesModule(this.state, this.storage, this.eventBus, this.supabase), // Add supabase
                 settings: new SettingsModule(this.state, this.storage, this.eventBus, this.supabase)
             };
 
