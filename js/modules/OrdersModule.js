@@ -402,8 +402,7 @@ export class OrdersModule {
 
             // Apply filters efficiently
             if (filters.status && filters.status !== 'all') {
-                const statusFilter = this.getStatusClass(filters.status);
-                orders = orders.filter(o => this.getStatusClass(o.status) === statusFilter);
+                orders = orders.filter(o => o.status === filters.status);
             }
 
             if (filters.search) {

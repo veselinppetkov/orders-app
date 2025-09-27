@@ -517,15 +517,15 @@ export default class OrdersView {
 
     renderControls() {
         return `
-            <div class="controls">
-                <button class="btn" id="new-order-btn">➕ Нова поръчка</button>
-                <button class="btn secondary" data-filter-status="all">Всички</button>
-                <button class="btn" style="background: #ffc107;" data-filter-status="pending">Очаквани</button>
-                <button class="btn success" data-filter-status="delivered">Доставени</button>
-                <button class="btn info" data-filter-status="free">Свободни</button>
-                <button class="btn info" data-filter-status="other">Други</button>
-            </div>
-        `;
+        <div class="controls">
+            <button class="btn" id="new-order-btn">➕ Нова поръчка</button>
+            <button class="btn secondary" data-filter-status="all">Всички</button>
+            <button class="btn" style="background: #ffc107;" data-filter-status="Очакван">Очаквани</button>
+            <button class="btn success" data-filter-status="Доставен">Доставени</button>
+            <button class="btn info" data-filter-status="Свободен">Свободни</button>
+            <button class="btn info" data-filter-status="Други">Други</button>
+        </div>
+    `;
     }
 
     // MAKE FILTERS ASYNC to load settings
