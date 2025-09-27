@@ -18,33 +18,47 @@ export default class OrdersView {
             vendor: ''
         };
         this.selectedOrders = new Set(); // For bulk operations
+
+        this.pagination = {
+            currentPage: 1,
+            ordersPerPage: 25,
+            totalOrders: 0,
+            totalPages: 0
+        };
     }
 
     async render() {
         try {
-            // ALL DATA LOADING IS NOW ASYNC
             const stats = await this.reportsModule.getMonthlyStats();
-            const orders = await this.ordersModule.filterOrders(this.filters);
+            const allOrders = await this.ordersModule.filterOrders(this.filters);
+
+            // ADD: Update pagination totals
+            this.updatePaginationTotals(allOrders.length);
+
+            // ADD: Get current page orders
+            const ordersForPage = this.getCurrentPageOrders(allOrders);
 
             return `
-            <div class="orders-view">
-                ${this.renderStats(stats)}
-                ${this.renderControls()}
-                ${this.renderBulkActions()}
-                ${await this.renderFilters()} 
-                ${this.renderTable(orders)}
-            </div>
+        <div class="orders-view">
+            ${this.renderStats(stats)}
+            ${this.renderControls()}
+            ${this.renderBulkActions()}
+            ${await this.renderFilters()} 
+            ${this.renderPaginationInfo()}
+            ${this.renderTable(ordersForPage)}
+            ${this.renderPaginationControls()}
+        </div>
         `;
 
         } catch (error) {
             console.error('❌ Failed to render orders view:', error);
             return `
-                <div class="error-state">
-                    <h3>❌ Failed to load orders</h3>
-                    <p>Error: ${error.message}</p>
-                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
-                </div>
-            `;
+            <div class="error-state">
+                <h3>❌ Failed to load orders</h3>
+                <p>Error: ${error.message}</p>
+                <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+            </div>
+        `;
         }
     }
 
@@ -169,6 +183,29 @@ export default class OrdersView {
         // All existing listeners made async
         this.attachExistingListeners();
         this.attachBulkListeners();
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'page-first') {
+                this.goToPage(1);
+            } else if (e.target.id === 'page-prev') {
+                this.goToPage(this.pagination.currentPage - 1);
+            } else if (e.target.id === 'page-next') {
+                this.goToPage(this.pagination.currentPage + 1);
+            } else if (e.target.id === 'page-last') {
+                this.goToPage(this.pagination.totalPages);
+            } else if (e.target.classList.contains('page-num')) {
+                const page = parseInt(e.target.dataset.page);
+                this.goToPage(page);
+            }
+        });
+
+        // UPDATE: Filter handlers to reset pagination
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                this.applyFilters(); // This now resets pagination
+            });
+        }
     }
 
     attachBulkListeners() {
@@ -534,5 +571,125 @@ export default class OrdersView {
 
     formatDate(dateStr) {
         return new Date(dateStr).toLocaleDateString('bg-BG');
+    }
+
+// ADD: Pagination logic methods
+    updatePaginationTotals(totalOrders) {
+        this.pagination.totalOrders = totalOrders;
+        this.pagination.totalPages = Math.ceil(totalOrders / this.pagination.ordersPerPage);
+
+        // Keep current page within bounds
+        if (this.pagination.currentPage > this.pagination.totalPages) {
+            this.pagination.currentPage = Math.max(1, this.pagination.totalPages);
+        }
+    }
+
+    getCurrentPageOrders(allOrders) {
+        const start = (this.pagination.currentPage - 1) * this.pagination.ordersPerPage;
+        const end = start + this.pagination.ordersPerPage;
+        return allOrders.slice(start, end);
+    }
+
+    renderPaginationInfo() {
+        if (this.pagination.totalOrders === 0) return '';
+
+        const start = (this.pagination.currentPage - 1) * this.pagination.ordersPerPage + 1;
+        const end = Math.min(start + this.pagination.ordersPerPage - 1, this.pagination.totalOrders);
+
+        return `
+        <div class="pagination-info">
+            Показани <strong>${start}-${end}</strong> от <strong>${this.pagination.totalOrders}</strong> поръчки
+        </div>
+    `;
+    }
+
+    renderPaginationControls() {
+        if (this.pagination.totalPages <= 1) return '';
+
+        const { currentPage, totalPages } = this.pagination;
+
+        return `
+        <div class="pagination-controls">
+            <button class="btn pagination-btn" 
+                    id="page-first" 
+                    ${currentPage === 1 ? 'disabled' : ''}>
+                « Първа
+            </button>
+            <button class="btn pagination-btn" 
+                    id="page-prev" 
+                    ${currentPage === 1 ? 'disabled' : ''}>
+                ‹ Предишна
+            </button>
+            
+            <div class="page-numbers">
+                ${this.renderPageNumbers()}
+            </div>
+            
+            <button class="btn pagination-btn" 
+                    id="page-next" 
+                    ${currentPage === totalPages ? 'disabled' : ''}>
+                Следваща ›
+            </button>
+            <button class="btn pagination-btn" 
+                    id="page-last" 
+                    ${currentPage === totalPages ? 'disabled' : ''}>
+                Последна »
+            </button>
+        </div>
+    `;
+    }
+
+    renderPageNumbers() {
+        const { currentPage, totalPages } = this.pagination;
+        const pageNumbers = [];
+
+        // Show max 7 page numbers with smart truncation
+        const maxVisible = 7;
+        let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let end = Math.min(totalPages, start + maxVisible - 1);
+
+        // Adjust start if we're near the end
+        if (end - start + 1 < maxVisible) {
+            start = Math.max(1, end - maxVisible + 1);
+        }
+
+        // Always show first page
+        if (start > 1) {
+            pageNumbers.push(`<button class="btn page-num" data-page="1">1</button>`);
+            if (start > 2) {
+                pageNumbers.push(`<span class="page-ellipsis">...</span>`);
+            }
+        }
+
+        // Show page range
+        for (let i = start; i <= end; i++) {
+            const isActive = i === currentPage ? 'active' : '';
+            pageNumbers.push(`<button class="btn page-num ${isActive}" data-page="${i}">${i}</button>`);
+        }
+
+        // Always show last page
+        if (end < totalPages) {
+            if (end < totalPages - 1) {
+                pageNumbers.push(`<span class="page-ellipsis">...</span>`);
+            }
+            pageNumbers.push(`<button class="btn page-num" data-page="${totalPages}">${totalPages}</button>`);
+        }
+
+        return pageNumbers.join('');
+    }
+
+    goToPage(page) {
+        const newPage = Math.max(1, Math.min(page, this.pagination.totalPages));
+        if (newPage !== this.pagination.currentPage) {
+            this.pagination.currentPage = newPage;
+            this.selectedOrders.clear(); // Clear selection when changing pages
+            this.refresh();
+        }
+    }
+
+// ADD: Reset pagination when filters change
+    async applyFilters() {
+        this.pagination.currentPage = 1; // Reset to first page
+        await this.debouncedRefresh();
     }
 }
