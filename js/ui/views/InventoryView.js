@@ -87,7 +87,6 @@ export default class InventoryView {
                 <button class="btn secondary" data-filter="all">Всички (${this.inventoryModule.getAllItems().length})</button>
                 <button class="btn warning" data-filter="low-stock">Ниска наличност (${this.inventoryModule.getStats().lowStockItems.length})</button>
                 <button class="btn danger" data-filter="out-of-stock">Изчерпани (${this.inventoryModule.getStats().outOfStockItems.length})</button>
-                <button class="btn info" id="bulk-order-btn">📦 Групова поръчка</button>
             </div>
         `;
     }
@@ -192,7 +191,6 @@ export default class InventoryView {
                 <td>
                     <div class="action-buttons">
                         <button class="btn btn-sm" data-action="edit" data-id="${item.id}" title="Редактиране">✏️</button>
-                        <button class="btn btn-sm info" data-action="order" data-id="${item.id}" title="Поръчай">📦</button>
                         <button class="btn btn-sm danger" data-action="delete" data-id="${item.id}" title="Изтриване">🗑️</button>
                     </div>
                 </td>
