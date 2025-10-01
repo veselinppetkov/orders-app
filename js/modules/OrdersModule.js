@@ -235,9 +235,6 @@ export class OrdersModule {
                 // Remove from cache
                 this.removeOrderFromCache(orderId, orderToDelete.month);
 
-                // Remove from localStorage backup
-                this.removeFromLocalStorageBackup(orderId);
-
                 // Emit successful deletion
                 this.eventBus.emit('order:deleted', {
                     orderId,
@@ -302,9 +299,6 @@ export class OrdersModule {
 
                 // Update cache
                 this.updateCache(targetMonth, orders);
-
-                // Backup to localStorage
-                this.backupOrdersToLocalStorage(targetMonth, orders);
 
                 console.log(`✅ Loaded ${orders.length} orders from Supabase for ${targetMonth}`);
                 return this.mergeWithOptimisticUpdates(orders, targetMonth);
@@ -629,63 +623,6 @@ export class OrdersModule {
         return Object.values(monthlyData).flatMap(m => m.orders || []);
     }
 
-    backupToLocalStorage(order) {
-        try {
-            const month = this.getOrderMonth(order.date);
-            const monthlyData = this.state.get('monthlyData');
-            this.ensureMonthExists(month, monthlyData);
-
-            // Update or add order
-            const orders = monthlyData[month].orders;
-            const index = orders.findIndex(o => o.id === order.id);
-
-            if (index !== -1) {
-                orders[index] = order;
-            } else {
-                orders.push(order);
-            }
-
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup failed:', error);
-        }
-    }
-
-    backupOrdersToLocalStorage(month, orders) {
-        try {
-            const monthlyData = this.state.get('monthlyData');
-            this.ensureMonthExists(month, monthlyData);
-
-            monthlyData[month].orders = orders;
-
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup failed:', error);
-        }
-    }
-
-    removeFromLocalStorageBackup(orderId) {
-        try {
-            const monthlyData = this.state.get('monthlyData');
-
-            for (const [month, data] of Object.entries(monthlyData)) {
-                if (data.orders) {
-                    data.orders = data.orders.filter(o => o.id !== orderId);
-                }
-            }
-
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup removal failed:', error);
-        }
-    }
-
     // UTILITY METHODS
     validateOrderData(orderData) {
         const required = ['date', 'client', 'origin', 'vendor', 'model'];
@@ -796,9 +733,6 @@ export class OrdersModule {
                 // Update cache
                 this.addOrderToCache(savedOrder);
 
-                // Backup to localStorage
-                this.backupToLocalStorage(savedOrder);
-
                 // Emit successful creation
                 this.eventBus.emit('order:created', {
                     order: savedOrder,
@@ -875,9 +809,6 @@ export class OrdersModule {
 
                 // Update cache
                 this.updateOrderInCache(savedOrder, oldMonth, newMonth);
-
-                // Backup to localStorage
-                this.backupToLocalStorage(savedOrder);
 
                 // Emit successful update
                 this.eventBus.emit('order:updated', {
