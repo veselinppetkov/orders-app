@@ -1,11 +1,11 @@
-// js/core/SupabaseService.js - REWRITTEN FOR RELIABLE CLOUD STORAGE
+import {Config} from "../config.js";
 
 export class SupabaseService {
     constructor() {
         // Configuration - Replace with your actual values
         this.config = {
-            url: 'https://xxpdogtyvnqfmnmphycp.supabase.co',
-            anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cGRvZ3R5dm5xZm1ubXBoeWNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2OTAyNTksImV4cCI6MjA3MzI2NjI1OX0.lL8ewSJBOav9Rfz7XjFaOwQONhez8T11FU5vM2ITDZ4',
+            url: Config.SUPABASE_URL,
+            anonKey: Config.SUPABASE_ANON_KEY,
             bucket: 'order-images'
         };
 
@@ -37,10 +37,13 @@ export class SupabaseService {
             avgResponseTime: 0
         };
 
+        this.isAuthenticated = false;
+
         this.initialize();
+
     }
 
-    initialize() {
+    async initialize() {
         try {
             // Initialize Supabase client
             if (typeof supabase === 'undefined') {
@@ -52,12 +55,53 @@ export class SupabaseService {
 
             console.log('🚀 SupabaseService initialized');
 
+            // Check authentication status
+            await this.checkAuth();
+
+            // Listen for auth changes
+            this.supabase.auth.onAuthStateChange((event, session) => {
+                console.log('🔐 Auth state changed:', event);
+
+                if (event === 'SIGNED_OUT') {
+                    // Redirect to login
+                    window.location.href = 'login.html';
+                }
+
+                if (event === 'SIGNED_IN') {
+                    this.isAuthenticated = true;
+                    console.log('✅ User authenticated');
+                }
+            });
+
             // Test connection in background
             this.testConnectionAsync();
 
         } catch (error) {
             console.error('❌ SupabaseService initialization failed:', error);
         }
+    }
+
+    async checkAuth() {
+        const { data: { session } } = await this.supabase.auth.getSession();
+
+        if (!session) {
+            console.warn('⚠️ No active session - redirecting to login');
+            window.location.href = 'login.html';
+            return false;
+        }
+
+        this.isAuthenticated = true;
+        console.log('✅ User is authenticated:', session.user.email);
+        return true;
+    }
+
+    async signOut() {
+        await this.supabase.auth.signOut();
+        window.location.href = 'login.html';
+    }
+
+    getCurrentUser() {
+        return this.supabase.auth.getUser();
     }
 
     // CONNECTION MANAGEMENT

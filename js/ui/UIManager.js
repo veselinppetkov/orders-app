@@ -105,31 +105,32 @@ export class UIManager {
         const app = document.getElementById('app');
         const currentMonth = this.state.get('currentMonth');
 
-        // REMOVED: protection widget references
-
         app.innerHTML = `
         <div class="container">
             <header class="header">
                 <div class="header-content">
-                    <div class="header-title">
-                        <h1>📦 Система за управление на поръчки</h1>
-                        <p>Професионално решение за следене на вашите поръчки</p>
+                    <div class="header-left">
+                        <h1>📦 Управление на поръчки</h1>
                     </div>
-                    
-                    <div class="header-controls">
-                        <!-- Undo/Redo бутони -->
-                        <div class="undo-redo-controls">
-                            <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
-                                <span class="btn-icon">↩️</span>
-                                <span class="btn-text">Undo</span>
-                            </button>
-                            <button class="redo-btn" id="redo-btn" title="Повторение (Ctrl+Shift+Z)">
-                                <span class="btn-icon">↪️</span>
-                                <span class="btn-text">Redo</span>
-                            </button>
-                            <div class="undo-info" id="undo-info">
-                                <span id="undo-count">0</span> / <span id="redo-count">0</span>
-                            </div>
+                    <div class="header-right">
+                        <button class="btn btn-logout" id="logoutBtn" title="Изход от системата">
+                            🚪 Изход
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="header-controls">
+                    <div class="undo-redo-controls">
+                        <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
+                            <span class="btn-icon">↩️</span>
+                            <span class="btn-text">Undo</span>
+                        </button>
+                        <button class="redo-btn" id="redo-btn" title="Повторение (Ctrl+Shift+Z)">
+                            <span class="btn-icon">↪️</span>
+                            <span class="btn-text">Redo</span>
+                        </button>
+                        <div class="undo-info" id="undo-info">
+                            <span id="undo-count">0</span> / <span id="redo-count">0</span>
                         </div>
                     </div>
                 </div>
@@ -147,7 +148,6 @@ export class UIManager {
                 </div>
             </header>
             
-            <!-- Rest of existing content -->
             <nav class="tabs">
                 <button class="tab active" data-view="orders">📋 Поръчки</button>
                 <button class="tab" data-view="clients">👥 Клиенти</button>
@@ -287,6 +287,13 @@ export class UIManager {
         this.eventBus.on('client:created', () => this.updateUndoRedoButtons());
         this.eventBus.on('client:updated', () => this.updateUndoRedoButtons());
         this.eventBus.on('client:deleted', () => this.updateUndoRedoButtons());
+
+        // Logout button
+        document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+            if (confirm('Сигурни ли сте, че искате да излезете?')) {
+                await window.app.supabase.signOut();
+            }
+        });
     }
 
     formatMonthKey(date) {
