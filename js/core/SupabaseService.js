@@ -287,7 +287,7 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            const transformedOrder = this.transformOrderFromDB(data);
+            const transformedOrder = await this.transformOrderFromDB(data);
             console.log('✅ Order created successfully:', transformedOrder.id);
             return transformedOrder;
         });
@@ -317,7 +317,9 @@ export class SupabaseService {
             const { data, error } = await query;
             if (error) throw error;
 
-            const transformedOrders = data.map(order => this.transformOrderFromDB(order));
+            const transformedOrders = await Promise.all(
+                data.map(order => this.transformOrderFromDB(order))
+            );
             console.log(`✅ Loaded ${transformedOrders.length} orders`);
             return transformedOrders;
         });
@@ -364,7 +366,7 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            const transformedOrder = this.transformOrderFromDB(data);
+            const transformedOrder = await this.transformOrderFromDB(data);
             console.log('✅ Order updated successfully');
             return transformedOrder;
         });
@@ -831,14 +833,36 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            // Get public URL
-            const { data: { publicUrl } } = this.supabase.storage
-                .from(this.config.bucket)
-                .getPublicUrl(filePath);
-
-            console.log('✅ Image uploaded successfully');
-            return publicUrl;
+            console.log('✅ Image uploaded successfully:', filePath);
+            return filePath;  // Return path, not URL
         });
+    }
+
+    async getImageUrl(imagePath) {
+        if (!imagePath) return null;
+
+        try {
+            // If it's already a full URL (legacy data), return as-is
+            if (imagePath.startsWith('http')) {
+                return imagePath;
+            }
+
+            // Generate a signed URL valid for 1 hour
+            const { data, error } = await this.supabase.storage
+                .from(this.config.bucket)
+                .createSignedUrl(imagePath, 3600);
+
+            if (error) {
+                console.warn('⚠️ Cannot generate signed URL for:', imagePath, error);
+                return null;
+            }
+
+            console.log('🔗 Generated signed URL for image');
+            return data.signedUrl;
+        } catch (error) {
+            console.error('❌ Error in getImageUrl:', error);
+            return null;
+        }
     }
 
     async deleteImage(imageUrl) {
@@ -866,10 +890,13 @@ export class SupabaseService {
     }
 
     // DATA TRANSFORMATION
-    transformOrderFromDB(dbOrder) {
+    async transformOrderFromDB(dbOrder) {
         // Calculate derived fields
         const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
         const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
+
+        // Generate signed URL for image
+        const imageUrl = await this.getImageUrl(dbOrder.image_url);
 
         return {
             id: dbOrder.id,
@@ -889,8 +916,9 @@ export class SupabaseService {
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',
-            imageData: dbOrder.image_url, // For compatibility
-            imageUrl: dbOrder.image_url
+            imageData: imageUrl,
+            imageUrl: imageUrl,
+            imagePath: dbOrder.image_url
         };
     }
 
