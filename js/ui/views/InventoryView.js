@@ -283,9 +283,9 @@ export default class InventoryView {
 
                 try {
                     if (action === 'increase') {
-                        this.inventoryModule.updateStock(id, 1, 'add');
+                        await this.inventoryModule.updateStock(id, 1, 'add');
                     } else if (action === 'decrease') {
-                        this.inventoryModule.updateStock(id, 1, 'subtract');
+                        await this.inventoryModule.updateStock(id, 1, 'subtract');
                     }
 
                     await this.refresh(); // ADD AWAIT
@@ -307,7 +307,7 @@ export default class InventoryView {
                 const newValue = parseInt(e.target.value) || 0;
 
                 try {
-                    this.inventoryModule.updateOrdered(id, newValue);
+                    await this.inventoryModule.updateOrdered(id, newValue);
                     this.eventBus.emit('notification:show', {
                         message: 'Поръчаното количество е обновено',
                         type: 'success'
@@ -340,7 +340,7 @@ export default class InventoryView {
                     case 'delete':
                         if (confirm('Сигурни ли сте, че искате да изтриете този продукт?')) {
                             try {
-                                this.inventoryModule.deleteItem(id);
+                                await this.inventoryModule.deleteItem(id);
                                 this.eventBus.emit('notification:show', {
                                     message: 'Продуктът е изтрит успешно',
                                     type: 'success'

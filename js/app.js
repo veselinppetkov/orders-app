@@ -202,11 +202,15 @@ export class App {
             // Reports module depends on orders module
             this.modules.reports = new ReportsModule(this.state, this.eventBus, this.modules.orders);
 
-            // Initialize undo/redo after modules exist
-            this.undoRedo = new UndoRedoManager(this.state, this.storage, this.eventBus);
+// Line 205-211
+// Initialize undo/redo after modules exist
+this.undoRedo = new UndoRedoManager(this.state, this.storage, this.eventBus);
 
-            console.log('✅ Business modules initialized');
+// ✅ ADD THESE 3 LINES:
+console.log('📦 Loading inventory from Supabase...');
+await this.modules.inventory.initializeInventory();
 
+console.log('✅ Business modules initialized');
         } catch (error) {
             throw new Error(`Business modules initialization failed: ${error.message}`);
         }
