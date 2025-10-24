@@ -1,4 +1,4 @@
-import { Config } from './config.js';
+import { Config } from '../config.js';  // ✅ Goes up one level to js/config.js
 
 // Initialize Supabase client
 const supabase = window.supabase.createClient(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY);
