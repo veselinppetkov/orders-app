@@ -714,37 +714,21 @@ export class SupabaseService {
         });
     }
 
-    async updateInventoryItem(itemId, itemData) {
+  async updateInventoryItem(itemId, itemData) {
         return this.executeRequest(async () => {
-            console.log('✏️ Updating inventory item:', itemId);
-
-            // Extract real database ID
-            // itemId might be "box_123" or just "123"
-            let dbId;
-            if (typeof itemId === 'string' && itemId.startsWith('box_')) {
-                dbId = parseInt(itemId.replace('box_', ''));
-            } else if (itemData.dbId) {
-                dbId = itemData.dbId;
-            } else {
-                dbId = parseInt(itemId);
-            }
-
-            const updateData = {
-                updated_at: new Date().toISOString()
-            };
-
-            // Only update provided fields
-            if (itemData.brand !== undefined) updateData.brand = itemData.brand;
-            if (itemData.type !== undefined) updateData.type = itemData.type;
-            if (itemData.purchasePrice !== undefined) updateData.purchase_price = parseFloat(itemData.purchasePrice);
-            if (itemData.sellPrice !== undefined) updateData.sell_price = parseFloat(itemData.sellPrice);
-            if (itemData.stock !== undefined) updateData.stock = parseInt(itemData.stock);
-            if (itemData.ordered !== undefined) updateData.ordered = parseInt(itemData.ordered);
+            console.log('📦 Updating inventory item:', itemId);
 
             const { data, error } = await this.supabase
                 .from('inventory')
-                .update(updateData)
-                .eq('id', dbId)  // Use real DB ID
+                .update({
+                    brand: itemData.brand,
+                    type: itemData.type || 'стандарт',
+                    purchase_price: parseFloat(itemData.purchasePrice) || 0,
+                    sell_price: parseFloat(itemData.sellPrice) || 0,
+                    stock: parseInt(itemData.stock) || 0,
+                    ordered: parseInt(itemData.ordered) || 0
+                })
+                .eq('id', itemId)
                 .select()
                 .single();
 
@@ -754,13 +738,13 @@ export class SupabaseService {
             const inventoryId = `box_${data.id}`;
             return {
                 id: inventoryId,
+                dbId: data.id,
                 brand: data.brand,
                 type: data.type,
                 purchasePrice: parseFloat(data.purchase_price),
                 sellPrice: parseFloat(data.sell_price),
                 stock: parseInt(data.stock),
-                ordered: parseInt(data.ordered),
-                dbId: data.id
+                ordered: parseInt(data.ordered)
             };
         });
     }
@@ -769,20 +753,14 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('🗑️ Deleting inventory item:', itemId);
 
-            // Extract real database ID
-            let dbId;
-            if (typeof itemId === 'string' && itemId.startsWith('box_')) {
-                dbId = parseInt(itemId.replace('box_', ''));
-            } else {
-                dbId = parseInt(itemId);
-            }
-
             const { error } = await this.supabase
                 .from('inventory')
                 .delete()
-                .eq('id', dbId);
+                .eq('id', itemId);
 
             if (error) throw error;
+
+            console.log('✅ Inventory item deleted successfully');
             return true;
         });
     }
