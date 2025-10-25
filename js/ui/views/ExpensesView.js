@@ -8,7 +8,7 @@ export default class ExpensesView {
     async render() {
         try {
             // FIXED: Await async methods
-            const expenses = await this.expensesModule.getExpenses();
+            const expenses = await this.expensesModule.getExpensesSorted(null, 'amount', 'desc');
             const total = await this.expensesModule.getTotalExpenses();
             const currentMonth = this.state.get('currentMonth');
 
