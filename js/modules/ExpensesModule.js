@@ -65,37 +65,55 @@ export class ExpensesModule {
     // ============================================
 
     // GET EXPENSES with Supabase priority
-    async getExpenses(month = null) {
-        const targetMonth = month || this.state.get('currentMonth');
+// GET EXPENSES with Supabase priority (preserves defaults)
+async getExpenses(month = null) {
+    const targetMonth = month || this.state.get('currentMonth');
+
+    try {
+        // Ensure month structure exists with defaults
+        await this.ensureMonthExpenses(targetMonth);
 
         try {
-            // Ensure month structure exists
-            await this.ensureMonthExpenses(targetMonth);
+            // Try Supabase first
+            const supabaseExpenses = await this.supabase.getExpenses(targetMonth);
+            this.stats.supabaseOperations++;
 
-            try {
-                // Try Supabase first
-                const expenses = await this.supabase.getExpenses(targetMonth);
-                this.stats.supabaseOperations++;
+            // Smart backup: Don't overwrite defaults with empty Supabase results
+            if (supabaseExpenses.length > 0) {
+                // Supabase has data - use it and backup
+                this.backupExpensesToLocalStorage(targetMonth, supabaseExpenses);
+                console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase for ${targetMonth}`);
+                return supabaseExpenses;
+            } else {
+                // Supabase empty - check if localStorage has defaults
+                const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
 
-                // Backup to localStorage
-                this.backupExpensesToLocalStorage(targetMonth, expenses);
-
-                console.log(`✅ Loaded ${expenses.length} expenses from Supabase for ${targetMonth}`);
-                return expenses;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
-                this.stats.fallbackOperations++;
-
-                // Fallback to localStorage
-                return this.getExpensesFromLocalStorage(targetMonth);
+                if (localExpenses.length > 0) {
+                    // Keep localStorage defaults (don't overwrite with empty)
+                    console.log(`✅ Using ${localExpenses.length} default expenses from localStorage for ${targetMonth}`);
+                    return localExpenses;
+                } else {
+                    // Both empty - return empty array
+                    console.log(`ℹ️ No expenses found for ${targetMonth}`);
+                    return [];
+                }
             }
 
-        } catch (error) {
-            console.error('❌ Failed to get expenses:', error);
-            return [];
+        } catch (supabaseError) {
+            console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
+            this.stats.fallbackOperations++;
+
+            // Fallback to localStorage (which has defaults from ensureMonthExpenses)
+            const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
+            console.log(`✅ Loaded ${localExpenses.length} expenses from localStorage for ${targetMonth}`);
+            return localExpenses;
         }
+
+    } catch (error) {
+        console.error('❌ Failed to get expenses:', error);
+        return [];
     }
+}
 
     // GET EXPENSES sorted by amount (highest to lowest)
 async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
