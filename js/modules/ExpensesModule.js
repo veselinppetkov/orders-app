@@ -405,9 +405,22 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
         if (!monthlyData[month]) {
             monthlyData[month] = { orders: [], expenses: [] };
         }
-        monthlyData[month].expenses = expenses;
+
+        // CRITICAL FIX: Merge instead of replace to preserve default expenses
+        // 1. Keep all default expenses (isDefault: true) from localStorage
+        const existingDefaults = (monthlyData[month].expenses || [])
+            .filter(expense => expense.isDefault === true);
+
+        // 2. Get all custom expenses from Supabase (they don't have isDefault or it's false)
+        const customExpenses = expenses.filter(expense => expense.isDefault !== true);
+
+        // 3. Merge: defaults first, then customs
+        monthlyData[month].expenses = [...existingDefaults, ...customExpenses];
+
         this.storage.save('monthlyData', monthlyData);
         this.state.set('monthlyData', monthlyData);
+
+        console.log(`✅ Merged expenses for ${month}: ${existingDefaults.length} defaults + ${customExpenses.length} customs = ${monthlyData[month].expenses.length} total`);
     }
 
     async addExpenseToLocalStorage(month, expense) {
