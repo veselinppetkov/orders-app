@@ -81,10 +81,13 @@ async getExpenses(month = null) {
 
             // Smart backup: Don't overwrite defaults with empty Supabase results
             if (supabaseExpenses.length > 0) {
-                // Supabase has data - use it and backup
+                // Supabase has data - merge with defaults and return combined result
                 this.backupExpensesToLocalStorage(targetMonth, supabaseExpenses);
-                console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase for ${targetMonth}`);
-                return supabaseExpenses;
+
+                // CRITICAL: Return the merged result (defaults + customs) from localStorage
+                const mergedExpenses = this.getExpensesFromLocalStorage(targetMonth);
+                console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase, merged with defaults. Total: ${mergedExpenses.length} expenses for ${targetMonth}`);
+                return mergedExpenses;
             } else {
                 // Supabase empty - check if localStorage has defaults
                 const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
