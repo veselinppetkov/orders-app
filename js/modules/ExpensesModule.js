@@ -17,7 +17,7 @@ export class ExpensesModule {
             { name: 'OLX RO', amount: 55, note: 'OLX Румъния такси', isDefault: true },
             { name: 'SmugMug', amount: 45, note: 'Хостинг за снимки', isDefault: true },
             { name: 'ChatGPT', amount: 35, note: 'AI асистент', isDefault: true },
-            { name: 'Bazar', amount: 35, note: 'Обяви', isDefault: true },
+            { name: 'Bazar', amount: 25, note: 'Обяви', isDefault: true },
             { name: 'Revolut', amount: 15, note: 'Банкови такси', isDefault: true },
             { name: 'A1', amount: 10, note: 'Мобилен оператор', isDefault: true },
             { name: 'Buffer', amount: 10, note: 'Social media management', isDefault: true }
