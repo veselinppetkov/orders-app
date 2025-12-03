@@ -224,12 +224,14 @@ export class ModalsManager {
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Доп. разходи (BGN):</label>
-                            <input type="number" id="orderExtrasBGN" value="${formData?.extrasBGN || 0}" step="0.01">
+                            <label>Доп. разходи (€):</label>
+                            <input type="number" id="orderExtrasBGN" value="${formData?.extrasBGN || 0}" step="0.01" placeholder="0.00">
+                            <small style="color:#6c757d;">Допълнителни разходи в евро</small>
                         </div>
                         <div class="form-group">
-                            <label>Продажна цена (BGN):</label>
-                            <input type="number" id="orderSellBGN" value="${formData?.sellBGN || ''}" step="0.01">
+                            <label>Продажна цена (€):</label>
+                            <input type="number" id="orderSellBGN" value="${formData?.sellBGN || ''}" step="0.01" placeholder="0.00">
+                            <small style="color:#6c757d;">Крайна цена за клиента в евро</small>
                         </div>
                     </div>
                     
@@ -359,8 +361,9 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-group">
-                        <label>Сума (BGN):</label>
-                        <input type="number" id="expenseAmount" value="${expense?.amount || ''}" step="0.01" required>
+                        <label>Сума (€):</label>
+                        <input type="number" id="expenseAmount" value="${expense?.amount || ''}" step="0.01" placeholder="0.00" required>
+                        <small style="color:#6c757d;">Размер на разхода в евро</small>
                     </div>
                     
                     <div class="form-group">
@@ -408,12 +411,14 @@ export class ModalsManager {
                     
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Доставна цена (лв):</label>
-                            <input type="number" id="itemPurchasePrice" value="${item?.purchasePrice || ''}" step="0.01" required>
+                            <label>Доставна цена (€):</label>
+                            <input type="number" id="itemPurchasePrice" value="${item?.purchasePrice || ''}" step="0.01" placeholder="0.00" required>
+                            <small style="color:#6c757d;">Цена на закупуване в евро</small>
                         </div>
                         <div class="form-group">
-                            <label>Продажна цена (лв):</label>
-                            <input type="number" id="itemSellPrice" value="${item?.sellPrice || ''}" step="0.01" required>
+                            <label>Продажна цена (€):</label>
+                            <input type="number" id="itemSellPrice" value="${item?.sellPrice || ''}" step="0.01" placeholder="0.00" required>
+                            <small style="color:#6c757d;">Препоръчана цена за клиенти в евро</small>
                         </div>
                     </div>
                     
