@@ -797,25 +797,64 @@ export class SupabaseService {
 
 // TRANSFORMERS
     transformExpenseFromDB(dbExpense) {
+        // Use EUR field if available, otherwise convert from BGN
+        const amountBGN = parseFloat(dbExpense.amount) || 0;
+        const amountEUR = dbExpense.amount_eur
+            ? parseFloat(dbExpense.amount_eur)
+            : CurrencyUtils.convertBGNtoEUR(amountBGN);
+
+        // Validate: Check if EUR value is suspiciously close to BGN (no conversion)
+        if (amountBGN > 50 && Math.abs(amountEUR - amountBGN) < 1) {
+            console.warn(`⚠️ Expense ${dbExpense.id} has unconverted EUR value: ${amountEUR} EUR ≈ ${amountBGN} BGN`);
+        }
+
         return {
             id: dbExpense.id,
             month: dbExpense.month,
             category: dbExpense.category,
-            amount: parseFloat(dbExpense.amount),
+            amount: amountEUR,  // Always use EUR
+            amountBGN: amountBGN,  // Keep BGN for reference
+            amountEUR: amountEUR,  // Explicit EUR field
             description: dbExpense.description || '',
-            isDefault: dbExpense.is_default || false
+            isDefault: dbExpense.is_default || false,
+            currency: dbExpense.currency || 'BGN'
         };
     }
 
     transformInventoryFromDB(dbItem) {
+        // Use EUR fields if available, otherwise convert from BGN
+        const purchasePriceBGN = parseFloat(dbItem.purchase_price) || 0;
+        const sellPriceBGN = parseFloat(dbItem.sell_price) || 0;
+
+        const purchasePriceEUR = dbItem.purchase_price_eur
+            ? parseFloat(dbItem.purchase_price_eur)
+            : CurrencyUtils.convertBGNtoEUR(purchasePriceBGN);
+
+        const sellPriceEUR = dbItem.sell_price_eur
+            ? parseFloat(dbItem.sell_price_eur)
+            : CurrencyUtils.convertBGNtoEUR(sellPriceBGN);
+
+        // Validate: Check if EUR values are suspiciously close to BGN (no conversion)
+        if (purchasePriceBGN > 10 && Math.abs(purchasePriceEUR - purchasePriceBGN) < 1) {
+            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted purchase price: ${purchasePriceEUR} EUR ≈ ${purchasePriceBGN} BGN`);
+        }
+        if (sellPriceBGN > 10 && Math.abs(sellPriceEUR - sellPriceBGN) < 1) {
+            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted sell price: ${sellPriceEUR} EUR ≈ ${sellPriceBGN} BGN`);
+        }
+
         return {
             id: dbItem.id,
             brand: dbItem.brand,
             type: dbItem.type,
-            purchasePrice: parseFloat(dbItem.purchase_price),
-            sellPrice: parseFloat(dbItem.sell_price),
-            stock: parseInt(dbItem.stock),
-            ordered: parseInt(dbItem.ordered)
+            purchasePrice: purchasePriceEUR,  // Always use EUR
+            sellPrice: sellPriceEUR,  // Always use EUR
+            purchasePriceBGN: purchasePriceBGN,  // Keep BGN for reference
+            sellPriceBGN: sellPriceBGN,  // Keep BGN for reference
+            purchasePriceEUR: purchasePriceEUR,  // Explicit EUR field
+            sellPriceEUR: sellPriceEUR,  // Explicit EUR field
+            stock: parseInt(dbItem.stock) || 0,
+            ordered: parseInt(dbItem.ordered) || 0,
+            currency: dbItem.currency || 'BGN'
         };
     }
 
