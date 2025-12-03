@@ -12,28 +12,43 @@ export default class ExpensesView {
             const total = await this.expensesModule.getTotalExpenses();
             const currentMonth = this.state.get('currentMonth');
 
+            // DEFENSIVE: Validate expenses data
+            console.log(`📊 Rendering ${expenses.length} expenses for ${currentMonth}. Total: ${total}`);
+
+            // Filter out any expenses with invalid data
+            const validExpenses = expenses.filter(exp => {
+                if (!exp || exp.amount === undefined || exp.amount === null) {
+                    console.error('⚠️ Invalid expense found:', exp);
+                    return false;
+                }
+                return true;
+            });
+
+            // DEFENSIVE: Ensure total is a valid number
+            const safeTotal = isNaN(total) || total === undefined || total === null ? 0 : total;
+
             return `
             <div class="expenses-view">
                 <h2>💰 Месечни разходи</h2>
                 <p style="margin-bottom: 20px; color: #6c757d;">
                     Управлявайте постоянните месечни разходи на бизнеса за <strong>${this.formatMonth(currentMonth)}</strong>
                 </p>
-                
+
                 <div class="controls">
                     <button class="btn" id="new-expense-btn">➕ Добави разход</button>
                     <button class="btn secondary" id="reset-expenses-btn">🔄 Възстанови defaults</button>
                 </div>
-                
-                ${expenses.length > 0 ? `
+
+                ${validExpenses.length > 0 ? `
                     <div class="expenses-list">
-                        ${expenses.map(expense => this.renderExpenseItem(expense)).join('')}
+                        ${validExpenses.map(expense => this.renderExpenseItem(expense)).join('')}
                     </div>
-                    
+
                     <div class="total-expenses">
                         <h3>Общо месечни разходи за ${this.formatMonth(currentMonth)}:</h3>
-                        <div class="total-amount">${total.toFixed(2)} €</div>
+                        <div class="total-amount">${safeTotal.toFixed(2)} €</div>
                         <div class="total-info">
-                            <small>${expenses.length} позиции • Средно ${(total / expenses.length).toFixed(2)} € на позиция</small>
+                            <small>${validExpenses.length} позиции • Средно ${(safeTotal / validExpenses.length).toFixed(2)} € на позиция</small>
                         </div>
                     </div>
                 ` : `
@@ -42,7 +57,7 @@ export default class ExpensesView {
                         <p>Започнете като добавите първия си месечен разход</p>
                         <button class="btn" onclick="document.getElementById('new-expense-btn').click()">➕ Добави разход</button>
                     </div>
-                `}                
+                `}
             </div>
         `;
 
@@ -62,16 +77,24 @@ export default class ExpensesView {
         // FIXED: Proper badge logic - check isDefault property instead of ID range
         const isDefaultExpense = expense.isDefault === true;
 
+        // DEFENSIVE: Ensure amount is valid
+        const safeAmount = (expense.amount !== undefined && expense.amount !== null && !isNaN(expense.amount))
+            ? parseFloat(expense.amount)
+            : 0;
+
+        // DEFENSIVE: Ensure name exists
+        const safeName = expense.name || expense.category || 'Unnamed expense';
+
         return `
         <div class="expense-item ${isDefaultExpense ? 'default-expense' : 'custom-expense'}">
             <div class="expense-info">
                 <div class="expense-header">
-                    <div class="expense-name">${expense.name}</div>
+                    <div class="expense-name">${safeName}</div>
                     ${isDefaultExpense ? '<span class="expense-badge default">Default</span>' : '<span class="expense-badge custom">Custom</span>'}
                 </div>
-                <div class="expense-amount">${expense.amount.toFixed(2)} €</div>
+                <div class="expense-amount">${safeAmount.toFixed(2)} €</div>
                 ${expense.note ? `<div class="expense-note">${expense.note}</div>` : ''}
-                
+
                 <!-- REMOVED: Percentage display as requested -->
             </div>
             <div class="expense-actions">
