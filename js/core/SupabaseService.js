@@ -971,12 +971,27 @@ export class SupabaseService {
         const extrasEUR = this.validateAndConvertEUR(dbOrder.extras_eur, extrasBGN);
         const sellEUR = this.validateAndConvertEUR(dbOrder.sell_eur, sellBGN);
 
-        // Total cost in EUR (always calculated from USD values)
-        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+        // CRITICAL FIX: Handle historical USD→BGN rates vs new USD→EUR rates
+        // Historical orders have rates > 1.5 (USD→BGN, e.g., 1.7-1.8)
+        // New orders have rates < 1.5 (USD→EUR, e.g., 0.85-0.95)
+        let totalEUR, totalBGN;
+
+        if (rate > 1.5) {
+            // Historical order: rate is USD→BGN, need to convert BGN→EUR
+            // Calculate total in BGN using old rate
+            totalBGN = ((costUSD + shippingUSD) * rate) + extrasBGN;
+            // Convert BGN→EUR using official rate
+            totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
+            console.log(`🕰️ Historical order ${dbOrder.id}: USD ${(costUSD + shippingUSD).toFixed(2)} * rate ${rate} (BGN) = ${totalBGN.toFixed(2)} BGN → ${totalEUR.toFixed(2)} EUR`);
+        } else {
+            // New order: rate is USD→EUR, use directly
+            totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+            totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        }
+
         const balanceEUR = sellEUR - totalEUR;
 
-        // BGN values for backward compatibility (calculated from EUR)
-        const totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        // BGN values for backward compatibility
         const balanceBGN = CurrencyUtils.convertEURtoBGN(balanceEUR);
 
         // System currency is now EUR
