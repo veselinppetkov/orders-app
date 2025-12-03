@@ -585,26 +585,44 @@ export class SupabaseService {
         });
     }
 
-    async getExpenses(month = null) {
-        return this.executeRequest(async () => {
-            console.log('📂 Loading expenses from Supabase', month ? `for ${month}` : '(all)');
+async getExpenses(month = null) {
+    return this.executeRequest(async () => {
+        console.log('💰 Loading expenses from Supabase', month ? `for ${month}` : '(all)');
 
-            let query = this.supabase
-                .from('expenses')
-                .select('*')
-                .order('created_at', { ascending: false });
+        let query = this.supabase
+            .from('expenses')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-            if (month) {
-                query = query.eq('month_key', month);
-            }
+        if (month) {
+            query = query.eq('month_key', month);
+        }
 
-            const { data, error } = await query;
-            if (error) throw error;
+        const { data, error } = await query;
+        if (error) throw error;
 
-            // Transform using the EUR field (use transformExpenseFromDB for consistency)
-            return data.map(exp => this.transformExpenseFromDB(exp));
+        return data.map(exp => {
+            const amountBGN = parseFloat(exp.amount) || 0;
+            const amountEUR = exp.amount_eur
+                ? parseFloat(exp.amount_eur)
+                : parseFloat((amountBGN / 1.95583).toFixed(2));
+
+            return {
+                id: exp.id,
+                month: exp.month_key,
+                name: exp.name || 'Без име',
+                category: exp.name || 'Без име',
+                amount: amountEUR,              // ✅ EUR!
+                amountBGN: amountBGN,
+                amountEUR: amountEUR,
+                description: exp.note || '',
+                note: exp.note || '',
+                isDefault: false,
+                currency: exp.currency || 'BGN'
+            };
         });
-    }
+    });
+}
 
     async updateExpense(expenseId, expenseData) {
         return this.executeRequest(async () => {
