@@ -27,15 +27,15 @@ export default class ReportsView {
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                             <h3>ОБЩО ПРИХОДИ</h3>
-                            <div class="value">${allTimeStats.totalRevenue.toFixed(2)} лв</div>
+                            <div class="value">${allTimeStats.totalRevenue.toFixed(2)} €</div>
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                             <h3>НЕТНА ПЕЧАЛБА</h3>
-                            <div class="value">${allTimeStats.netProfit.toFixed(2)} лв</div>
+                            <div class="value">${allTimeStats.netProfit.toFixed(2)} €</div>
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
                             <h3>СРЕДНА ПЕЧАЛБА</h3>
-                            <div class="value">${allTimeStats.avgProfit.toFixed(2)} лв</div>
+                            <div class="value">${allTimeStats.avgProfit.toFixed(2)} €</div>
                         </div>
                     </div>
                     
@@ -99,9 +99,9 @@ export default class ReportsView {
                         <tr>
                             <td><strong>${key}</strong></td>
                             <td>${value.count}</td>
-                            <td>${value.revenue.toFixed(2)} лв</td>
+                            <td>${value.revenue.toFixed(2)} €</td>
                             <td class="${value.profit >= 0 ? 'profit-positive' : 'profit-negative'}">
-                                <strong>${value.profit.toFixed(2)} лв</strong>
+                                <strong>${value.profit.toFixed(2)} €</strong>
                             </td>
                         </tr>
                     `).join('')}
@@ -110,8 +110,8 @@ export default class ReportsView {
                     <tr class="total-row">
                         <td><strong>ОБЩО</strong></td>
                         <td><strong>${sorted.reduce((sum, [, val]) => sum + val.count, 0)}</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} лв</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.profit, 0).toFixed(2)} лв</strong></td>
+                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} €</strong></td>
+                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.profit, 0).toFixed(2)} €</strong></td>
                     </tr>
                 </tfoot>
             </table>
@@ -143,10 +143,10 @@ export default class ReportsView {
                             <tr>
                                 <td><strong>${this.formatMonth(month)}</strong></td>
                                 <td>${value.count}</td>
-                                <td>${value.revenue.toFixed(2)} лв</td>
-                                <td>${value.expenses.toFixed(2)} лв</td>
+                                <td>${value.revenue.toFixed(2)} €</td>
+                                <td>${value.expenses.toFixed(2)} €</td>
                                 <td class="${netProfit >= 0 ? 'profit-positive' : 'profit-negative'}">
-                                    <strong>${netProfit.toFixed(2)} лв</strong>
+                                    <strong>${netProfit.toFixed(2)} €</strong>
                                 </td>
                             </tr>
                         `;
@@ -156,9 +156,9 @@ export default class ReportsView {
                     <tr class="total-row">
                         <td><strong>ОБЩО</strong></td>
                         <td><strong>${sorted.reduce((sum, [, val]) => sum + val.count, 0)}</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} лв</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.expenses, 0).toFixed(2)} лв</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + (val.profit - val.expenses), 0).toFixed(2)} лв</strong></td>
+                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} €</strong></td>
+                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.expenses, 0).toFixed(2)} €</strong></td>
+                        <td><strong>${sorted.reduce((sum, [, val]) => sum + (val.profit - val.expenses), 0).toFixed(2)} €</strong></td>
                     </tr>
                 </tfoot>
             </table>

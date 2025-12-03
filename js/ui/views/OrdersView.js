@@ -1,5 +1,6 @@
 import { DebounceUtils } from '../../utils/DebounceUtils.js';
 import { FormatUtils } from '../../utils/FormatUtils.js';
+import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
 
 export default class OrdersView {
     constructor(modules, state, eventBus) {
@@ -159,9 +160,9 @@ export default class OrdersView {
             `<div class="no-image-placeholder">${order.model}</div>`
         }
             </td>
-            <td><strong>${order.totalBGN.toFixed(2)} лв</strong></td>
-            <td>${order.sellBGN.toFixed(2)} лв</td>
-            <td><strong style="color: ${order.balanceBGN < 0 ? '#dc3545' : '#28a745'}">${order.balanceBGN.toFixed(2)} лв</strong></td>
+            <td><strong>${CurrencyUtils.formatWithDate(order.totalBGN, order.date, order.currency || 'BGN', true)}</strong></td>
+            <td>${CurrencyUtils.formatWithDate(order.sellBGN, order.date, order.currency || 'BGN', true)}</td>
+            <td><strong style="color: ${order.balanceBGN < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatWithDate(order.balanceBGN, order.date, order.currency || 'BGN', true)}</strong></td>
             <td>${order.fullSet ? '✅' : '❌'}</td>
             <td>
                 <span class="status-badge" 
@@ -501,15 +502,15 @@ export default class OrdersView {
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Приходи</div>
-                    <div class="stat-value">${stats.revenue.toFixed(2)} лв</div>
+                    <div class="stat-value">${stats.revenue.toFixed(2)} €</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Разходи</div>
-                    <div class="stat-value">${stats.expenses.toFixed(2)} лв</div>
+                    <div class="stat-value">${stats.expenses.toFixed(2)} €</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Печалба</div>
-                    <div class="stat-value">${stats.profit.toFixed(2)} лв</div>
+                    <div class="stat-value">${stats.profit.toFixed(2)} €</div>
                 </div>
             </div>
         `;

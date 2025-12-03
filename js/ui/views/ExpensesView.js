@@ -31,9 +31,9 @@ export default class ExpensesView {
                     
                     <div class="total-expenses">
                         <h3>Общо месечни разходи за ${this.formatMonth(currentMonth)}:</h3>
-                        <div class="total-amount">${total.toFixed(2)} лв</div>
+                        <div class="total-amount">${total.toFixed(2)} €</div>
                         <div class="total-info">
-                            <small>${expenses.length} позиции • Средно ${(total / expenses.length).toFixed(2)} лв на позиция</small>
+                            <small>${expenses.length} позиции • Средно ${(total / expenses.length).toFixed(2)} € на позиция</small>
                         </div>
                     </div>
                 ` : `
@@ -69,7 +69,7 @@ export default class ExpensesView {
                     <div class="expense-name">${expense.name}</div>
                     ${isDefaultExpense ? '<span class="expense-badge default">Default</span>' : '<span class="expense-badge custom">Custom</span>'}
                 </div>
-                <div class="expense-amount">${expense.amount.toFixed(2)} лв</div>
+                <div class="expense-amount">${expense.amount.toFixed(2)} €</div>
                 ${expense.note ? `<div class="expense-note">${expense.note}</div>` : ''}
                 
                 <!-- REMOVED: Percentage display as requested -->

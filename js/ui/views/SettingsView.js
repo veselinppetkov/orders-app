@@ -31,8 +31,9 @@ export default class SettingsView {
             // GET SETTINGS FROM SUPABASE/ASYNC
             const s = await this.settingsModule.getSettings() || {};
 
-            const usdRate = this._escape(s.usdRate ?? 0);
-            const factoryShipping = this._escape(s.factoryShipping ?? 0);
+            const usdRate = this._escape(s.usdRate ?? 1.71);
+            const eurRate = this._escape(s.eurRate ?? 0.92);
+            const factoryShipping = this._escape(s.factoryShipping ?? 1.5);
             const origins = Array.isArray(s.origins) ? s.origins : (typeof s.origins === 'string' ? s.origins.split('\n') : []);
             const vendors = Array.isArray(s.vendors) ? s.vendors : (typeof s.vendors === 'string' ? s.vendors.split('\n') : []);
 
@@ -44,8 +45,14 @@ export default class SettingsView {
               <div class="settings-card">
                 <h3>💱 Валутен курс</h3>
                 <div class="form-group">
-                  <label>Курс USD → BGN:</label>
+                  <label>Курс USD → EUR (€):</label>
+                  <input type="number" id="eurRate" value="${eurRate}" step="0.01">
+                  <small style="color:#6c757d;">Пазарен курс за нови поръчки (обновявайте ежеседмично)</small>
+                </div>
+                <div class="form-group" style="margin-top:15px;">
+                  <label>Курс USD → BGN (лв) - Legacy:</label>
                   <input type="number" id="usdRate" value="${usdRate}" step="0.01">
+                  <small style="color:#6c757d;">Използва се само за исторически данни</small>
                 </div>
               </div>
 
@@ -111,8 +118,9 @@ export default class SettingsView {
         // Save settings - MAKE ASYNC
         $('save-settings')?.addEventListener('click', async () => {
             const settings = {
-                usdRate: this._num($('usdRate')?.value, 0),
-                factoryShipping: this._num($('factoryShipping')?.value, 0),
+                eurRate: this._num($('eurRate')?.value, 0.92),
+                usdRate: this._num($('usdRate')?.value, 1.71),
+                factoryShipping: this._num($('factoryShipping')?.value, 1.5),
                 origins: this._lines($('originsList')?.value),
                 vendors: this._lines($('vendorsList')?.value)
             };

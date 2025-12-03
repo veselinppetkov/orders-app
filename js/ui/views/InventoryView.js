@@ -70,11 +70,11 @@ export default class InventoryView {
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Стойност на склад</div>
-                    <div class="stat-value">${stats.totalValue.toFixed(2)} лв</div>
+                    <div class="stat-value">${stats.totalValue.toFixed(2)} €</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Потенциални приходи</div>
-                    <div class="stat-value">${stats.potentialRevenue.toFixed(2)} лв</div>
+                    <div class="stat-value">${stats.potentialRevenue.toFixed(2)} €</div>
                 </div>
             </div>
         `;
@@ -147,7 +147,7 @@ export default class InventoryView {
                                 <td><strong>${items.reduce((sum, item) => sum + item.stock, 0)}</strong></td>
                                 <td><strong>${items.reduce((sum, item) => sum + item.ordered, 0)}</strong></td>
                                 <td><strong>${items.reduce((sum, item) => sum + item.stock + item.ordered, 0)}</strong></td>
-                                <td><strong>${items.reduce((sum, item) => sum + (item.stock * item.purchasePrice), 0).toFixed(2)} лв</strong></td>
+                                <td><strong>${items.reduce((sum, item) => sum + (item.stock * item.purchasePrice), 0).toFixed(2)} €</strong></td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>
@@ -171,8 +171,8 @@ export default class InventoryView {
                         ${item.type}
                     </span>
                 </td>
-                <td>${item.purchasePrice.toFixed(2)} лв</td>
-                <td>${item.sellPrice.toFixed(2)} лв</td>
+                <td>${item.purchasePrice.toFixed(2)} €</td>
+                <td>${item.sellPrice.toFixed(2)} €</td>
                 <td>
                     <div class="stock-control">
                         <button class="stock-btn" data-action="decrease" data-id="${item.id}">-</button>
@@ -186,7 +186,7 @@ export default class InventoryView {
                     </div>
                 </td>
                 <td><strong>${total}</strong></td>
-                <td><strong>${itemValue.toFixed(2)} лв</strong></td>
+                <td><strong>${itemValue.toFixed(2)} €</strong></td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
                     <div class="action-buttons">
