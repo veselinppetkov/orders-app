@@ -106,9 +106,9 @@ export default class OrdersView {
                             <th>Източник</th>
                             <th>Доставчик</th>
                             <th>Модел</th>
-                            <th>Общо (BGN)</th>
-                            <th>П-на цена (BGN)</th>
-                            <th>Баланс (BGN)</th>
+                            <th>Общо (€)</th>
+                            <th>П-на цена (€)</th>
+                            <th>Баланс (€)</th>
                             <th>Пълен сет</th>
                             <th>Статус</th>
                             <th>Бележки</th>
@@ -160,9 +160,9 @@ export default class OrdersView {
             `<div class="no-image-placeholder">${order.model}</div>`
         }
             </td>
-            <td><strong>${CurrencyUtils.formatWithDate(order.totalBGN, order.date, order.currency || 'BGN', true)}</strong></td>
-            <td>${CurrencyUtils.formatWithDate(order.sellBGN, order.date, order.currency || 'BGN', true)}</td>
-            <td><strong style="color: ${order.balanceBGN < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatWithDate(order.balanceBGN, order.date, order.currency || 'BGN', true)}</strong></td>
+            <td><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></td>
+            <td>${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</td>
+            <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
             <td>${order.fullSet ? '✅' : '❌'}</td>
             <td>
                 <span class="status-badge" 

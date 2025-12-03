@@ -1,8 +1,18 @@
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 export class ReportsModule {
     constructor(state, eventBus, ordersModule) {  // ADD ordersModule dependency
         this.state = state;
         this.eventBus = eventBus;
         this.ordersModule = ordersModule;  // NEW: Direct access to orders
+    }
+
+    getOrderEurMetrics(order) {
+        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const totalEUR = order.totalEUR ?? CurrencyUtils.convertBGNtoEUR(order.totalBGN || 0);
+        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+
+        return { sellEUR, totalEUR, balanceEUR };
     }
 
     async getMonthlyStats(month = null) {
@@ -16,8 +26,8 @@ export class ReportsModule {
         const expenses = monthlyData[targetMonth]?.expenses || [];
 
         const totalExpenses = expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
-        const revenue = orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0);
-        const totalOrderCosts = orders.reduce((sum, o) => sum + (o.totalEUR || o.totalBGN || 0), 0);
+        const revenue = orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0);
+        const totalOrderCosts = orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).totalEUR, 0);
         const profit = revenue - totalOrderCosts - totalExpenses;
 
         return {
@@ -37,8 +47,8 @@ export class ReportsModule {
         const monthlyData = this.state.get('monthlyData');
         const allExpenses = Object.values(monthlyData).flatMap(m => m.expenses || []);
 
-        const totalRevenue = allOrders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0);
-        const totalProfit = allOrders.reduce((sum, o) => sum + (o.balanceEUR || o.balanceBGN || 0), 0);
+        const totalRevenue = allOrders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0);
+        const totalProfit = allOrders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0);
         const totalExpenses = allExpenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
 
         return {
@@ -81,8 +91,8 @@ export class ReportsModule {
 
             report[month] = {
                 count: orders.length,
-                revenue: orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0),
-                profit: orders.reduce((sum, o) => sum + (o.balanceEUR || o.balanceBGN || 0), 0),
+                revenue: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0),
+                profit: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0),
                 expenses: expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0)
             };
         });
@@ -108,8 +118,9 @@ export class ReportsModule {
                 acc[key] = { count: 0, revenue: 0, profit: 0 };
             }
             acc[key].count++;
-            acc[key].revenue += (order.sellEUR || order.sellBGN || 0);
-            acc[key].profit += (order.balanceEUR || order.balanceBGN || 0);
+            const { sellEUR, balanceEUR } = this.getOrderEurMetrics(order);
+            acc[key].revenue += sellEUR;
+            acc[key].profit += balanceEUR;
             return acc;
         }, {});
     }

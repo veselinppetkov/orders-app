@@ -1,3 +1,5 @@
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 // js/modules/ClientsModule.js - REWRITTEN FOR CLEAN ASYNC MANAGEMENT
 
 export class ClientsModule {
@@ -416,6 +418,13 @@ export class ClientsModule {
         }
     }
 
+    getOrderEurMetrics(order) {
+        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+
+        return { sellEUR, balanceEUR };
+    }
+
     // GET CLIENT STATISTICS with caching
     async getClientStats(clientName) {
         try {
@@ -431,15 +440,15 @@ export class ClientsModule {
 
             const stats = {
                 totalOrders: orders.length,
-                // Use EUR as primary currency (with fallback to BGN for backward compatibility)
-                totalRevenue: orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0),
-                totalProfit: orders.reduce((sum, o) => sum + (o.balanceEUR || o.balanceBGN || 0), 0),
+                // Use EUR as primary currency (with conversion for legacy BGN data)
+                totalRevenue: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0),
+                totalProfit: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0),
                 lastOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null,
                 firstOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(a.date) - new Date(b.date))[0] : null,
                 avgOrderValue: orders.length > 0 ?
-                    orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0) / orders.length : 0
+                    orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0) / orders.length : 0
             };
 
             // Cache the stats
