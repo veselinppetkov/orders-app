@@ -1,8 +1,18 @@
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 export class ReportsModule {
     constructor(state, eventBus, ordersModule) {  // ADD ordersModule dependency
         this.state = state;
         this.eventBus = eventBus;
         this.ordersModule = ordersModule;  // NEW: Direct access to orders
+    }
+
+    getOrderEurMetrics(order) {
+        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const totalEUR = order.totalEUR ?? CurrencyUtils.convertBGNtoEUR(order.totalBGN || 0);
+        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+
+        return { sellEUR, totalEUR, balanceEUR };
     }
 
     async getMonthlyStats(month = null) {

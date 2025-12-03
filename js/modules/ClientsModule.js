@@ -1,3 +1,5 @@
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 // js/modules/ClientsModule.js - REWRITTEN FOR CLEAN ASYNC MANAGEMENT
 
 export class ClientsModule {
@@ -414,6 +416,13 @@ export class ClientsModule {
             console.error('❌ Failed to get client orders:', error);
             return [];
         }
+    }
+
+    getOrderEurMetrics(order) {
+        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+
+        return { sellEUR, balanceEUR };
     }
 
     // GET CLIENT STATISTICS with caching
