@@ -9,18 +9,19 @@ export class ExpensesModule {
 
         // Default expense templates (kept as local-only templates)
         this.defaultExpenses = [
-            { name: 'IG Campaign', amount: 1780, note: 'Instagram реклама кампания', isDefault: true },
+            { name: 'IG Campaign', amount: 3000, note: 'Instagram реклама кампания', isDefault: true },
             { name: 'Assurance', amount: 590, note: 'Застраховка', isDefault: true },
             { name: 'Fiverr', amount: 530, note: 'Freelance услуги', isDefault: true },
             { name: 'Ltd.', amount: 460, note: 'Фирмени разходи', isDefault: true },
             { name: 'OLX BG', amount: 90, note: 'OLX България такси', isDefault: true },
-            { name: 'OLX RO', amount: 55, note: 'OLX Румъния такси', isDefault: true },
+            { name: 'OLX RO', amount: 200, note: 'OLX Румъния такси', isDefault: true },
             { name: 'SmugMug', amount: 45, note: 'Хостинг за снимки', isDefault: true },
             { name: 'ChatGPT', amount: 35, note: 'AI асистент', isDefault: true },
             { name: 'Revolut', amount: 15, note: 'Банкови такси', isDefault: true },
             { name: 'A1', amount: 10, note: 'Мобилен оператор', isDefault: true },
             { name: 'Buffer', amount: 10, note: 'Social media management', isDefault: true },
             { name: 'Bazar', amount: 25, note: 'Обяви', isDefault: true },
+            { name: 'Claude', amount: 30, note: 'Обяви', isDefault: true },
         ];
 
         // Operation tracking
@@ -247,78 +248,121 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
     }
 
     // UPDATE EXPENSE with Supabase priority
-    async update(expenseId, expenseData) {
-        const operationId = `update_${expenseId}_${Date.now()}`;
-        this.pendingOperations.add(operationId);
+// UPDATE EXPENSE with Supabase priority
+async update(expenseId, expenseData) {
+    const operationId = `update_${expenseId}_${Date.now()}`;
+    this.pendingOperations.add(operationId);
 
-        try {
-            // Validate input
-            this.validateExpenseData(expenseData);
+    try {
+        // Validate input
+        this.validateExpenseData(expenseData);
 
-            const currentMonth = this.state.get('currentMonth');
+        const currentMonth = this.state.get('currentMonth');
 
-            // Emit before-update event for undo/redo
-            this.eventBus.emit('expense:before-updated', { expenseId, expenseData });
-
-            try {
-                // Try Supabase first
-                const updatedExpense = await this.supabase.updateExpense(expenseId, {
-                    name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
-                    note: expenseData.note?.trim() || ''
-                });
-
-                this.stats.supabaseOperations++;
-                this.stats.totalOperations++;
-
-                // Update localStorage backup
-                await this.updateExpenseInLocalStorage(currentMonth, expenseId, updatedExpense);
-
-                // Emit successful update
-                this.eventBus.emit('expense:updated', {
-                    expense: updatedExpense,
-                    month: currentMonth,
-                    operationId,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Expense updated successfully in Supabase:', expenseId);
-                return updatedExpense;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
-                this.stats.fallbackOperations++;
-                this.stats.totalOperations++;
-
-                // Fallback: Update localStorage only
-                const updates = {
-                    name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
-                    note: expenseData.note?.trim() || ''
-                };
-
-                const localExpense = await this.updateExpenseInLocalStorage(currentMonth, expenseId, updates);
-
-                // Emit fallback update
-                this.eventBus.emit('expense:updated', {
-                    expense: localExpense,
-                    month: currentMonth,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Expense updated in localStorage fallback:', expenseId);
-                return localExpense;
-            }
-
-        } catch (error) {
-            this.eventBus.emit('expense:update-failed', { error, expenseId, expenseData, operationId });
-            throw error;
-
-        } finally {
-            this.pendingOperations.delete(operationId);
+        // ============================================
+        // FIX: Check if this is a default expense FIRST
+        // ============================================
+        const existingExpense = await this.findExpenseById(currentMonth, expenseId);
+        if (!existingExpense) {
+            throw new Error(`Expense not found: ${expenseId}`);
         }
+
+        const isDefaultExpense = existingExpense.isDefault === true;
+
+        // Emit before-update event for undo/redo
+        this.eventBus.emit('expense:before-updated', { expenseId, expenseData });
+
+        // ============================================
+        // FIX: Default expenses are local-only, skip Supabase
+        // ============================================
+        if (isDefaultExpense) {
+            console.log('📝 Updating default expense (local-only):', expenseId);
+            this.stats.fallbackOperations++;
+            this.stats.totalOperations++;
+
+            // Update localStorage only, PRESERVING isDefault flag
+            const updates = {
+                name: expenseData.name.trim(),
+                amount: parseFloat(expenseData.amount) || 0,
+                note: expenseData.note?.trim() || '',
+                isDefault: true  // CRITICAL: Preserve the flag
+            };
+
+            const localExpense = await this.updateExpenseInLocalStorage(currentMonth, expenseId, updates);
+
+            this.eventBus.emit('expense:updated', {
+                expense: localExpense,
+                month: currentMonth,
+                operationId,
+                source: 'localStorage'
+            });
+
+            console.log('✅ Default expense updated in localStorage:', expenseId);
+            return localExpense;
+        }
+
+        // ============================================
+        // Custom expenses: Try Supabase first
+        // ============================================
+        try {
+            const updatedExpense = await this.supabase.updateExpense(expenseId, {
+                name: expenseData.name.trim(),
+                amount: parseFloat(expenseData.amount) || 0,
+                note: expenseData.note?.trim() || ''
+            });
+
+            this.stats.supabaseOperations++;
+            this.stats.totalOperations++;
+
+            // Update localStorage backup (custom expenses have isDefault: false)
+            await this.updateExpenseInLocalStorage(currentMonth, expenseId, {
+                ...updatedExpense,
+                isDefault: false  // Explicit for clarity
+            });
+
+            this.eventBus.emit('expense:updated', {
+                expense: updatedExpense,
+                month: currentMonth,
+                operationId,
+                source: 'supabase'
+            });
+
+            console.log('✅ Custom expense updated in Supabase:', expenseId);
+            return updatedExpense;
+
+        } catch (supabaseError) {
+            console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
+            this.stats.fallbackOperations++;
+            this.stats.totalOperations++;
+
+            const updates = {
+                name: expenseData.name.trim(),
+                amount: parseFloat(expenseData.amount) || 0,
+                note: expenseData.note?.trim() || '',
+                isDefault: false  // Custom expenses are not defaults
+            };
+
+            const localExpense = await this.updateExpenseInLocalStorage(currentMonth, expenseId, updates);
+
+            this.eventBus.emit('expense:updated', {
+                expense: localExpense,
+                month: currentMonth,
+                operationId,
+                source: 'localStorage'
+            });
+
+            console.log('✅ Custom expense updated in localStorage fallback:', expenseId);
+            return localExpense;
+        }
+
+    } catch (error) {
+        this.eventBus.emit('expense:update-failed', { error, expenseId, expenseData, operationId });
+        throw error;
+
+    } finally {
+        this.pendingOperations.delete(operationId);
     }
+}
 
     // DELETE EXPENSE with Supabase priority
     async delete(expenseId) {
