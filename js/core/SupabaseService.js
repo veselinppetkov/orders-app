@@ -264,20 +264,11 @@ export class SupabaseService {
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${Date.now()}`);
             }
 
-            // Determine currency based on date
-            const currency = CurrencyUtils.getCurrencyForDate(orderData.date);
-
-            // Calculate EUR values if currency is BGN (historical), or vice versa
-            let extrasEUR, sellEUR;
-            if (currency === 'BGN') {
-                // Historical order - convert BGN to EUR
-                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            } else {
-                // New EUR order - use EUR directly or convert from BGN if provided
-                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            }
+            // System is EUR-only: normalize any legacy BGN input and fix mislabeled EUR values
+            const extrasEUR = CurrencyUtils.normalizeToEUR(orderData.extrasEUR, orderData.extrasBGN);
+            const sellEUR = CurrencyUtils.normalizeToEUR(orderData.sellEUR, orderData.sellBGN);
+            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -291,11 +282,11 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: parseFloat(orderData.extrasBGN) || 0,
-                    sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_bgn: extrasBGN,
+                    sell_bgn: sellBGN,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
-                    currency: currency,
+                    currency: 'EUR',
                     status: orderData.status || 'Очакван',
                     full_set: orderData.fullSet || false,
                     notes: orderData.notes || '',
@@ -360,18 +351,11 @@ export class SupabaseService {
                 }
             }
 
-            // Determine currency based on date
-            const currency = orderData.currency || CurrencyUtils.getCurrencyForDate(orderData.date);
-
-            // Calculate EUR values
-            let extrasEUR, sellEUR;
-            if (currency === 'BGN') {
-                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            } else {
-                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            }
+            // System is EUR-only: normalize any legacy BGN input and fix mislabeled EUR values
+            const extrasEUR = CurrencyUtils.normalizeToEUR(orderData.extrasEUR, orderData.extrasBGN);
+            const sellEUR = CurrencyUtils.normalizeToEUR(orderData.sellEUR, orderData.sellBGN);
+            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -385,11 +369,11 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: parseFloat(orderData.extrasBGN) || 0,
-                    sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_bgn: extrasBGN,
+                    sell_bgn: sellBGN,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
-                    currency: currency,
+                    currency: 'EUR',
                     status: orderData.status,
                     full_set: orderData.fullSet,
                     notes: orderData.notes || '',
@@ -575,12 +559,12 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('💰 Creating expense in Supabase:', expenseData.category || expenseData.name);
 
-            // Determine currency based on the month (expenses are always for a specific month)
-            const currency = expenseData.currency || CurrencyUtils.getCurrencyForDate(`${expenseData.month}-01`);
-
-            // Calculate EUR amount if needed
-            const amountBGN = parseFloat(expenseData.amount) || 0;
-            const amountEUR = currency === 'BGN' ? CurrencyUtils.convertBGNtoEUR(amountBGN) : (expenseData.amountEUR || amountBGN);
+            // Normalize to EUR only; derive BGN for audit trails
+            const amountEUR = CurrencyUtils.normalizeToEUR(
+                expenseData.amountEUR ?? expenseData.amount,
+                expenseData.amountBGN ?? expenseData.amount
+            );
+            const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
 
             const { data, error } = await this.supabase
                 .from('expenses')
@@ -589,7 +573,7 @@ export class SupabaseService {
                     name: expenseData.category || expenseData.name,
                     amount: amountBGN,
                     amount_eur: amountEUR,
-                    currency: currency,
+                    currency: 'EUR',
                     note: expenseData.description || expenseData.note || ''
                 }])
                 .select()
@@ -603,9 +587,10 @@ export class SupabaseService {
                 month: data.month_key,
                 name: data.name,
                 category: data.name,
-                amount: parseFloat(data.amount),
-                amountEUR: parseFloat(data.amount_eur || amountEUR),
-                currency: data.currency || currency,
+                amount: parseFloat(amountEUR.toFixed(2)),
+                amountEUR: parseFloat((data.amount_eur ?? amountEUR).toFixed(2)),
+                amountBGN: parseFloat(amountBGN.toFixed(2)),
+                currency: 'EUR',
                 description: data.note || '',
                 note: data.note || '',
                 isDefault: expenseData.isDefault || false
@@ -629,17 +614,25 @@ export class SupabaseService {
             const { data, error } = await query;
             if (error) throw error;
 
-            // Transform - include BOTH name and category fields
-            return data.map(exp => ({
-                id: exp.id,
-                month: exp.month_key,
-                name: exp.name,             // UI expects this
-                category: exp.name,         // Module might expect this
-                amount: parseFloat(exp.amount),
-                description: exp.note || '',
-                note: exp.note || '',
-                isDefault: false
-            }));
+            // Transform - include BOTH name and category fields and normalized EUR amount
+            return data.map(exp => {
+                const amountEUR = CurrencyUtils.normalizeToEUR(exp.amount_eur, exp.amount);
+                const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
+
+                return {
+                    id: exp.id,
+                    month: exp.month_key,
+                    name: exp.name,             // UI expects this
+                    category: exp.name,         // Module might expect this
+                    amount: amountEUR,
+                    amountEUR: amountEUR,
+                    amountBGN: amountBGN,
+                    description: exp.note || '',
+                    note: exp.note || '',
+                    isDefault: false,
+                    currency: 'EUR'
+                };
+            });
         });
     }
 
@@ -647,11 +640,19 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('✏️ Updating expense:', expenseId);
 
+            const normalizedAmountEUR = CurrencyUtils.normalizeToEUR(
+                expenseData.amountEUR ?? expenseData.amount,
+                expenseData.amountBGN ?? expenseData.amount
+            );
+            const normalizedAmountBGN = CurrencyUtils.convertEURtoBGN(normalizedAmountEUR);
+
             const { data, error } = await this.supabase
                 .from('expenses')
                 .update({
                     name: expenseData.category || expenseData.name,
-                    amount: parseFloat(expenseData.amount),
+                    amount: normalizedAmountBGN,
+                    amount_eur: normalizedAmountEUR,
+                    currency: 'EUR',
                     note: expenseData.description || expenseData.note || ''
                 })
                 .eq('id', expenseId)
@@ -665,10 +666,13 @@ export class SupabaseService {
                 month: data.month_key,
                 name: data.name,           // UI expects 'name'
                 category: data.name,        // Keep for compatibility
-                amount: parseFloat(data.amount),
+                amount: normalizedAmountEUR,
+                amountEUR: normalizedAmountEUR,
+                amountBGN: normalizedAmountBGN,
                 description: data.note || '',
                 note: data.note || '',
-                isDefault: false
+                isDefault: false,
+                currency: 'EUR'
             };
         });
     }
@@ -915,18 +919,28 @@ export class SupabaseService {
 
     // DATA TRANSFORMATION
     async transformOrderFromDB(dbOrder) {
-        // Calculate derived fields in BGN
-        const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
-        const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
+        const costUSD = parseFloat(dbOrder.cost_usd) || 0;
+        const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
+        const rate = parseFloat(dbOrder.rate) || 0;
+        const extrasEUR = CurrencyUtils.normalizeToEUR(dbOrder.extras_eur, dbOrder.extras_bgn);
+        const sellEUR = CurrencyUtils.normalizeToEUR(dbOrder.sell_eur, dbOrder.sell_bgn);
+        const totalEURFromDb = CurrencyUtils.normalizeToEUR(dbOrder.total_eur, dbOrder.total_bgn);
 
-        // Calculate derived fields in EUR
-        const extrasEUR = dbOrder.extras_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.extras_bgn);
-        const sellEUR = dbOrder.sell_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.sell_bgn);
-        const totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
-        const balanceEUR = sellEUR - totalEUR;
+        const recalculatedTotalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+        const totalEUR = totalEURFromDb > 0
+            ? totalEURFromDb
+            : recalculatedTotalEUR;
 
-        // Determine currency
-        const currency = dbOrder.currency || CurrencyUtils.getCurrencyForDate(dbOrder.date);
+        const balanceEUR = CurrencyUtils.normalizeToEUR(
+            dbOrder.balance_eur,
+            dbOrder.balance_bgn ?? (sellEUR - CurrencyUtils.convertEURtoBGN(totalEUR))
+        ) || (sellEUR - totalEUR);
+
+        const totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        const balanceBGN = CurrencyUtils.convertEURtoBGN(balanceEUR);
+
+        // System currency is now EUR
+        const currency = 'EUR';
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);
@@ -939,12 +953,12 @@ export class SupabaseService {
             origin: dbOrder.origin,
             vendor: dbOrder.vendor,
             model: dbOrder.model,
-            costUSD: parseFloat(dbOrder.cost_usd),
-            shippingUSD: parseFloat(dbOrder.shipping_usd),
-            rate: parseFloat(dbOrder.rate),
-            // BGN fields (legacy/historical)
-            extrasBGN: parseFloat(dbOrder.extras_bgn),
-            sellBGN: parseFloat(dbOrder.sell_bgn),
+            costUSD: costUSD,
+            shippingUSD: shippingUSD,
+            rate: rate,
+            // BGN fields (derived for legacy display only)
+            extrasBGN: parseFloat(CurrencyUtils.convertEURtoBGN(extrasEUR).toFixed(2)),
+            sellBGN: parseFloat(CurrencyUtils.convertEURtoBGN(sellEUR).toFixed(2)),
             totalBGN: parseFloat(totalBGN.toFixed(2)),
             balanceBGN: parseFloat(balanceBGN.toFixed(2)),
             // EUR fields (primary)

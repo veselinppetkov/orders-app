@@ -58,8 +58,11 @@ export class OrdersModule {
             // Emit before-create event for undo/redo
             this.eventBus.emit('order:before-created', orderData);
 
+            // Normalize order up-front so Supabase and UI use the same EUR-only payload
+            const preparedOrder = await this.prepareOrder(orderData);
+
             // Create optimistic order for immediate UI feedback
-            const optimisticOrder = this.createOptimisticOrder(orderData);
+            const optimisticOrder = preparedOrder;
             this.addOptimisticUpdate(optimisticOrder);
 
             // Emit optimistic creation
@@ -71,7 +74,7 @@ export class OrdersModule {
 
             // Attempt Supabase save
             try {
-                const savedOrder = await this.supabase.createOrder(orderData);
+                const savedOrder = await this.supabase.createOrder(preparedOrder);
                 this.stats.supabaseOperations++;
 
                 // Replace optimistic with real order
@@ -98,7 +101,7 @@ export class OrdersModule {
                 console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
 
                 // Fallback to localStorage
-                const localOrder = await this.createInLocalStorage(orderData);
+                const localOrder = await this.createInLocalStorage(preparedOrder);
                 this.stats.fallbackOperations++;
 
                 // Replace optimistic with local order
@@ -156,8 +159,8 @@ export class OrdersModule {
                 newData: orderData
             });
 
-            // Prepare updated order
-            const updatedOrder = this.prepareOrder({ ...orderData, id: orderId });
+            // Prepare updated order (normalized to EUR)
+            const updatedOrder = await this.prepareOrder({ ...orderData, id: orderId });
             const newMonth = this.getOrderMonth(updatedOrder.date);
             const oldMonth = currentOrder.month;
 
@@ -187,7 +190,7 @@ export class OrdersModule {
                 console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
 
                 // Fallback to localStorage
-                const localOrder = await this.updateInLocalStorage(orderId, orderData);
+                const localOrder = await this.updateInLocalStorage(orderId, updatedOrder);
                 this.stats.fallbackOperations++;
 
                 // Update cache
@@ -640,7 +643,7 @@ export class OrdersModule {
             throw new Error('Invalid date format');
         }
 
-        const numericFields = ['costUSD', 'shippingUSD', 'extrasBGN', 'sellBGN'];
+        const numericFields = ['costUSD', 'shippingUSD', 'extrasEUR', 'sellEUR'];
         for (const field of numericFields) {
             if (orderData[field] === '' || orderData[field] === null || orderData[field] === undefined) {
                 orderData[field] = 0; // 👉 празно = 0
@@ -688,8 +691,8 @@ export class OrdersModule {
             }
         }
 
-        // Determine currency based on order date
-        const currency = data.currency || CurrencyUtils.getCurrencyForDate(data.date);
+        // Currency is fully migrated to EUR
+        const currency = 'EUR';
 
         // Calculate USD costs
         const costUSD = parseFloat(data.costUSD) || 0;
@@ -697,32 +700,20 @@ export class OrdersModule {
             ? parseFloat(data.shippingUSD) || 0
             : parseFloat(settings.factoryShipping) || 0;
 
-        // Use EUR rate for new orders, BGN rate for historical
-        let rate, extrasBGN, sellBGN, extrasEUR, sellEUR;
+        const rate = parseFloat(settings.eurRate) || 0.92;
 
-        if (currency === 'EUR') {
-            // New EUR-based order
-            rate = parseFloat(settings.eurRate) || 0.92;
+        // Normalize amounts: accept legacy BGN input but convert to EUR immediately and fix mislabeled EUR values
+        const extrasEUR = CurrencyUtils.normalizeToEUR(
+            data.extrasEUR,
+            data.extrasBGN ?? data.extrasEUR
+        );
+        const sellEUR = CurrencyUtils.normalizeToEUR(
+            data.sellEUR,
+            data.sellBGN ?? data.sellEUR
+        );
 
-            // User provides EUR values
-            extrasEUR = parseFloat(data.extrasEUR || data.extrasBGN) || 0;
-            sellEUR = parseFloat(data.sellEUR || data.sellBGN) || 0;
-
-            // Convert to BGN for storage (backward compatibility)
-            extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
-            sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
-        } else {
-            // Historical BGN-based order
-            rate = parseFloat(settings.usdRate) || 1.71;
-
-            // User provides BGN values
-            extrasBGN = parseFloat(data.extrasBGN) || 0;
-            sellBGN = parseFloat(data.sellBGN) || 0;
-
-            // Convert to EUR
-            extrasEUR = CurrencyUtils.convertBGNtoEUR(extrasBGN);
-            sellEUR = CurrencyUtils.convertBGNtoEUR(sellBGN);
-        }
+        const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+        const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
         // Prepare order with guaranteed settings
         const order = {
@@ -750,24 +741,13 @@ export class OrdersModule {
             imageData: data.imageData || null
         };
 
-        // Calculate derived fields in both currencies
-        if (currency === 'EUR') {
-            // EUR calculations (primary)
-            order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-            order.balanceEUR = sellEUR - order.totalEUR;
+        // Calculate derived fields (EUR primary)
+        order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+        order.balanceEUR = sellEUR - order.totalEUR;
 
-            // BGN for compatibility
-            order.totalBGN = CurrencyUtils.convertEURtoBGN(order.totalEUR);
-            order.balanceBGN = CurrencyUtils.convertEURtoBGN(order.balanceEUR);
-        } else {
-            // BGN calculations (historical)
-            order.totalBGN = ((costUSD + shippingUSD) * rate) + extrasBGN;
-            order.balanceBGN = sellBGN - Math.ceil(order.totalBGN);
-
-            // EUR conversions
-            order.totalEUR = CurrencyUtils.convertBGNtoEUR(order.totalBGN);
-            order.balanceEUR = CurrencyUtils.convertBGNtoEUR(order.balanceBGN);
-        }
+        // Backward-compatible BGN values derived from EUR
+        order.totalBGN = CurrencyUtils.convertEURtoBGN(order.totalEUR);
+        order.balanceBGN = CurrencyUtils.convertEURtoBGN(order.balanceEUR);
 
         return order;
     }
@@ -959,14 +939,16 @@ export class OrdersModule {
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
+        const rate = parseFloat(settings.eurRate) || order.rate || 0.92;
 
-        // Use current settings for recalculation
-        const updatedOrder = { ...order };
-        updatedOrder.rate = parseFloat(settings.usdRate) || order.rate || 1.71;
+        const updatedOrder = { ...order, rate };
+        const extrasEUR = CurrencyUtils.normalizeToEUR(order.extrasEUR, order.extrasBGN ?? order.extrasEUR);
+        const sellEUR = CurrencyUtils.normalizeToEUR(order.sellEUR, order.sellBGN ?? order.sellEUR);
 
-        // Recalculate derived fields
-        updatedOrder.totalBGN = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * updatedOrder.rate) + updatedOrder.extrasBGN;
-        updatedOrder.balanceBGN = updatedOrder.sellBGN - Math.ceil(updatedOrder.totalBGN);
+        updatedOrder.totalEUR = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR;
+        updatedOrder.balanceEUR = sellEUR - updatedOrder.totalEUR;
+        updatedOrder.totalBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.totalEUR);
+        updatedOrder.balanceBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.balanceEUR);
 
         return updatedOrder;
     }

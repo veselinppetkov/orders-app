@@ -65,6 +65,30 @@ export class ExpensesModule {
         });
     }
 
+    normalizeExpenseAmounts(expenseData) {
+        const amountEUR = CurrencyUtils.normalizeToEUR(
+            expenseData.amountEUR ?? expenseData.amount,
+            expenseData.amountBGN ?? expenseData.amount
+        );
+
+        return {
+            amountEUR,
+            amountBGN: CurrencyUtils.convertEURtoBGN(amountEUR)
+        };
+    }
+
+    normalizeExpenseRecord(expense) {
+        const { amountEUR, amountBGN } = this.normalizeExpenseAmounts(expense);
+
+        return {
+            ...expense,
+            amount: amountEUR,
+            amountEUR,
+            amountBGN,
+            currency: 'EUR'
+        };
+    }
+
     // ============================================
     // CORE CRUD OPERATIONS WITH SUPABASE
     // ============================================
@@ -84,27 +108,27 @@ async getExpenses(month = null) {
             this.stats.supabaseOperations++;
 
             // Smart backup: Don't overwrite defaults with empty Supabase results
-            if (supabaseExpenses.length > 0) {
-                // Supabase has data - merge with defaults and return combined result
-                this.backupExpensesToLocalStorage(targetMonth, supabaseExpenses);
+                if (supabaseExpenses.length > 0) {
+                    // Supabase has data - merge with defaults and return combined result
+                    this.backupExpensesToLocalStorage(targetMonth, supabaseExpenses);
 
-                // CRITICAL: Return the merged result (defaults + customs) from localStorage
-                const mergedExpenses = this.getExpensesFromLocalStorage(targetMonth);
-                console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase, merged with defaults. Total: ${mergedExpenses.length} expenses for ${targetMonth}`);
-                return mergedExpenses;
-            } else {
-                // Supabase empty - check if localStorage has defaults
-                const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
-
-                if (localExpenses.length > 0) {
-                    // Keep localStorage defaults (don't overwrite with empty)
-                    console.log(`✅ Using ${localExpenses.length} default expenses from localStorage for ${targetMonth}`);
-                    return localExpenses;
+                    // CRITICAL: Return the merged result (defaults + customs) from localStorage
+                    const mergedExpenses = this.getExpensesFromLocalStorage(targetMonth);
+                    console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase, merged with defaults. Total: ${mergedExpenses.length} expenses for ${targetMonth}`);
+                    return mergedExpenses.map(expense => this.normalizeExpenseRecord(expense));
                 } else {
-                    // Both empty - return empty array
-                    console.log(`ℹ️ No expenses found for ${targetMonth}`);
-                    return [];
-                }
+                    // Supabase empty - check if localStorage has defaults
+                    const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
+
+                    if (localExpenses.length > 0) {
+                        // Keep localStorage defaults (don't overwrite with empty)
+                        console.log(`✅ Using ${localExpenses.length} default expenses from localStorage for ${targetMonth}`);
+                        return localExpenses.map(expense => this.normalizeExpenseRecord(expense));
+                    } else {
+                        // Both empty - return empty array
+                        console.log(`ℹ️ No expenses found for ${targetMonth}`);
+                        return [];
+                    }
             }
 
         } catch (supabaseError) {
@@ -114,7 +138,7 @@ async getExpenses(month = null) {
             // Fallback to localStorage (which has defaults from ensureMonthExpenses)
             const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
             console.log(`✅ Loaded ${localExpenses.length} expenses from localStorage for ${targetMonth}`);
-            return localExpenses;
+            return localExpenses.map(expense => this.normalizeExpenseRecord(expense));
         }
 
     } catch (error) {
@@ -168,6 +192,7 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
             this.validateExpenseData(expenseData);
 
             const currentMonth = this.state.get('currentMonth');
+            const { amountEUR, amountBGN } = this.normalizeExpenseAmounts(expenseData);
 
             // Emit before-create event for undo/redo
             this.eventBus.emit('expense:before-created', expenseData);
@@ -177,7 +202,9 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
                 const expenseToCreate = {
                     month: currentMonth,
                     name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
+                    amount: amountEUR,
+                    amountEUR,
+                    amountBGN,
                     note: expenseData.note?.trim() || '',
                     isDefault: false
                 };
@@ -192,7 +219,9 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
                 const localExpense = {
                     id: savedExpense.id,  // Use Supabase ID for consistency
                     name: savedExpense.name,
-                    amount: savedExpense.amount,
+                    amount: amountEUR,
+                    amountEUR: amountEUR,
+                    amountBGN: amountBGN,
                     note: savedExpense.note || '',
                     isDefault: false,
                     createdAt: new Date().toISOString()
@@ -221,7 +250,9 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
                 const localExpense = {
                     id: this.nextCustomId++,
                     name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
+                    amount: amountEUR,
+                    amountEUR: amountEUR,
+                    amountBGN: amountBGN,
                     note: expenseData.note?.trim() || '',
                     isDefault: false,
                     createdAt: new Date().toISOString()
@@ -261,6 +292,7 @@ async update(expenseId, expenseData) {
         this.validateExpenseData(expenseData);
 
         const currentMonth = this.state.get('currentMonth');
+        const { amountEUR, amountBGN } = this.normalizeExpenseAmounts(expenseData);
 
         // ============================================
         // FIX: Check if this is a default expense FIRST
@@ -286,7 +318,9 @@ async update(expenseId, expenseData) {
             // Update localStorage only, PRESERVING isDefault flag
             const updates = {
                 name: expenseData.name.trim(),
-                amount: parseFloat(expenseData.amount) || 0,
+                amount: amountEUR,
+                amountEUR,
+                amountBGN,
                 note: expenseData.note?.trim() || '',
                 isDefault: true  // CRITICAL: Preserve the flag
             };
@@ -307,12 +341,14 @@ async update(expenseId, expenseData) {
         // ============================================
         // Custom expenses: Try Supabase first
         // ============================================
-        try {
-            const updatedExpense = await this.supabase.updateExpense(expenseId, {
-                name: expenseData.name.trim(),
-                amount: parseFloat(expenseData.amount) || 0,
-                note: expenseData.note?.trim() || ''
-            });
+            try {
+                const updatedExpense = await this.supabase.updateExpense(expenseId, {
+                    name: expenseData.name.trim(),
+                    amount: amountEUR,
+                    amountEUR,
+                    amountBGN,
+                    note: expenseData.note?.trim() || ''
+                });
 
             this.stats.supabaseOperations++;
             this.stats.totalOperations++;
@@ -340,7 +376,9 @@ async update(expenseId, expenseData) {
 
             const updates = {
                 name: expenseData.name.trim(),
-                amount: parseFloat(expenseData.amount) || 0,
+                amount: amountEUR,
+                amountEUR,
+                amountBGN,
                 note: expenseData.note?.trim() || '',
                 isDefault: false  // Custom expenses are not defaults
             };

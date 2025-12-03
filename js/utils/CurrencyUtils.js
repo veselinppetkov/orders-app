@@ -52,6 +52,45 @@ export class CurrencyUtils {
     }
 
     /**
+     * Normalize potentially mixed currency inputs to a reliable EUR amount.
+     * If both EUR and BGN are provided but they don't match when converted,
+     * the BGN value is treated as the source of truth to fix mislabeled data.
+     * @param {number|string|null|undefined} eurAmount - Value that should be EUR
+     * @param {number|string|null|undefined} bgnAmount - Value that might be BGN
+     * @returns {number} Normalized EUR amount
+     */
+    static normalizeToEUR(eurAmount, bgnAmount) {
+        const parsedEUR = parseFloat(eurAmount);
+        const parsedBGN = parseFloat(bgnAmount);
+
+        const hasEUR = !isNaN(parsedEUR);
+        const hasBGN = !isNaN(parsedBGN);
+
+        if (hasEUR && hasBGN) {
+            const eurFromBGN = this.convertBGNtoEUR(parsedBGN);
+            const bgnFromEUR = this.convertEURtoBGN(parsedEUR);
+
+            // If the two values agree, trust the EUR input
+            if (Math.abs(parsedBGN - bgnFromEUR) <= 0.05) {
+                return this.roundEUR(parsedEUR);
+            }
+
+            // Values disagree -> favor BGN as canonical and convert to EUR
+            return eurFromBGN;
+        }
+
+        if (hasEUR) {
+            return this.roundEUR(parsedEUR);
+        }
+
+        if (hasBGN) {
+            return this.convertBGNtoEUR(parsedBGN);
+        }
+
+        return 0;
+    }
+
+    /**
      * Determine which currency should be used based on date
      * @param {Date|string} date - Date to check
      * @returns {string} 'EUR' or 'BGN'

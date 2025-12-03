@@ -1,3 +1,5 @@
+import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
+
 export class ModalsManager {
     constructor(modules, state, eventBus) {
         this.modules = modules;
@@ -225,12 +227,12 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Доп. разходи (€):</label>
-                            <input type="number" id="orderExtrasBGN" value="${formData?.extrasBGN || 0}" step="0.01" placeholder="0.00">
+                            <input type="number" id="orderExtrasEUR" value="${formData?.extrasEUR || ''}" step="0.01" placeholder="0.00">
                             <small style="color:#6c757d;">Допълнителни разходи в евро</small>
                         </div>
                         <div class="form-group">
                             <label>Продажна цена (€):</label>
-                            <input type="number" id="orderSellBGN" value="${formData?.sellBGN || ''}" step="0.01" placeholder="0.00">
+                            <input type="number" id="orderSellEUR" value="${formData?.sellEUR || ''}" step="0.01" placeholder="0.00">
                             <small style="color:#6c757d;">Крайна цена за клиента в евро</small>
                         </div>
                     </div>
@@ -529,7 +531,7 @@ export class ModalsManager {
             `<div class="no-image-placeholder">${o.model}</div>`
         }
                                             </td>
-                                            <td>${(o.sellEUR || o.sellBGN || 0).toFixed(2)} €</td>
+                                            <td>${CurrencyUtils.formatAmount(CurrencyUtils.normalizeToEUR(o.sellEUR, o.sellBGN ?? o.sellEUR), 'EUR')}</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
                                         </tr>
                                     `).join('')}
@@ -616,8 +618,8 @@ export class ModalsManager {
             // FIXED: Always capture exact form values (don't let them be undefined)
             costUSD: document.getElementById('orderCostUSD').value || '0',
             shippingUSD: document.getElementById('orderShippingUSD').value || '0',
-            extrasBGN: document.getElementById('orderExtrasBGN').value || '0',
-            sellBGN: document.getElementById('orderSellBGN').value || '0',
+            extrasEUR: document.getElementById('orderExtrasEUR').value || '0',
+            sellEUR: document.getElementById('orderSellEUR').value || '0',
             status: document.getElementById('orderStatus').value,
             fullSet: document.getElementById('orderFullSet').checked,
             notes: document.getElementById('orderNotes').value || '',
