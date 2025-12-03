@@ -813,12 +813,12 @@ async getExpenses(month = null) {
 
         return {
             id: dbExpense.id,
-            month: dbExpense.month_key || dbExpense.month,
-            name: dbExpense.name,  // FIX: Use 'name' column, not 'category'
+            month: dbExpense.month,
+            category: dbExpense.category,
             amount: amountEUR,  // Always use EUR
             amountBGN: amountBGN,  // Keep BGN for reference
             amountEUR: amountEUR,  // Explicit EUR field
-            note: dbExpense.note || '',  // FIX: Use 'note' column, not 'description'
+            description: dbExpense.description || '',
             isDefault: dbExpense.is_default || false,
             currency: dbExpense.currency || 'BGN'
         };
