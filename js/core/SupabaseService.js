@@ -559,21 +559,20 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('💰 Creating expense in Supabase:', expenseData.category || expenseData.name);
 
-            // Determine currency based on the month (expenses are always for a specific month)
-            const currency = expenseData.currency || CurrencyUtils.getCurrencyForDate(`${expenseData.month}-01`);
+            // Incoming amount is now in EUR (from UI)
+            const amountEUR = parseFloat(expenseData.amount) || 0;
 
-            // Calculate EUR amount if needed
-            const amountBGN = parseFloat(expenseData.amount) || 0;
-            const amountEUR = currency === 'BGN' ? CurrencyUtils.convertBGNtoEUR(amountBGN) : (expenseData.amountEUR || amountBGN);
+            // Convert to BGN for backward compatibility
+            const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
 
             const { data, error } = await this.supabase
                 .from('expenses')
                 .insert([{
                     month_key: expenseData.month,
                     name: expenseData.category || expenseData.name,
-                    amount: amountBGN,
-                    amount_eur: amountEUR,
-                    currency: currency,
+                    amount: amountBGN,  // Store BGN for backward compatibility
+                    amount_eur: amountEUR,  // Store EUR as primary
+                    currency: 'EUR',
                     note: expenseData.description || expenseData.note || ''
                 }])
                 .select()
@@ -581,19 +580,8 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            // Transform to match UI expectations
-            return {
-                id: data.id,
-                month: data.month_key,
-                name: data.name,
-                category: data.name,
-                amount: parseFloat(data.amount),
-                amountEUR: parseFloat(data.amount_eur || amountEUR),
-                currency: data.currency || currency,
-                description: data.note || '',
-                note: data.note || '',
-                isDefault: expenseData.isDefault || false
-            };
+            // Return transformed data
+            return this.transformExpenseFromDB(data);
         });
     }
 
@@ -613,17 +601,8 @@ export class SupabaseService {
             const { data, error } = await query;
             if (error) throw error;
 
-            // Transform - include BOTH name and category fields
-            return data.map(exp => ({
-                id: exp.id,
-                month: exp.month_key,
-                name: exp.name,             // UI expects this
-                category: exp.name,         // Module might expect this
-                amount: parseFloat(exp.amount),
-                description: exp.note || '',
-                note: exp.note || '',
-                isDefault: false
-            }));
+            // Transform using the EUR field (use transformExpenseFromDB for consistency)
+            return data.map(exp => this.transformExpenseFromDB(exp));
         });
     }
 
@@ -631,11 +610,16 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('✏️ Updating expense:', expenseId);
 
+            // Convert EUR to BGN for storage (backward compatibility)
+            const amountEUR = parseFloat(expenseData.amount) || 0;
+            const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
+
             const { data, error } = await this.supabase
                 .from('expenses')
                 .update({
                     name: expenseData.category || expenseData.name,
-                    amount: parseFloat(expenseData.amount),
+                    amount: amountBGN,  // Store BGN for backward compatibility
+                    amount_eur: amountEUR,  // Store EUR as primary
                     note: expenseData.description || expenseData.note || ''
                 })
                 .eq('id', expenseId)
@@ -644,16 +628,7 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            return {
-                id: data.id,
-                month: data.month_key,
-                name: data.name,           // UI expects 'name'
-                category: data.name,        // Keep for compatibility
-                amount: parseFloat(data.amount),
-                description: data.note || '',
-                note: data.note || '',
-                isDefault: false
-            };
+            return this.transformExpenseFromDB(data);
         });
     }
 
@@ -692,14 +667,10 @@ export class SupabaseService {
             const inventory = {};
             data.forEach(item => {
                 const inventoryId = `box_${item.id}`; // Create compatible ID
+                const transformedItem = this.transformInventoryFromDB(item);
                 inventory[inventoryId] = {
                     id: inventoryId,
-                    brand: item.brand,
-                    type: item.type,
-                    purchasePrice: parseFloat(item.purchase_price),
-                    sellPrice: parseFloat(item.sell_price),
-                    stock: parseInt(item.stock),
-                    ordered: parseInt(item.ordered),
+                    ...transformedItem,
                     dbId: item.id  // Keep real DB ID for updates
                 };
             });
@@ -713,32 +684,39 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('📦 Creating inventory item:', itemData.brand);
 
+            // Incoming prices are in EUR (from UI)
+            const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
+            const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
+
+            // Convert to BGN for backward compatibility
+            const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
+            const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
+
             // Don't send ID - let database auto-generate it
             const { data, error } = await this.supabase
                 .from('inventory')
                 .insert([{
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: parseFloat(itemData.purchasePrice) || 0,
-                    sell_price: parseFloat(itemData.sellPrice) || 0,
+                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
+                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
+                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
+                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
                     stock: parseInt(itemData.stock) || 0,
-                    ordered: parseInt(itemData.ordered) || 0
+                    ordered: parseInt(itemData.ordered) || 0,
+                    currency: 'EUR'
                 }])
                 .select()
                 .single();
 
             if (error) throw error;
 
-            // Return with compatible ID format
+            // Return with compatible ID format and transformed data
             const inventoryId = `box_${data.id}`;
+            const transformedItem = this.transformInventoryFromDB(data);
             return {
                 id: inventoryId,
-                brand: data.brand,
-                type: data.type,
-                purchasePrice: parseFloat(data.purchase_price),
-                sellPrice: parseFloat(data.sell_price),
-                stock: parseInt(data.stock),
-                ordered: parseInt(data.ordered),
+                ...transformedItem,
                 dbId: data.id
             };
         });
@@ -748,15 +726,26 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('📦 Updating inventory item:', itemId);
 
+            // Incoming prices are in EUR (from UI)
+            const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
+            const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
+
+            // Convert to BGN for backward compatibility
+            const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
+            const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
+
             const { data, error } = await this.supabase
                 .from('inventory')
                 .update({
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: parseFloat(itemData.purchasePrice) || 0,
-                    sell_price: parseFloat(itemData.sellPrice) || 0,
+                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
+                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
+                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
+                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
                     stock: parseInt(itemData.stock) || 0,
-                    ordered: parseInt(itemData.ordered) || 0
+                    ordered: parseInt(itemData.ordered) || 0,
+                    currency: 'EUR'
                 })
                 .eq('id', itemId)
                 .select()
@@ -764,17 +753,13 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            // Return with compatible ID format
+            // Return with compatible ID format and transformed data
             const inventoryId = `box_${data.id}`;
+            const transformedItem = this.transformInventoryFromDB(data);
             return {
                 id: inventoryId,
-                dbId: data.id,
-                brand: data.brand,
-                type: data.type,
-                purchasePrice: parseFloat(data.purchase_price),
-                sellPrice: parseFloat(data.sell_price),
-                stock: parseInt(data.stock),
-                ordered: parseInt(data.ordered)
+                ...transformedItem,
+                dbId: data.id
             };
         });
     }
