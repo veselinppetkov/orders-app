@@ -704,9 +704,22 @@ export class OrdersModule {
             // New EUR-based order
             rate = parseFloat(settings.eurRate) || 0.92;
 
-            // User provides EUR values
-            extrasEUR = parseFloat(data.extrasEUR || data.extrasBGN) || 0;
-            sellEUR = parseFloat(data.sellEUR || data.sellBGN) || 0;
+            // User provides EUR values (convert from BGN if EUR not provided)
+            if (data.extrasEUR !== undefined && data.extrasEUR !== null && data.extrasEUR !== '') {
+                extrasEUR = parseFloat(data.extrasEUR) || 0;
+            } else if (data.extrasBGN !== undefined && data.extrasBGN !== null) {
+                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(data.extrasBGN) || 0);
+            } else {
+                extrasEUR = 0;
+            }
+
+            if (data.sellEUR !== undefined && data.sellEUR !== null && data.sellEUR !== '') {
+                sellEUR = parseFloat(data.sellEUR) || 0;
+            } else if (data.sellBGN !== undefined && data.sellBGN !== null) {
+                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(data.sellBGN) || 0);
+            } else {
+                sellEUR = 0;
+            }
 
             // Convert to BGN for storage (backward compatibility)
             extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
@@ -719,7 +732,7 @@ export class OrdersModule {
             extrasBGN = parseFloat(data.extrasBGN) || 0;
             sellBGN = parseFloat(data.sellBGN) || 0;
 
-            // Convert to EUR
+            // Convert to EUR (always convert, don't trust pre-existing EUR values for BGN orders)
             extrasEUR = CurrencyUtils.convertBGNtoEUR(extrasBGN);
             sellEUR = CurrencyUtils.convertBGNtoEUR(sellBGN);
         }

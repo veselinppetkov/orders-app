@@ -914,14 +914,51 @@ export class SupabaseService {
     }
 
     // DATA TRANSFORMATION
+
+    /**
+     * Validate and ensure proper EUR conversion
+     * Always returns a properly converted EUR value
+     * @param {number} eurValue - EUR value from database (may be incorrect/missing)
+     * @param {number} bgnValue - BGN value from database (source of truth)
+     * @returns {number} Validated EUR value
+     */
+    validateAndConvertEUR(eurValue, bgnValue) {
+        const bgnNum = parseFloat(bgnValue) || 0;
+
+        // If no EUR value exists, convert from BGN
+        if (!eurValue || eurValue === 0) {
+            return CurrencyUtils.convertBGNtoEUR(bgnNum);
+        }
+
+        const eurNum = parseFloat(eurValue);
+
+        // Validate: Check if EUR value matches expected conversion
+        const expectedEUR = CurrencyUtils.convertBGNtoEUR(bgnNum);
+        const tolerance = 0.02; // 2% tolerance for rounding differences
+
+        // If EUR value is suspiciously close to BGN value (no conversion applied)
+        if (Math.abs(eurNum - bgnNum) < 1 && bgnNum > 100) {
+            console.warn(`⚠️ Suspicious EUR value detected: EUR=${eurNum}, BGN=${bgnNum}. Converting from BGN.`);
+            return expectedEUR;
+        }
+
+        // If EUR value deviates significantly from expected
+        if (expectedEUR > 0 && Math.abs(eurNum - expectedEUR) / expectedEUR > tolerance) {
+            console.warn(`⚠️ EUR value mismatch: stored=${eurNum}, expected=${expectedEUR.toFixed(2)}. Using stored value.`);
+        }
+
+        // Use the stored EUR value (assumed correct after warnings)
+        return eurNum;
+    }
+
     async transformOrderFromDB(dbOrder) {
-        // Calculate derived fields in BGN
+        // Calculate derived fields in BGN (legacy)
         const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
         const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
 
-        // Calculate derived fields in EUR
-        const extrasEUR = dbOrder.extras_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.extras_bgn);
-        const sellEUR = dbOrder.sell_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.sell_bgn);
+        // Calculate derived fields in EUR with validation
+        const extrasEUR = this.validateAndConvertEUR(dbOrder.extras_eur, dbOrder.extras_bgn);
+        const sellEUR = this.validateAndConvertEUR(dbOrder.sell_eur, dbOrder.sell_bgn);
         const totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
         const balanceEUR = sellEUR - totalEUR;
 

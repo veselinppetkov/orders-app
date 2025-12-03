@@ -529,7 +529,7 @@ export class ModalsManager {
             `<div class="no-image-placeholder">${o.model}</div>`
         }
                                             </td>
-                                            <td>${(o.sellEUR || o.sellBGN || 0).toFixed(2)} €</td>
+                                            <td>${(o.sellEUR || 0).toFixed(2)} €</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
                                         </tr>
                                     `).join('')}
