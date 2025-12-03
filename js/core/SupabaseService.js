@@ -1,4 +1,5 @@
 import {Config} from "../config.js";
+import {CurrencyUtils} from "../utils/CurrencyUtils.js";
 
 export class SupabaseService {
     constructor() {
@@ -263,6 +264,21 @@ export class SupabaseService {
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${Date.now()}`);
             }
 
+            // Determine currency based on date
+            const currency = CurrencyUtils.getCurrencyForDate(orderData.date);
+
+            // Calculate EUR values if currency is BGN (historical), or vice versa
+            let extrasEUR, sellEUR;
+            if (currency === 'BGN') {
+                // Historical order - convert BGN to EUR
+                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            } else {
+                // New EUR order - use EUR directly or convert from BGN if provided
+                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            }
+
             const { data, error } = await this.supabase
                 .from('orders')
                 .insert([{
@@ -277,6 +293,9 @@ export class SupabaseService {
                     rate: parseFloat(orderData.rate) || 1,
                     extras_bgn: parseFloat(orderData.extrasBGN) || 0,
                     sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_eur: extrasEUR,
+                    sell_eur: sellEUR,
+                    currency: currency,
                     status: orderData.status || 'Очакван',
                     full_set: orderData.fullSet || false,
                     notes: orderData.notes || '',
@@ -341,6 +360,19 @@ export class SupabaseService {
                 }
             }
 
+            // Determine currency based on date
+            const currency = orderData.currency || CurrencyUtils.getCurrencyForDate(orderData.date);
+
+            // Calculate EUR values
+            let extrasEUR, sellEUR;
+            if (currency === 'BGN') {
+                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            } else {
+                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            }
+
             const { data, error } = await this.supabase
                 .from('orders')
                 .update({
@@ -355,6 +387,9 @@ export class SupabaseService {
                     rate: parseFloat(orderData.rate) || 1,
                     extras_bgn: parseFloat(orderData.extrasBGN) || 0,
                     sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_eur: extrasEUR,
+                    sell_eur: sellEUR,
+                    currency: currency,
                     status: orderData.status,
                     full_set: orderData.fullSet,
                     notes: orderData.notes || '',
@@ -540,12 +575,21 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('💰 Creating expense in Supabase:', expenseData.category || expenseData.name);
 
+            // Determine currency based on the month (expenses are always for a specific month)
+            const currency = expenseData.currency || CurrencyUtils.getCurrencyForDate(`${expenseData.month}-01`);
+
+            // Calculate EUR amount if needed
+            const amountBGN = parseFloat(expenseData.amount) || 0;
+            const amountEUR = currency === 'BGN' ? CurrencyUtils.convertBGNtoEUR(amountBGN) : (expenseData.amountEUR || amountBGN);
+
             const { data, error } = await this.supabase
                 .from('expenses')
                 .insert([{
                     month_key: expenseData.month,
-                    name: expenseData.category || expenseData.name, // Support both field names
-                    amount: parseFloat(expenseData.amount) || 0,
+                    name: expenseData.category || expenseData.name,
+                    amount: amountBGN,
+                    amount_eur: amountEUR,
+                    currency: currency,
                     note: expenseData.description || expenseData.note || ''
                 }])
                 .select()
@@ -553,13 +597,15 @@ export class SupabaseService {
 
             if (error) throw error;
 
-            // Transform to match UI expectations - use 'name' field
+            // Transform to match UI expectations
             return {
                 id: data.id,
                 month: data.month_key,
-                name: data.name,           // UI expects 'name'
-                category: data.name,        // Keep for compatibility
+                name: data.name,
+                category: data.name,
                 amount: parseFloat(data.amount),
+                amountEUR: parseFloat(data.amount_eur || amountEUR),
+                currency: data.currency || currency,
                 description: data.note || '',
                 note: data.note || '',
                 isDefault: expenseData.isDefault || false
@@ -869,9 +915,18 @@ export class SupabaseService {
 
     // DATA TRANSFORMATION
     async transformOrderFromDB(dbOrder) {
-        // Calculate derived fields
+        // Calculate derived fields in BGN
         const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
         const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
+
+        // Calculate derived fields in EUR
+        const extrasEUR = dbOrder.extras_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.extras_bgn);
+        const sellEUR = dbOrder.sell_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.sell_bgn);
+        const totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
+        const balanceEUR = sellEUR - totalEUR;
+
+        // Determine currency
+        const currency = dbOrder.currency || CurrencyUtils.getCurrencyForDate(dbOrder.date);
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);
@@ -887,10 +942,18 @@ export class SupabaseService {
             costUSD: parseFloat(dbOrder.cost_usd),
             shippingUSD: parseFloat(dbOrder.shipping_usd),
             rate: parseFloat(dbOrder.rate),
+            // BGN fields (legacy/historical)
             extrasBGN: parseFloat(dbOrder.extras_bgn),
             sellBGN: parseFloat(dbOrder.sell_bgn),
             totalBGN: parseFloat(totalBGN.toFixed(2)),
             balanceBGN: parseFloat(balanceBGN.toFixed(2)),
+            // EUR fields (primary)
+            extrasEUR: parseFloat(extrasEUR.toFixed(2)),
+            sellEUR: parseFloat(sellEUR.toFixed(2)),
+            totalEUR: parseFloat(totalEUR.toFixed(2)),
+            balanceEUR: parseFloat(balanceEUR.toFixed(2)),
+            // Metadata
+            currency: currency,
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',
@@ -924,7 +987,15 @@ export class SupabaseService {
 
     getDefaultSettings() {
         return {
-            usdRate: 1.71,
+            // EUR is now the primary currency
+            eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
+            baseCurrency: 'EUR',
+            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
+
+            // Legacy BGN settings (kept for historical data)
+            usdRate: 1.71, // Legacy USD to BGN rate
+
+            // Other settings
             factoryShipping: 1.5,
             origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
             vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']

@@ -319,7 +319,15 @@ console.log('✅ Business modules initialized');
 
     getDefaultSettings() {
         return {
-            usdRate: 1.71,
+            // EUR is now the primary currency (Bulgaria euro adoption Jan 1, 2026)
+            eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
+            baseCurrency: 'EUR',
+            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
+
+            // Legacy BGN settings (kept for historical data)
+            usdRate: 1.71, // Legacy USD to BGN rate
+
+            // Other settings
             factoryShipping: 1.5,
             origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
             vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']

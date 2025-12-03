@@ -58,6 +58,10 @@ export class SettingsModule {
         return this.updateSettings({ usdRate: parseFloat(rate) });
     }
 
+    async updateEurRate(rate) {
+        return this.updateSettings({ eurRate: parseFloat(rate) });
+    }
+
     async updateShipping(shipping) {
         return this.updateSettings({ factoryShipping: parseFloat(shipping) });
     }
