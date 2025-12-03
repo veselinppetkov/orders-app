@@ -531,7 +531,7 @@ export class ModalsManager {
             `<div class="no-image-placeholder">${o.model}</div>`
         }
                                             </td>
-                                            <td>${CurrencyUtils.formatAmount(o.sellEUR ?? CurrencyUtils.convertBGNtoEUR(o.sellBGN || 0), 'EUR')}</td>
+                                            <td>${(o.sellEUR || 0).toFixed(2)} €</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
                                         </tr>
                                     `).join('')}

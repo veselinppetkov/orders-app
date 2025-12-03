@@ -440,15 +440,15 @@ export class ClientsModule {
 
             const stats = {
                 totalOrders: orders.length,
-                // Use EUR as primary currency (with conversion for legacy BGN data)
-                totalRevenue: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0),
-                totalProfit: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0),
+                // Use EUR exclusively (orders are validated and converted by SupabaseService)
+                totalRevenue: orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0),
+                totalProfit: orders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
                 lastOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null,
                 firstOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(a.date) - new Date(b.date))[0] : null,
                 avgOrderValue: orders.length > 0 ?
-                    orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0) / orders.length : 0
+                    orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0) / orders.length : 0
             };
 
             // Cache the stats

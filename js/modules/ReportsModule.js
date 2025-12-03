@@ -26,8 +26,8 @@ export class ReportsModule {
         const expenses = monthlyData[targetMonth]?.expenses || [];
 
         const totalExpenses = expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
-        const revenue = orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0);
-        const totalOrderCosts = orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).totalEUR, 0);
+        const revenue = orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
+        const totalOrderCosts = orders.reduce((sum, o) => sum + (o.totalEUR || 0), 0);
         const profit = revenue - totalOrderCosts - totalExpenses;
 
         return {
@@ -47,8 +47,8 @@ export class ReportsModule {
         const monthlyData = this.state.get('monthlyData');
         const allExpenses = Object.values(monthlyData).flatMap(m => m.expenses || []);
 
-        const totalRevenue = allOrders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0);
-        const totalProfit = allOrders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0);
+        const totalRevenue = allOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
+        const totalProfit = allOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0);
         const totalExpenses = allExpenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
 
         return {
@@ -91,8 +91,8 @@ export class ReportsModule {
 
             report[month] = {
                 count: orders.length,
-                revenue: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).sellEUR, 0),
-                profit: orders.reduce((sum, o) => sum + this.getOrderEurMetrics(o).balanceEUR, 0),
+                revenue: orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0),
+                profit: orders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
                 expenses: expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0)
             };
         });
@@ -110,7 +110,7 @@ export class ReportsModule {
             .map(([client, stats]) => ({ client, ...stats }));
     }
 
-    // Helper method - updated for EUR
+    // Helper method - EUR only (orders validated by SupabaseService)
     aggregateBy(orders, field) {
         return orders.reduce((acc, order) => {
             const key = order[field];
@@ -118,9 +118,8 @@ export class ReportsModule {
                 acc[key] = { count: 0, revenue: 0, profit: 0 };
             }
             acc[key].count++;
-            const { sellEUR, balanceEUR } = this.getOrderEurMetrics(order);
-            acc[key].revenue += sellEUR;
-            acc[key].profit += balanceEUR;
+            acc[key].revenue += (order.sellEUR || 0);
+            acc[key].profit += (order.balanceEUR || 0);
             return acc;
         }, {});
     }

@@ -703,6 +703,7 @@ export class OrdersModule {
         const extrasEUR = parseFloat(data.extrasEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.extrasBGN) || 0);
         const sellEUR = parseFloat(data.sellEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.sellBGN) || 0);
 
+        // BGN values for backward compatibility (calculated from EUR)
         const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
         const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
