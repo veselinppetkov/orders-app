@@ -491,11 +491,11 @@ export class ModalsManager {
                             </div>
                             <div class="stat-card">
                                 <div class="stat-label">Общ приход</div>
-                                <div class="stat-value">${stats.totalRevenue.toFixed(2)} лв</div>
+                                <div class="stat-value">${stats.totalRevenue.toFixed(2)} €</div>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-label">Обща печалба</div>
-                                <div class="stat-value">${stats.totalProfit.toFixed(2)} лв</div>
+                                <div class="stat-value">${stats.totalProfit.toFixed(2)} €</div>
                             </div>
                         </div>
                         
@@ -529,7 +529,7 @@ export class ModalsManager {
             `<div class="no-image-placeholder">${o.model}</div>`
         }
                                             </td>
-                                            <td>${o.sellBGN.toFixed(2)} лв</td>
+                                            <td>${(o.sellEUR || o.sellBGN || 0).toFixed(2)} €</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
                                         </tr>
                                     `).join('')}
@@ -823,9 +823,9 @@ export class ModalsManager {
 
                 // Update hint display
                 hint.innerHTML = `
-                📞 ${client.phone || 'Няма тел.'} | 
-                📊 ${stats.totalOrders} поръчки | 
-                💰 ${stats.totalRevenue.toFixed(2)} лв
+                📞 ${client.phone || 'Няма тел.'} |
+                📊 ${stats.totalOrders} поръчки |
+                💰 ${stats.totalRevenue.toFixed(2)} €
             `;
                 hint.style.display = 'block';
 

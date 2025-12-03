@@ -80,8 +80,8 @@ export default class ClientsView {
                 </div>
                 <div class="client-info">
                     <div><strong>Поръчки:</strong> ${stats.totalOrders}</div>
-                    <div><strong>Приходи:</strong> ${stats.totalRevenue.toFixed(2)} лв</div>
-                    <div><strong>Печалба:</strong> ${stats.totalProfit.toFixed(2)} лв</div>
+                    <div><strong>Приходи:</strong> ${stats.totalRevenue.toFixed(2)} €</div>
+                    <div><strong>Печалба:</strong> ${stats.totalProfit.toFixed(2)} €</div>
                     <div><strong>Последна поръчка:</strong> ${stats.lastOrder ? this.formatDate(stats.lastOrder.date) : 'Няма'}</div>
                     ${client.phone ? `<div><strong>Телефон:</strong> ${client.phone}</div>` : ''}
                     ${client.email ? `<div><strong>Email:</strong> ${client.email}</div>` : ''}
