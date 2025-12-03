@@ -431,14 +431,15 @@ export class ClientsModule {
 
             const stats = {
                 totalOrders: orders.length,
-                totalRevenue: orders.reduce((sum, o) => sum + o.sellBGN, 0),
-                totalProfit: orders.reduce((sum, o) => sum + o.balanceBGN, 0),
+                // Use EUR as primary currency (with fallback to BGN for backward compatibility)
+                totalRevenue: orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0),
+                totalProfit: orders.reduce((sum, o) => sum + (o.balanceEUR || o.balanceBGN || 0), 0),
                 lastOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null,
                 firstOrder: orders.length > 0 ?
                     orders.sort((a, b) => new Date(a.date) - new Date(b.date))[0] : null,
                 avgOrderValue: orders.length > 0 ?
-                    orders.reduce((sum, o) => sum + o.sellBGN, 0) / orders.length : 0
+                    orders.reduce((sum, o) => sum + (o.sellEUR || o.sellBGN || 0), 0) / orders.length : 0
             };
 
             // Cache the stats

@@ -1,5 +1,7 @@
 // js/modules/OrdersModule.js - REWRITTEN FOR CLEAN ASYNC MANAGEMENT
 
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 export class OrdersModule {
     constructor(state, storage, eventBus, supabase) {
         this.state = state;
@@ -658,26 +660,68 @@ export class OrdersModule {
         let settings = this.state.get('settings');
 
         // If settings not loaded or invalid, load them first
-        if (!settings || !settings.usdRate || !settings.factoryShipping) {
+        if (!settings || (!settings.usdRate && !settings.eurRate) || !settings.factoryShipping) {
             try {
                 // Use the settings module to get fresh settings
                 const settingsModule = this.state.get('modules')?.settings;
                 if (settingsModule) {
                     settings = await settingsModule.getSettings();
                 } else {
-                    // Fallback to default values
+                    // Fallback to default values (EUR as primary)
                     settings = {
-                        usdRate: 1.71,
-                        factoryShipping: 1.5
+                        eurRate: 0.92,
+                        usdRate: 1.71, // Legacy
+                        factoryShipping: 1.5,
+                        baseCurrency: 'EUR',
+                        conversionRate: 1.95583
                     };
                 }
             } catch (error) {
                 console.warn('⚠️ Failed to load settings, using defaults:', error);
                 settings = {
+                    eurRate: 0.92,
                     usdRate: 1.71,
-                    factoryShipping: 1.5
+                    factoryShipping: 1.5,
+                    baseCurrency: 'EUR',
+                    conversionRate: 1.95583
                 };
             }
+        }
+
+        // Determine currency based on order date
+        const currency = data.currency || CurrencyUtils.getCurrencyForDate(data.date);
+
+        // Calculate USD costs
+        const costUSD = parseFloat(data.costUSD) || 0;
+        const shippingUSD = (data.shippingUSD !== '' && data.shippingUSD !== undefined && data.shippingUSD !== null)
+            ? parseFloat(data.shippingUSD) || 0
+            : parseFloat(settings.factoryShipping) || 0;
+
+        // Use EUR rate for new orders, BGN rate for historical
+        let rate, extrasBGN, sellBGN, extrasEUR, sellEUR;
+
+        if (currency === 'EUR') {
+            // New EUR-based order
+            rate = parseFloat(settings.eurRate) || 0.92;
+
+            // User provides EUR values
+            extrasEUR = parseFloat(data.extrasEUR || data.extrasBGN) || 0;
+            sellEUR = parseFloat(data.sellEUR || data.sellBGN) || 0;
+
+            // Convert to BGN for storage (backward compatibility)
+            extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+            sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
+        } else {
+            // Historical BGN-based order
+            rate = parseFloat(settings.usdRate) || 1.71;
+
+            // User provides BGN values
+            extrasBGN = parseFloat(data.extrasBGN) || 0;
+            sellBGN = parseFloat(data.sellBGN) || 0;
+
+            // Convert to EUR
+            extrasEUR = CurrencyUtils.convertBGNtoEUR(extrasBGN);
+            sellEUR = CurrencyUtils.convertBGNtoEUR(sellBGN);
         }
 
         // Prepare order with guaranteed settings
@@ -689,23 +733,41 @@ export class OrdersModule {
             origin: data.origin,
             vendor: data.vendor,
             model: data.model,
-            costUSD: parseFloat(data.costUSD) || 0,
-            // FIXED: Use form value if provided, otherwise use settings default
-            shippingUSD: (data.shippingUSD !== '' && data.shippingUSD !== undefined && data.shippingUSD !== null)
-                ? parseFloat(data.shippingUSD) || 0
-                : parseFloat(settings.factoryShipping) || 0,
-            rate: parseFloat(settings.usdRate) || 1.71,
-            extrasBGN: parseFloat(data.extrasBGN) || 0,
-            sellBGN: parseFloat(data.sellBGN) || 0,
+            costUSD: costUSD,
+            shippingUSD: shippingUSD,
+            rate: rate,
+            // BGN fields (legacy/historical)
+            extrasBGN: extrasBGN,
+            sellBGN: sellBGN,
+            // EUR fields (primary)
+            extrasEUR: extrasEUR,
+            sellEUR: sellEUR,
+            // Metadata
+            currency: currency,
             status: data.status || 'Очакван',
             fullSet: data.fullSet || false,
             notes: data.notes || '',
             imageData: data.imageData || null
         };
 
-        // Calculate derived fields with guaranteed valid settings
-        order.totalBGN = ((order.costUSD + order.shippingUSD) * order.rate) + order.extrasBGN;
-        order.balanceBGN = order.sellBGN - Math.ceil(order.totalBGN);
+        // Calculate derived fields in both currencies
+        if (currency === 'EUR') {
+            // EUR calculations (primary)
+            order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+            order.balanceEUR = sellEUR - order.totalEUR;
+
+            // BGN for compatibility
+            order.totalBGN = CurrencyUtils.convertEURtoBGN(order.totalEUR);
+            order.balanceBGN = CurrencyUtils.convertEURtoBGN(order.balanceEUR);
+        } else {
+            // BGN calculations (historical)
+            order.totalBGN = ((costUSD + shippingUSD) * rate) + extrasBGN;
+            order.balanceBGN = sellBGN - Math.ceil(order.totalBGN);
+
+            // EUR conversions
+            order.totalEUR = CurrencyUtils.convertBGNtoEUR(order.totalBGN);
+            order.balanceEUR = CurrencyUtils.convertBGNtoEUR(order.balanceBGN);
+        }
 
         return order;
     }

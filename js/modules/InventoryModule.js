@@ -1,5 +1,7 @@
 // js/modules/InventoryModule.js - FIXED getStats() method
 
+import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+
 export class InventoryModule {
     constructor(state, storage, eventBus, supabase) {  // ✅ FIXED: Added supabase parameter
         this.state = state;
@@ -44,26 +46,27 @@ export class InventoryModule {
     }
 
     initializeDefaultInventory() {
-        console.log('📦 Initializing default inventory...');
+        console.log('📦 Initializing default inventory (EUR pricing)...');
 
+        // Converted to EUR using official rate: 1 EUR = 1.95583 BGN
         const defaultInventory = {
-            'box_2': { id: 'box_2', brand: 'Rolex', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 12, ordered: 0 },
-            'box_3': { id: 'box_3', brand: 'OMEGA', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 4, ordered: 0 },
-            'box_4': { id: 'box_4', brand: 'Cartier', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 4, ordered: 0 },
-            'box_5': { id: 'box_5', brand: 'TAG Heuer', type: 'стандарт', purchasePrice: 40, sellPrice: 80, stock: 7, ordered: 0 },
-            'box_6': { id: 'box_6', brand: 'Breitling', type: 'стандарт', purchasePrice: 50, sellPrice: 100, stock: 3, ordered: 0 },
-            'box_7': { id: 'box_7', brand: 'Patek Philippe', type: 'премиум', purchasePrice: 100, sellPrice: 200, stock: 2, ordered: 0 },
-            'box_8': { id: 'box_8', brand: 'Audemars Piguet', type: 'премиум', purchasePrice: 70, sellPrice: 140, stock: 4, ordered: 0 },
-            'box_9': { id: 'box_9', brand: 'IWC', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 1, ordered: 0 },
-            'box_10': { id: 'box_10', brand: 'Panerai', type: 'премиум', purchasePrice: 55, sellPrice: 110, stock: 2, ordered: 0 },
-            'box_11': { id: 'box_11', brand: 'Tudor', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 0, ordered: 0 },
-            'box_12': { id: 'box_12', brand: 'Vacheron Constantin', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 5, ordered: 0 },
-            'box_13': { id: 'box_13', brand: 'Patek Philippe', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 5, ordered: 0 },
-            'box_14': { id: 'box_14', brand: 'Hublot', type: 'стандарт', purchasePrice: 35, sellPrice: 70, stock: 0, ordered: 0 },
-            'box_15': { id: 'box_15', brand: 'SevenFriday', type: 'стандарт', purchasePrice: 40, sellPrice: 80, stock: 1, ordered: 0 },
-            'box_17': { id: 'box_17', brand: 'Longines', type: 'стандарт', purchasePrice: 45, sellPrice: 90, stock: 0, ordered: 0 },
-            'box_18': { id: 'box_18', brand: 'Franck Muller', type: 'премиум', purchasePrice: 55, sellPrice: 110, stock: 4, ordered: 0 },
-            'box_19': { id: 'box_19', brand: 'Hublot', type: 'премиум', purchasePrice: 50, sellPrice: 100, stock: 1, ordered: 0 }
+            'box_2': { id: 'box_2', brand: 'Rolex', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 12, ordered: 0, currency: 'EUR' },
+            'box_3': { id: 'box_3', brand: 'OMEGA', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 4, ordered: 0, currency: 'EUR' },
+            'box_4': { id: 'box_4', brand: 'Cartier', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 4, ordered: 0, currency: 'EUR' },
+            'box_5': { id: 'box_5', brand: 'TAG Heuer', type: 'стандарт', purchasePrice: 20.46, purchasePriceBGN: 40, sellPrice: 40.91, sellPriceBGN: 80, stock: 7, ordered: 0, currency: 'EUR' },
+            'box_6': { id: 'box_6', brand: 'Breitling', type: 'стандарт', purchasePrice: 25.57, purchasePriceBGN: 50, sellPrice: 51.14, sellPriceBGN: 100, stock: 3, ordered: 0, currency: 'EUR' },
+            'box_7': { id: 'box_7', brand: 'Patek Philippe', type: 'премиум', purchasePrice: 51.14, purchasePriceBGN: 100, sellPrice: 102.27, sellPriceBGN: 200, stock: 2, ordered: 0, currency: 'EUR' },
+            'box_8': { id: 'box_8', brand: 'Audemars Piguet', type: 'премиум', purchasePrice: 35.79, purchasePriceBGN: 70, sellPrice: 71.59, sellPriceBGN: 140, stock: 4, ordered: 0, currency: 'EUR' },
+            'box_9': { id: 'box_9', brand: 'IWC', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 1, ordered: 0, currency: 'EUR' },
+            'box_10': { id: 'box_10', brand: 'Panerai', type: 'премиум', purchasePrice: 28.12, purchasePriceBGN: 55, sellPrice: 56.25, sellPriceBGN: 110, stock: 2, ordered: 0, currency: 'EUR' },
+            'box_11': { id: 'box_11', brand: 'Tudor', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 0, ordered: 0, currency: 'EUR' },
+            'box_12': { id: 'box_12', brand: 'Vacheron Constantin', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 5, ordered: 0, currency: 'EUR' },
+            'box_13': { id: 'box_13', brand: 'Patek Philippe', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 5, ordered: 0, currency: 'EUR' },
+            'box_14': { id: 'box_14', brand: 'Hublot', type: 'стандарт', purchasePrice: 17.90, purchasePriceBGN: 35, sellPrice: 35.79, sellPriceBGN: 70, stock: 0, ordered: 0, currency: 'EUR' },
+            'box_15': { id: 'box_15', brand: 'SevenFriday', type: 'стандарт', purchasePrice: 20.46, purchasePriceBGN: 40, sellPrice: 40.91, sellPriceBGN: 80, stock: 1, ordered: 0, currency: 'EUR' },
+            'box_17': { id: 'box_17', brand: 'Longines', type: 'стандарт', purchasePrice: 23.01, purchasePriceBGN: 45, sellPrice: 46.02, sellPriceBGN: 90, stock: 0, ordered: 0, currency: 'EUR' },
+            'box_18': { id: 'box_18', brand: 'Franck Muller', type: 'премиум', purchasePrice: 28.12, purchasePriceBGN: 55, sellPrice: 56.25, sellPriceBGN: 110, stock: 4, ordered: 0, currency: 'EUR' },
+            'box_19': { id: 'box_19', brand: 'Hublot', type: 'премиум', purchasePrice: 25.57, purchasePriceBGN: 50, sellPrice: 51.14, sellPriceBGN: 100, stock: 1, ordered: 0, currency: 'EUR' }
         };
 
         this.state.set('inventory', defaultInventory);
