@@ -12,7 +12,7 @@ export class ExpensesModule {
         // Default expense templates (converted to EUR - Bulgaria euro adoption 2026)
         // Original BGN amounts converted using official rate: 1 EUR = 1.95583 BGN
         this.defaultExpenses = [
-            { name: 'IG Campaign', amount: 1534.29, amountBGN: 3000, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
+            { name: 'IG Campaign', amountEUR: 1534.29, amountBGN: 3000, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
             { name: 'Assurance', amount: 301.65, amountBGN: 590, note: 'Застраховка', isDefault: true, currency: 'EUR' },
             { name: 'Fiverr', amount: 270.98, amountBGN: 530, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
             { name: 'Ltd.', amount: 235.23, amountBGN: 460, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
