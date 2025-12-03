@@ -50,7 +50,7 @@ export default class SettingsView {
                   <small style="color:#6c757d;">Пазарен курс за нови поръчки (обновявайте ежеседмично)</small>
                 </div>
                 <div class="form-group" style="margin-top:15px;">
-                  <label>Курс USD → BGN (лв) - Legacy:</label>
+                  <label>Курс USD → EUR (€):</label>
                   <input type="number" id="usdRate" value="${usdRate}" step="0.01">
                   <small style="color:#6c757d;">Използва се само за исторически данни</small>
                 </div>

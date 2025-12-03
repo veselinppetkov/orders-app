@@ -264,20 +264,11 @@ export class SupabaseService {
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${Date.now()}`);
             }
 
-            // Determine currency based on date
-            const currency = CurrencyUtils.getCurrencyForDate(orderData.date);
-
-            // Calculate EUR values if currency is BGN (historical), or vice versa
-            let extrasEUR, sellEUR;
-            if (currency === 'BGN') {
-                // Historical order - convert BGN to EUR
-                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            } else {
-                // New EUR order - use EUR directly or convert from BGN if provided
-                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            }
+            // System is EUR-only: normalize any legacy BGN input
+            const extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+            const sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -291,11 +282,11 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: parseFloat(orderData.extrasBGN) || 0,
-                    sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_bgn: extrasBGN,
+                    sell_bgn: sellBGN,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
-                    currency: currency,
+                    currency: 'EUR',
                     status: orderData.status || 'Очакван',
                     full_set: orderData.fullSet || false,
                     notes: orderData.notes || '',
@@ -360,18 +351,11 @@ export class SupabaseService {
                 }
             }
 
-            // Determine currency based on date
-            const currency = orderData.currency || CurrencyUtils.getCurrencyForDate(orderData.date);
-
-            // Calculate EUR values
-            let extrasEUR, sellEUR;
-            if (currency === 'BGN') {
-                extrasEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            } else {
-                extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-                sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            }
+            // System is EUR-only: normalize any legacy BGN input
+            const extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
+            const sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
+            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
+            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -385,11 +369,11 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: parseFloat(orderData.extrasBGN) || 0,
-                    sell_bgn: parseFloat(orderData.sellBGN) || 0,
+                    extras_bgn: extrasBGN,
+                    sell_bgn: sellBGN,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
-                    currency: currency,
+                    currency: 'EUR',
                     status: orderData.status,
                     full_set: orderData.fullSet,
                     notes: orderData.notes || '',
@@ -915,18 +899,33 @@ export class SupabaseService {
 
     // DATA TRANSFORMATION
     async transformOrderFromDB(dbOrder) {
-        // Calculate derived fields in BGN
-        const totalBGN = ((dbOrder.cost_usd + dbOrder.shipping_usd) * dbOrder.rate) + dbOrder.extras_bgn;
-        const balanceBGN = dbOrder.sell_bgn - Math.ceil(totalBGN);
+        const costUSD = parseFloat(dbOrder.cost_usd) || 0;
+        const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
+        const rate = parseFloat(dbOrder.rate) || 0;
+        const extrasBGN = parseFloat(dbOrder.extras_bgn) || 0;
+        const sellBGN = parseFloat(dbOrder.sell_bgn) || 0;
 
-        // Calculate derived fields in EUR
-        const extrasEUR = dbOrder.extras_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.extras_bgn);
-        const sellEUR = dbOrder.sell_eur || CurrencyUtils.convertBGNtoEUR(dbOrder.sell_bgn);
-        const totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
+        const isLegacyBGN = dbOrder.currency === 'BGN' || (!dbOrder.extras_eur && extrasBGN);
+
+        const extrasEUR = isLegacyBGN
+            ? CurrencyUtils.convertBGNtoEUR(extrasBGN)
+            : parseFloat(dbOrder.extras_eur) || 0;
+
+        const sellEUR = isLegacyBGN
+            ? CurrencyUtils.convertBGNtoEUR(sellBGN)
+            : parseFloat(dbOrder.sell_eur) || 0;
+
+        const totalEUR = isLegacyBGN
+            ? CurrencyUtils.convertBGNtoEUR(((costUSD + shippingUSD) * rate) + extrasBGN)
+            : ((costUSD + shippingUSD) * rate) + extrasEUR;
+
         const balanceEUR = sellEUR - totalEUR;
 
-        // Determine currency
-        const currency = dbOrder.currency || CurrencyUtils.getCurrencyForDate(dbOrder.date);
+        const totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        const balanceBGN = CurrencyUtils.convertEURtoBGN(balanceEUR);
+
+        // System currency is now EUR
+        const currency = 'EUR';
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);
@@ -939,12 +938,12 @@ export class SupabaseService {
             origin: dbOrder.origin,
             vendor: dbOrder.vendor,
             model: dbOrder.model,
-            costUSD: parseFloat(dbOrder.cost_usd),
-            shippingUSD: parseFloat(dbOrder.shipping_usd),
-            rate: parseFloat(dbOrder.rate),
+            costUSD: costUSD,
+            shippingUSD: shippingUSD,
+            rate: rate,
             // BGN fields (legacy/historical)
-            extrasBGN: parseFloat(dbOrder.extras_bgn),
-            sellBGN: parseFloat(dbOrder.sell_bgn),
+            extrasBGN: parseFloat(totalBGN ? CurrencyUtils.convertEURtoBGN(extrasEUR).toFixed(2) : 0),
+            sellBGN: parseFloat(sellBGN || CurrencyUtils.convertEURtoBGN(sellEUR).toFixed(2)),
             totalBGN: parseFloat(totalBGN.toFixed(2)),
             balanceBGN: parseFloat(balanceBGN.toFixed(2)),
             // EUR fields (primary)
