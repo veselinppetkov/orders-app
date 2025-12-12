@@ -84,7 +84,7 @@ export class InventoryModule {
 
     // ✅ FIXED: Use SupabaseService.createInventoryItem()
     async createItem(itemData) {
-        const inventory = this.state.get('inventory') || {};
+        const inventory = { ...(this.state.get('inventory') || {}) };  // Clone to ensure state change detection
 
         // Validate required fields
         if (!itemData.brand?.trim()) {
@@ -138,7 +138,7 @@ export class InventoryModule {
 
     // ✅ FIXED: Use SupabaseService.updateInventoryItem()
     async updateItem(id, itemData) {
-        const inventory = this.state.get('inventory');
+        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
         const item = inventory[id];
 
         if (!item) return false;
@@ -190,7 +190,7 @@ export class InventoryModule {
 
     // ✅ FIXED: Use SupabaseService.deleteInventoryItem()
     async deleteItem(id) {
-        const inventory = this.state.get('inventory');
+        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
         const item = inventory[id];
 
         if (!item) return false;
@@ -217,7 +217,7 @@ export class InventoryModule {
 
     // ✅ FIXED: Use SupabaseService.updateInventoryItem() for stock changes
     async updateStock(id, quantity, operation = 'set') {
-        const inventory = this.state.get('inventory');
+        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
         const item = inventory[id];
 
         if (!item) return false;
@@ -239,7 +239,7 @@ export class InventoryModule {
         // Try Supabase first if we have database ID
         if (item.dbId) {
             try {
-                await this.supabase.updateInventoryItem(item.dbId, {
+                const updatedItem = await this.supabase.updateInventoryItem(item.dbId, {
                     brand: item.brand,
                     type: item.type,
                     purchasePrice: item.purchasePrice,
@@ -248,25 +248,34 @@ export class InventoryModule {
                     ordered: item.ordered
                 });
 
-                console.log('✅ Stock updated in Supabase:', item.brand);
+                console.log('✅ Stock updated in Supabase:', updatedItem.brand);
+
+                // ✅ FIX: Use Supabase response to update local state
+                inventory[id] = updatedItem;
+                this.storage.save('inventory', inventory);
+                this.state.set('inventory', inventory);
+                this.eventBus.emit('inventory:updated', updatedItem);
+
+                return true;
 
             } catch (err) {
                 console.warn('⚠️ Stock update failed, updating localStorage only:', err.message);
             }
         }
 
-        // Update local state
-        item.stock = newStock;
+        // Fallback: Update local state only (no dbId or Supabase failed)
+        const updatedItem = { ...item, stock: newStock };
+        inventory[id] = updatedItem;
         this.storage.save('inventory', inventory);
         this.state.set('inventory', inventory);
-        this.eventBus.emit('inventory:updated', item);
+        this.eventBus.emit('inventory:updated', updatedItem);
 
         return true;
     }
 
     // ✅ FIXED: Use SupabaseService.updateInventoryItem() for ordered changes
     async updateOrdered(id, quantity) {
-        const inventory = this.state.get('inventory');
+        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
         const item = inventory[id];
 
         if (!item) return false;
@@ -276,7 +285,7 @@ export class InventoryModule {
         // Try Supabase first if we have database ID
         if (item.dbId) {
             try {
-                await this.supabase.updateInventoryItem(item.dbId, {
+                const updatedItem = await this.supabase.updateInventoryItem(item.dbId, {
                     brand: item.brand,
                     type: item.type,
                     purchasePrice: item.purchasePrice,
@@ -285,18 +294,27 @@ export class InventoryModule {
                     ordered: newOrdered
                 });
 
-                console.log('✅ Ordered quantity updated in Supabase:', item.brand);
+                console.log('✅ Ordered quantity updated in Supabase:', updatedItem.brand);
+
+                // ✅ FIX: Use Supabase response to update local state
+                inventory[id] = updatedItem;
+                this.storage.save('inventory', inventory);
+                this.state.set('inventory', inventory);
+                this.eventBus.emit('inventory:updated', updatedItem);
+
+                return true;
 
             } catch (err) {
                 console.warn('⚠️ Supabase update failed, updating localStorage only:', err.message);
             }
         }
 
-        // Update local state
-        item.ordered = newOrdered;
+        // Fallback: Update local state only (no dbId or Supabase failed)
+        const updatedItem = { ...item, ordered: newOrdered };
+        inventory[id] = updatedItem;
         this.storage.save('inventory', inventory);
         this.state.set('inventory', inventory);
-        this.eventBus.emit('inventory:updated', item);
+        this.eventBus.emit('inventory:updated', updatedItem);
 
         return true;
     }
