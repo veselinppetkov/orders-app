@@ -1,23 +1,34 @@
-// js/core/SupabaseService.js - FIXED: Inventory ID handling
-// Key fix: Spread transformedItem FIRST, then override id with inventoryId
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+import {Config} from "../config.js";
+import {CurrencyUtils} from "../utils/CurrencyUtils.js";
 
 export class SupabaseService {
     constructor() {
-        this.supabaseUrl = 'https://aqqbeusnpbfvlgpcgsoh.supabase.co';
-        this.supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxcWJldXNucGJmdmxncGNnc29oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgxOTg4ODcsImV4cCI6MjA2Mzc3NDg4N30.8lE7lBMzBV1LUEY-TCvlvTLPT0_xE_GMahOKZ0VLtGU';
-        
-        this.supabase = createClient(this.supabaseUrl, this.supabaseKey);
-        
-        // Request management
+        // Configuration - Replace with your actual values
+        this.config = {
+            url: Config.SUPABASE_URL,
+            anonKey: Config.SUPABASE_ANON_KEY,
+            bucket: 'order-images'
+        };
+
+        // Connection state
+        this.isConnected = false;
+        this.connectionTested = false;
+        this.lastConnectionTest = 0;
+        this.connectionTestInterval = 5 * 60 * 1000; // Test every 5 minutes
+
+        // Retry configuration
+        this.retryConfig = {
+            maxRetries: 3,
+            baseDelay: 1000,
+            maxDelay: 10000,
+            backoffFactor: 2
+        };
+
+        // Rate limiting
         this.requestQueue = [];
         this.activeRequests = 0;
-        this.maxConcurrentRequests = 3;
-        this.retryAttempts = 3;
-        this.retryDelay = 1000;
-        
+        this.maxConcurrentRequests = 5;
+
         // Statistics
         this.stats = {
             requestCount: 0,
@@ -26,44 +37,172 @@ export class SupabaseService {
             totalResponseTime: 0,
             avgResponseTime: 0
         };
-        
-        console.log('🔌 SupabaseService initialized');
+
+        this.isAuthenticated = false;
+
+        this.initialize();
+
     }
 
-    // ============================================
-    // REQUEST MANAGEMENT
-    // ============================================
+    async initialize() {
+        try {
+            // Initialize Supabase client
+            if (typeof supabase === 'undefined') {
+                console.warn('⚠️ Supabase client not loaded - cloud features disabled');
+                return;
+            }
 
-    async executeRequest(requestFn) {
-        await this.waitForSlot();
-        
-        this.activeRequests++;
-        const startTime = performance.now();
-        
+            this.supabase = supabase.createClient(this.config.url, this.config.anonKey);
+
+            console.log('🚀 SupabaseService initialized');
+
+            // Check authentication status
+            await this.checkAuth();
+
+            // Listen for auth changes
+            this.supabase.auth.onAuthStateChange((event, session) => {
+                console.log('🔐 Auth state changed:', event);
+
+                if (event === 'SIGNED_OUT') {
+                    // Redirect to login
+                    window.location.href = 'login.html';
+                }
+
+                if (event === 'SIGNED_IN') {
+                    this.isAuthenticated = true;
+                    console.log('✅ User authenticated');
+                }
+            });
+
+            // Test connection in background
+            this.testConnectionAsync();
+
+        } catch (error) {
+            console.error('❌ SupabaseService initialization failed:', error);
+        }
+    }
+
+    async checkAuth() {
+        const { data: { session } } = await this.supabase.auth.getSession();
+
+        if (!session) {
+            console.warn('⚠️ No active session - redirecting to login');
+            window.location.href = 'login.html';
+            return false;
+        }
+
+        this.isAuthenticated = true;
+        console.log('✅ User is authenticated:', session.user.email);
+        return true;
+    }
+
+    async signOut() {
+        await this.supabase.auth.signOut();
+        window.location.href = 'login.html';
+    }
+
+    getCurrentUser() {
+        return this.supabase.auth.getUser();
+    }
+
+    // CONNECTION MANAGEMENT
+    async testConnection() {
+        const now = Date.now();
+
+        // Use cached result if recent
+        if (this.connectionTested && (now - this.lastConnectionTest) < this.connectionTestInterval) {
+            return this.isConnected;
+        }
+
+        try {
+            if (!this.supabase) {
+                throw new Error('Supabase client not initialized');
+            }
+
+            const startTime = performance.now();
+
+            // Simple connection test
+            const { data, error } = await this.supabase
+                .from('settings')
+                .select('id')
+                .limit(1);
+
+            const responseTime = performance.now() - startTime;
+
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows, which is OK
+                throw error;
+            }
+
+            this.isConnected = true;
+            this.connectionTested = true;
+            this.lastConnectionTest = now;
+
+            console.log(`✅ Supabase connection test passed (${responseTime.toFixed(0)}ms)`);
+            return true;
+
+        } catch (error) {
+            this.isConnected = false;
+            this.connectionTested = true;
+            this.lastConnectionTest = now;
+
+            console.warn('⚠️ Supabase connection test failed:', error.message);
+            return false;
+        }
+    }
+
+    async testConnectionAsync() {
+        // Non-blocking connection test
+        setTimeout(async () => {
+            await this.testConnection();
+        }, 1000);
+    }
+
+    // REQUEST EXECUTION with retry logic
+    async executeRequest(operation, maxRetries = this.retryConfig.maxRetries) {
         let lastError;
-        
-        for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             try {
-                const result = await requestFn();
+                // Rate limiting
+                await this.waitForSlot();
+
+                const startTime = performance.now();
+                this.activeRequests++;
+
+                // Execute the operation
+                const result = await operation();
+
+                // Update statistics
                 const responseTime = performance.now() - startTime;
-                
                 this.updateStats(true, responseTime);
-                this.activeRequests--;
-                this.processQueue();
-                
+
                 return result;
-                
+
             } catch (error) {
                 lastError = error;
-                console.warn(`⚠️ Request attempt ${attempt} failed:`, error.message);
-                
-                if (attempt < this.retryAttempts && !this.isNonRetryableError(error)) {
-                    await new Promise(resolve => setTimeout(resolve, this.retryDelay * attempt));
-                } else {
-                    this.updateStats(false, performance.now() - startTime);
-                    this.activeRequests--;
-                    this.processQueue();
+
+                // Update statistics
+                this.updateStats(false, 0);
+
+                // Don't retry on certain errors
+                if (this.isNonRetryableError(error)) {
+                    throw error;
                 }
+
+                // Wait before retry (exponential backoff)
+                if (attempt < maxRetries) {
+                    const delay = Math.min(
+                        this.retryConfig.baseDelay * Math.pow(this.retryConfig.backoffFactor, attempt),
+                        this.retryConfig.maxDelay
+                    );
+
+                    console.warn(`⚠️ Request failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms:`, error.message);
+                    await this.sleep(delay);
+                }
+
+            } finally {
+                this.activeRequests--;
+                this.processQueue();
             }
         }
 
@@ -75,6 +214,7 @@ export class SupabaseService {
             return;
         }
 
+        // Add to queue and wait
         return new Promise((resolve) => {
             this.requestQueue.push(resolve);
         });
@@ -88,6 +228,7 @@ export class SupabaseService {
     }
 
     isNonRetryableError(error) {
+        // Don't retry on authentication, permission, or validation errors
         const nonRetryableCodes = [
             'PGRST301', // Permission denied
             'PGRST204', // Invalid JSON
@@ -112,10 +253,7 @@ export class SupabaseService {
         }
     }
 
-    // ============================================
     // ORDERS OPERATIONS
-    // ============================================
-
     async createOrder(orderData) {
         return this.executeRequest(async () => {
             console.log('📝 Creating order in Supabase:', orderData.client);
@@ -174,9 +312,12 @@ export class SupabaseService {
                 .select('*')
                 .order('date', { ascending: false });
 
+            // Apply month filter if specified
             if (month) {
                 const [year, monthNum] = month.split('-');
                 const startDate = `${year}-${monthNum}-01`;
+
+                // Calculate last day of month
                 const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
                 const endDate = `${year}-${monthNum}-${lastDay.toString().padStart(2, '0')}`;
 
@@ -198,15 +339,19 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('✏️ Updating order in Supabase:', orderId);
 
-            let imageUrl = orderData.imageUrl;
+            // Handle image update
+            let imageUrl = orderData.imageUrl; // Keep existing
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
+                // Upload new image
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${orderId}-${Date.now()}`);
 
+                // Clean up old image if different
                 if (orderData.imageUrl && orderData.imageUrl !== imageUrl) {
                     await this.deleteImage(orderData.imageUrl);
                 }
             }
 
+            // System is EUR-only: normalize any legacy BGN input
             const extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
             const sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
             const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
@@ -250,12 +395,14 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('🗑️ Deleting order from Supabase:', orderId);
 
+            // Get order to delete associated image
             const { data: order } = await this.supabase
                 .from('orders')
                 .select('image_url')
                 .eq('id', orderId)
                 .single();
 
+            // Delete the order record
             const { error } = await this.supabase
                 .from('orders')
                 .delete()
@@ -263,6 +410,7 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Delete associated image if exists
             if (order?.image_url) {
                 await this.deleteImage(order.image_url);
             }
@@ -272,10 +420,7 @@ export class SupabaseService {
         });
     }
 
-    // ============================================
     // CLIENTS OPERATIONS
-    // ============================================
-
     async createClient(clientData) {
         return this.executeRequest(async () => {
             console.log('📝 Creating client in Supabase:', clientData.name);
@@ -362,10 +507,7 @@ export class SupabaseService {
         });
     }
 
-    // ============================================
     // SETTINGS OPERATIONS
-    // ============================================
-
     async getSettings() {
         return this.executeRequest(async () => {
             console.log('⚙️ Loading settings from Supabase');
@@ -376,7 +518,7 @@ export class SupabaseService {
                 .eq('id', 1)
                 .single();
 
-            if (error && error.code !== 'PGRST116') {
+            if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
                 throw error;
             }
 
@@ -405,27 +547,22 @@ export class SupabaseService {
         });
     }
 
-    getDefaultSettings() {
-        return {
-            usdRate: 1.71,
-            eurRate: 0.92,
-            factoryShipping: 1.5,
-            baseCurrency: 'EUR',
-            conversionRate: 1.95583,
-            origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
-            vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
-        };
-    }
+    // Add to SupabaseService class
 
-    // ============================================
-    // EXPENSES OPERATIONS
-    // ============================================
+// ============================================
+// EXPENSES - Matching YOUR schema
+// ============================================
+
+// In SupabaseService.js, update these methods:
 
     async createExpense(expenseData) {
         return this.executeRequest(async () => {
             console.log('💰 Creating expense in Supabase:', expenseData.category || expenseData.name);
 
+            // Incoming amount is now in EUR (from UI)
             const amountEUR = parseFloat(expenseData.amount) || 0;
+
+            // Convert to BGN for backward compatibility
             const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
 
             const { data, error } = await this.supabase
@@ -433,8 +570,8 @@ export class SupabaseService {
                 .insert([{
                     month_key: expenseData.month,
                     name: expenseData.category || expenseData.name,
-                    amount: amountBGN,
-                    amount_eur: amountEUR,
+                    amount: amountBGN,  // Store BGN for backward compatibility
+                    amount_eur: amountEUR,  // Store EUR as primary
                     currency: 'EUR',
                     note: expenseData.description || expenseData.note || ''
                 }])
@@ -443,52 +580,55 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Return transformed data
             return this.transformExpenseFromDB(data);
         });
     }
 
-    async getExpenses(month = null) {
-        return this.executeRequest(async () => {
-            console.log('💰 Loading expenses from Supabase', month ? `for ${month}` : '(all)');
+async getExpenses(month = null) {
+    return this.executeRequest(async () => {
+        console.log('💰 Loading expenses from Supabase', month ? `for ${month}` : '(all)');
 
-            let query = this.supabase
-                .from('expenses')
-                .select('*')
-                .order('created_at', { ascending: false });
+        let query = this.supabase
+            .from('expenses')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-            if (month) {
-                query = query.eq('month_key', month);
-            }
+        if (month) {
+            query = query.eq('month_key', month);
+        }
 
-            const { data, error } = await query;
-            if (error) throw error;
+        const { data, error } = await query;
+        if (error) throw error;
 
-            return data.map(exp => {
-                const amountBGN = parseFloat(exp.amount) || 0;
-                const amountEUR = exp.amount_eur
-                    ? parseFloat(exp.amount_eur)
-                    : parseFloat((amountBGN / 1.95583).toFixed(2));
+        return data.map(exp => {
+            const amountBGN = parseFloat(exp.amount) || 0;
+            const amountEUR = exp.amount_eur
+                ? parseFloat(exp.amount_eur)
+                : parseFloat((amountBGN / 1.95583).toFixed(2));
 
-                return {
-                    id: exp.id,
-                    month: exp.month_key,
-                    name: exp.name || 'Без име',
-                    category: exp.name || 'Без име',
-                    amount: amountEUR,
-                    amountEUR: amountEUR,
-                    amountBGN: amountBGN,
-                    description: exp.note || '',
-                    note: exp.note || '',
-                    currency: exp.currency || 'EUR'
-                };
-            });
+            return {
+                id: exp.id,
+                month: exp.month_key,
+                name: exp.name || 'Без име',
+                category: exp.name || 'Без име',
+                amount: amountEUR,              // ✅ EUR!
+                amountBGN: amountBGN,
+                amountEUR: amountEUR,
+                description: exp.note || '',
+                note: exp.note || '',
+                isDefault: false,
+                currency: exp.currency || 'BGN'
+            };
         });
-    }
+    });
+}
 
     async updateExpense(expenseId, expenseData) {
         return this.executeRequest(async () => {
-            console.log('💰 Updating expense in Supabase:', expenseId);
+            console.log('✏️ Updating expense:', expenseId);
 
+            // Convert EUR to BGN for storage (backward compatibility)
             const amountEUR = parseFloat(expenseData.amount) || 0;
             const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
 
@@ -496,9 +636,8 @@ export class SupabaseService {
                 .from('expenses')
                 .update({
                     name: expenseData.category || expenseData.name,
-                    amount: amountBGN,
-                    amount_eur: amountEUR,
-                    currency: 'EUR',
+                    amount: amountBGN,  // Store BGN for backward compatibility
+                    amount_eur: amountEUR,  // Store EUR as primary
                     note: expenseData.description || expenseData.note || ''
                 })
                 .eq('id', expenseId)
@@ -521,15 +660,13 @@ export class SupabaseService {
                 .eq('id', expenseId);
 
             if (error) throw error;
-
-            console.log('✅ Expense deleted successfully');
             return true;
         });
     }
 
-    // ============================================
-    // INVENTORY OPERATIONS - ✅ FIXED ID HANDLING
-    // ============================================
+// ============================================
+// INVENTORY - Matching YOUR schema
+// ============================================
 
     async getInventory() {
         return this.executeRequest(async () => {
@@ -542,16 +679,17 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Convert to object format for compatibility
+            // Your app expects: { "box_123": {...}, "box_456": {...} }
+            // We'll use "box_" + database ID as the key
             const inventory = {};
             data.forEach(item => {
-                const inventoryId = `box_${item.id}`;
+                const inventoryId = `box_${item.id}`; // Create compatible ID
                 const transformedItem = this.transformInventoryFromDB(item);
-                
-                // ✅ FIX: Spread transformedItem FIRST, then override id
                 inventory[inventoryId] = {
-                    ...transformedItem,     // Spread first (contains id: 8)
-                    id: inventoryId,        // Override with correct format
-                    dbId: item.id           // Keep DB ID for updates
+                    id: inventoryId,
+                    ...transformedItem,
+                    dbId: item.id  // Keep real DB ID for updates
                 };
             });
 
@@ -564,20 +702,24 @@ export class SupabaseService {
         return this.executeRequest(async () => {
             console.log('📦 Creating inventory item:', itemData.brand);
 
+            // Incoming prices are in EUR (from UI)
             const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
             const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
+
+            // Convert to BGN for backward compatibility
             const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
             const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
 
+            // Don't send ID - let database auto-generate it
             const { data, error } = await this.supabase
                 .from('inventory')
                 .insert([{
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: purchasePriceBGN,
-                    sell_price: sellPriceBGN,
-                    purchase_price_eur: purchasePriceEUR,
-                    sell_price_eur: sellPriceEUR,
+                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
+                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
+                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
+                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
                     stock: parseInt(itemData.stock) || 0,
                     ordered: parseInt(itemData.ordered) || 0,
                     currency: 'EUR'
@@ -587,24 +729,26 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Return with compatible ID format and transformed data
             const inventoryId = `box_${data.id}`;
             const transformedItem = this.transformInventoryFromDB(data);
-            
-            // ✅ FIX: Spread transformedItem FIRST, then override id
             return {
-                ...transformedItem,     // Spread first
-                id: inventoryId,        // Override with correct format
-                dbId: data.id           // Keep DB ID for updates
+                id: inventoryId,
+                ...transformedItem,
+                dbId: data.id
             };
         });
     }
 
-    async updateInventoryItem(itemId, itemData) {
+  async updateInventoryItem(itemId, itemData) {
         return this.executeRequest(async () => {
             console.log('📦 Updating inventory item:', itemId);
 
+            // Incoming prices are in EUR (from UI)
             const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
             const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
+
+            // Convert to BGN for backward compatibility
             const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
             const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
 
@@ -613,10 +757,10 @@ export class SupabaseService {
                 .update({
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: purchasePriceBGN,
-                    sell_price: sellPriceBGN,
-                    purchase_price_eur: purchasePriceEUR,
-                    sell_price_eur: sellPriceEUR,
+                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
+                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
+                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
+                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
                     stock: parseInt(itemData.stock) || 0,
                     ordered: parseInt(itemData.ordered) || 0,
                     currency: 'EUR'
@@ -627,14 +771,13 @@ export class SupabaseService {
 
             if (error) throw error;
 
+            // Return with compatible ID format and transformed data
             const inventoryId = `box_${data.id}`;
             const transformedItem = this.transformInventoryFromDB(data);
-            
-            // ✅ FIX: Spread transformedItem FIRST, then override id
             return {
-                ...transformedItem,     // Spread first
-                id: inventoryId,        // Override with correct format
-                dbId: data.id           // Keep DB ID for updates
+                id: inventoryId,
+                ...transformedItem,
+                dbId: data.id
             };
         });
     }
@@ -655,109 +798,222 @@ export class SupabaseService {
         });
     }
 
-    // ============================================
+// TRANSFORMERS
+    transformExpenseFromDB(dbExpense) {
+        // Use EUR field if available, otherwise convert from BGN
+        const amountBGN = parseFloat(dbExpense.amount) || 0;
+        const amountEUR = dbExpense.amount_eur
+            ? parseFloat(dbExpense.amount_eur)
+            : CurrencyUtils.convertBGNtoEUR(amountBGN);
+
+        // Validate: Check if EUR value is suspiciously close to BGN (no conversion)
+        if (amountBGN > 50 && Math.abs(amountEUR - amountBGN) < 1) {
+            console.warn(`⚠️ Expense ${dbExpense.id} has unconverted EUR value: ${amountEUR} EUR ≈ ${amountBGN} BGN`);
+        }
+
+        return {
+            id: dbExpense.id,
+            month: dbExpense.month,
+            category: dbExpense.category,
+            amount: amountEUR,  // Always use EUR
+            amountBGN: amountBGN,  // Keep BGN for reference
+            amountEUR: amountEUR,  // Explicit EUR field
+            description: dbExpense.description || '',
+            isDefault: dbExpense.is_default || false,
+            currency: dbExpense.currency || 'BGN'
+        };
+    }
+
+    transformInventoryFromDB(dbItem) {
+        // Use EUR fields if available, otherwise convert from BGN
+        const purchasePriceBGN = parseFloat(dbItem.purchase_price) || 0;
+        const sellPriceBGN = parseFloat(dbItem.sell_price) || 0;
+
+        const purchasePriceEUR = dbItem.purchase_price_eur
+            ? parseFloat(dbItem.purchase_price_eur)
+            : CurrencyUtils.convertBGNtoEUR(purchasePriceBGN);
+
+        const sellPriceEUR = dbItem.sell_price_eur
+            ? parseFloat(dbItem.sell_price_eur)
+            : CurrencyUtils.convertBGNtoEUR(sellPriceBGN);
+
+        // Validate: Check if EUR values are suspiciously close to BGN (no conversion)
+        if (purchasePriceBGN > 10 && Math.abs(purchasePriceEUR - purchasePriceBGN) < 1) {
+            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted purchase price: ${purchasePriceEUR} EUR ≈ ${purchasePriceBGN} BGN`);
+        }
+        if (sellPriceBGN > 10 && Math.abs(sellPriceEUR - sellPriceBGN) < 1) {
+            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted sell price: ${sellPriceEUR} EUR ≈ ${sellPriceBGN} BGN`);
+        }
+
+        return {
+            id: dbItem.id,
+            brand: dbItem.brand,
+            type: dbItem.type,
+            purchasePrice: purchasePriceEUR,  // Always use EUR
+            sellPrice: sellPriceEUR,  // Always use EUR
+            purchasePriceBGN: purchasePriceBGN,  // Keep BGN for reference
+            sellPriceBGN: sellPriceBGN,  // Keep BGN for reference
+            purchasePriceEUR: purchasePriceEUR,  // Explicit EUR field
+            sellPriceEUR: sellPriceEUR,  // Explicit EUR field
+            stock: parseInt(dbItem.stock) || 0,
+            ordered: parseInt(dbItem.ordered) || 0,
+            currency: dbItem.currency || 'BGN'
+        };
+    }
+
     // IMAGE OPERATIONS
-    // ============================================
+    async uploadImage(base64Data, filename) {
+        return this.executeRequest(async () => {
+            console.log('📤 Uploading image:', filename);
 
-    async uploadImage(base64Data, fileName) {
-        try {
-            const base64Content = base64Data.split(',')[1];
-            const mimeType = base64Data.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-            const extension = mimeType.split('/')[1] || 'jpg';
-            
-            const byteCharacters = atob(base64Content);
-            const byteArray = new Uint8Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteArray[i] = byteCharacters.charCodeAt(i);
-            }
-            const blob = new Blob([byteArray], { type: mimeType });
+            // Convert base64 to blob
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
 
-            const filePath = `orders/${fileName}.${extension}`;
+            // Create unique filename
+            const extension = blob.type.split('/')[1] || 'jpg';
+            const filePath = `${filename}.${extension}`;
 
             const { data, error } = await this.supabase.storage
-                .from('order-images')
+                .from(this.config.bucket)
                 .upload(filePath, blob, {
-                    contentType: mimeType,
+                    cacheControl: '3600',
                     upsert: true
                 });
 
             if (error) throw error;
 
-            console.log('✅ Image uploaded:', filePath);
-            return filePath;
-
-        } catch (error) {
-            console.error('❌ Image upload failed:', error);
-            throw error;
-        }
+            console.log('✅ Image uploaded successfully:', filePath);
+            return filePath;  // Return path, not URL
+        });
     }
 
     async getImageUrl(imagePath) {
         if (!imagePath) return null;
 
         try {
+            // If it's already a full URL (legacy data), return as-is
+            if (imagePath.startsWith('http')) {
+                return imagePath;
+            }
+
+            // Generate a signed URL valid for 1 hour
             const { data, error } = await this.supabase.storage
-                .from('order-images')
+                .from(this.config.bucket)
                 .createSignedUrl(imagePath, 3600);
 
-            if (error) throw error;
+            if (error) {
+                console.warn('⚠️ Cannot generate signed URL for:', imagePath, error);
+                return null;
+            }
 
+            console.log('🔗 Generated signed URL for image');
             return data.signedUrl;
         } catch (error) {
-            console.warn('⚠️ Failed to get signed URL:', error.message);
+            console.error('❌ Error in getImageUrl:', error);
             return null;
         }
     }
 
-    async deleteImage(imagePath) {
-        if (!imagePath) return;
+    async deleteImage(imageUrl) {
+        if (!imageUrl || !imageUrl.includes(this.config.bucket)) {
+            return; // Not our image
+        }
 
         try {
+            // Extract filename from URL
+            const urlParts = imageUrl.split('/');
+            const filename = urlParts[urlParts.length - 1];
+
             const { error } = await this.supabase.storage
-                .from('order-images')
-                .remove([imagePath]);
+                .from(this.config.bucket)
+                .remove([filename]);
 
             if (error) throw error;
 
-            console.log('✅ Image deleted:', imagePath);
+            console.log('✅ Image deleted:', filename);
+
         } catch (error) {
-            console.warn('⚠️ Failed to delete image:', error.message);
+            console.warn('⚠️ Image deletion failed:', error);
+            // Don't fail the operation if image deletion fails
         }
     }
 
-    // ============================================
-    // TRANSFORMERS
-    // ============================================
+    // DATA TRANSFORMATION
+
+    /**
+     * Validate and ensure proper EUR conversion
+     * Always returns a properly converted EUR value
+     * @param {number} eurValue - EUR value from database (may be incorrect/missing)
+     * @param {number} bgnValue - BGN value from database (source of truth)
+     * @returns {number} Validated EUR value
+     */
+    validateAndConvertEUR(eurValue, bgnValue) {
+        const bgnNum = parseFloat(bgnValue) || 0;
+
+        // If no EUR value exists, convert from BGN
+        if (!eurValue || eurValue === 0) {
+            return CurrencyUtils.convertBGNtoEUR(bgnNum);
+        }
+
+        const eurNum = parseFloat(eurValue);
+
+        // Validate: Check if EUR value matches expected conversion
+        const expectedEUR = CurrencyUtils.convertBGNtoEUR(bgnNum);
+        const tolerance = 0.02; // 2% tolerance for rounding differences
+
+        // If EUR value is suspiciously close to BGN value (no conversion applied)
+        if (Math.abs(eurNum - bgnNum) < 1 && bgnNum > 100) {
+            console.warn(`⚠️ Suspicious EUR value detected: EUR=${eurNum}, BGN=${bgnNum}. Converting from BGN.`);
+            return expectedEUR;
+        }
+
+        // If EUR value deviates significantly from expected
+        if (expectedEUR > 0 && Math.abs(eurNum - expectedEUR) / expectedEUR > tolerance) {
+            console.warn(`⚠️ EUR value mismatch: stored=${eurNum}, expected=${expectedEUR.toFixed(2)}. Using stored value.`);
+        }
+
+        // Use the stored EUR value (assumed correct after warnings)
+        return eurNum;
+    }
 
     async transformOrderFromDB(dbOrder) {
+        // Parse all values explicitly
         const costUSD = parseFloat(dbOrder.cost_usd) || 0;
         const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
-        const rate = parseFloat(dbOrder.rate) || 1;
+        const rate = parseFloat(dbOrder.rate) || 0;
+        const extrasBGN = parseFloat(dbOrder.extras_bgn) || 0;
+        const sellBGN = parseFloat(dbOrder.sell_bgn) || 0;
 
-        // EUR fields (primary)
-        const extrasEUR = dbOrder.extras_eur 
-            ? parseFloat(dbOrder.extras_eur) 
-            : CurrencyUtils.convertBGNtoEUR(parseFloat(dbOrder.extras_bgn) || 0);
-        const sellEUR = dbOrder.sell_eur 
-            ? parseFloat(dbOrder.sell_eur) 
-            : CurrencyUtils.convertBGNtoEUR(parseFloat(dbOrder.sell_bgn) || 0);
+        // Calculate derived fields in EUR with validation (uses validateAndConvertEUR method)
+        const extrasEUR = this.validateAndConvertEUR(dbOrder.extras_eur, extrasBGN);
+        const sellEUR = this.validateAndConvertEUR(dbOrder.sell_eur, sellBGN);
 
-        // BGN fields (for backward compatibility)
-        const extrasBGN = dbOrder.extras_bgn 
-            ? parseFloat(dbOrder.extras_bgn) 
-            : CurrencyUtils.convertEURtoBGN(extrasEUR);
-        const sellBGN = dbOrder.sell_bgn 
-            ? parseFloat(dbOrder.sell_bgn) 
-            : CurrencyUtils.convertEURtoBGN(sellEUR);
+        // CRITICAL FIX: Handle historical USD→BGN rates vs new USD→EUR rates
+        // Historical orders have rates > 1.5 (USD→BGN, e.g., 1.7-1.8)
+        // New orders have rates < 1.5 (USD→EUR, e.g., 0.85-0.95)
+        let totalEUR, totalBGN;
 
-        // Calculate totals in EUR
-        const baseEUR = (costUSD + shippingUSD) * rate;
-        const totalEUR = baseEUR + extrasEUR;
+        if (rate > 1.5) {
+            // Historical order: rate is USD→BGN, need to convert BGN→EUR
+            // Calculate total in BGN using old rate
+            totalBGN = ((costUSD + shippingUSD) * rate) + extrasBGN;
+            // Convert BGN→EUR using official rate
+            totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
+            console.log(`🕰️ Historical order ${dbOrder.id}: USD ${(costUSD + shippingUSD).toFixed(2)} * rate ${rate} (BGN) = ${totalBGN.toFixed(2)} BGN → ${totalEUR.toFixed(2)} EUR`);
+        } else {
+            // New order: rate is USD→EUR, use directly
+            totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+            totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        }
+
         const balanceEUR = sellEUR - totalEUR;
 
-        // BGN totals for backward compatibility
-        const totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
+        // BGN values for backward compatibility
         const balanceBGN = CurrencyUtils.convertEURtoBGN(balanceEUR);
+
+        // System currency is now EUR
+        const currency = 'EUR';
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);
@@ -773,7 +1029,7 @@ export class SupabaseService {
             costUSD: costUSD,
             shippingUSD: shippingUSD,
             rate: rate,
-            // BGN fields (legacy)
+            // BGN fields (legacy/historical - for reference only)
             extrasBGN: parseFloat(extrasBGN.toFixed(2)),
             sellBGN: parseFloat(sellBGN.toFixed(2)),
             totalBGN: parseFloat(totalBGN.toFixed(2)),
@@ -784,7 +1040,7 @@ export class SupabaseService {
             totalEUR: parseFloat(totalEUR.toFixed(2)),
             balanceEUR: parseFloat(balanceEUR.toFixed(2)),
             // Metadata
-            currency: 'EUR',
+            currency: currency,
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',
@@ -796,83 +1052,135 @@ export class SupabaseService {
 
     transformClientFromDB(dbClient) {
         return {
-            id: 'client_' + dbClient.id,
+            id: 'client_' + dbClient.id, // Maintain compatibility
             name: dbClient.name,
             phone: dbClient.phone || '',
             email: dbClient.email || '',
             address: dbClient.address || '',
             preferredSource: dbClient.preferred_source || '',
             notes: dbClient.notes || '',
-            dbId: dbClient.id
+            createdDate: dbClient.created_at
         };
     }
 
-    transformExpenseFromDB(dbExpense) {
-        const amountBGN = parseFloat(dbExpense.amount) || 0;
-        const amountEUR = dbExpense.amount_eur
-            ? parseFloat(dbExpense.amount_eur)
-            : CurrencyUtils.convertBGNtoEUR(amountBGN);
-
-        if (amountBGN > 50 && Math.abs(amountEUR - amountBGN) < 1) {
-            console.warn(`⚠️ Expense ${dbExpense.id} has unconverted EUR value: ${amountEUR} EUR ≈ ${amountBGN} BGN`);
+    // UTILITY METHODS
+    extractDbId(clientId) {
+        // Extract database ID from client_123 format
+        if (typeof clientId === 'string' && clientId.startsWith('client_')) {
+            return parseInt(clientId.replace('client_', ''));
         }
+        return parseInt(clientId);
+    }
 
+    getDefaultSettings() {
         return {
-            id: dbExpense.id,
-            month: dbExpense.month_key,
-            category: dbExpense.name || 'Без име',
-            name: dbExpense.name || 'Без име',
-            amount: amountEUR,
-            amountBGN: amountBGN,
-            amountEUR: amountEUR,
-            description: dbExpense.note || '',
-            note: dbExpense.note || '',
-            isDefault: dbExpense.is_default || false,
-            currency: dbExpense.currency || 'EUR'
+            // EUR is now the primary currency
+            eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
+            baseCurrency: 'EUR',
+            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
+
+            // Legacy BGN settings (kept for historical data)
+            usdRate: 1.71, // Legacy USD to BGN rate
+
+            // Other settings
+            factoryShipping: 1.5,
+            origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
+            vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
         };
     }
 
-    transformInventoryFromDB(dbItem) {
-        const purchasePriceBGN = parseFloat(dbItem.purchase_price) || 0;
-        const sellPriceBGN = parseFloat(dbItem.sell_price) || 0;
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
-        const purchasePriceEUR = dbItem.purchase_price_eur
-            ? parseFloat(dbItem.purchase_price_eur)
-            : CurrencyUtils.convertBGNtoEUR(purchasePriceBGN);
-        const sellPriceEUR = dbItem.sell_price_eur
-            ? parseFloat(dbItem.sell_price_eur)
-            : CurrencyUtils.convertBGNtoEUR(sellPriceBGN);
-
+    // STATUS AND DEBUGGING
+    getConnectionStatus() {
         return {
-            id: dbItem.id,  // Note: This gets overridden in getInventory/create/update
-            brand: dbItem.brand,
-            type: dbItem.type || 'стандарт',
-            purchasePrice: purchasePriceEUR,
-            purchasePriceBGN: purchasePriceBGN,
-            purchasePriceEUR: purchasePriceEUR,
-            sellPrice: sellPriceEUR,
-            sellPriceBGN: sellPriceBGN,
-            sellPriceEUR: sellPriceEUR,
-            stock: parseInt(dbItem.stock) || 0,
-            ordered: parseInt(dbItem.ordered) || 0,
-            currency: dbItem.currency || 'EUR'
+            isConnected: this.isConnected,
+            lastTest: this.lastConnectionTest,
+            testAge: Date.now() - this.lastConnectionTest,
+            nextTest: this.lastConnectionTest + this.connectionTestInterval
         };
     }
 
-    // ============================================
-    // UTILITIES
-    // ============================================
+    getStatistics() {
+        return {
+            ...this.stats,
+            successRate: this.stats.requestCount > 0 ?
+                (this.stats.successCount / this.stats.requestCount * 100).toFixed(1) + '%' : '0%',
+            activeRequests: this.activeRequests,
+            queueLength: this.requestQueue.length
+        };
+    }
 
-    extractDbId(prefixedId) {
-        if (typeof prefixedId === 'number') return prefixedId;
-        if (typeof prefixedId === 'string') {
-            const match = prefixedId.match(/_(\d+)$/);
-            return match ? parseInt(match[1]) : parseInt(prefixedId);
+    debugSupabase() {
+        const status = this.getConnectionStatus();
+        const stats = this.getStatistics();
+
+        console.group('🔍 SUPABASE DEBUG');
+        console.log('Connection:', status);
+        console.log('Statistics:', stats);
+        console.log('Config:', {
+            url: this.config.url,
+            bucket: this.config.bucket,
+            hasClient: !!this.supabase
+        });
+        console.groupEnd();
+    }
+
+    // HEALTH CHECK
+    async healthCheck() {
+        try {
+            const connected = await this.testConnection();
+            const stats = this.getStatistics();
+
+            let status = 'healthy';
+            const issues = [];
+
+            if (!connected) {
+                status = 'disconnected';
+                issues.push('No connection to Supabase');
+            }
+
+            if (stats.successRate < 80 && this.stats.requestCount > 10) {
+                status = 'degraded';
+                issues.push(`Low success rate: ${stats.successRate}`);
+            }
+
+            if (this.activeRequests >= this.maxConcurrentRequests) {
+                status = 'overloaded';
+                issues.push('Request queue full');
+            }
+
+            return {
+                status,
+                connected,
+                issues,
+                stats,
+                timestamp: Date.now()
+            };
+
+        } catch (error) {
+            return {
+                status: 'error',
+                connected: false,
+                issues: [error.message],
+                timestamp: Date.now()
+            };
         }
-        return prefixedId;
     }
 
-    getStats() {
-        return { ...this.stats };
+    // CLEANUP
+    destroy() {
+        console.log('🗑️ Destroying SupabaseService...');
+
+        // Clear queues
+        this.requestQueue = [];
+
+        // Reset state
+        this.isConnected = false;
+        this.connectionTested = false;
+
+        console.log('✅ SupabaseService destroyed');
     }
 }
