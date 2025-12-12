@@ -217,10 +217,17 @@ export class InventoryModule {
 
     // ✅ FIXED: Use SupabaseService.updateInventoryItem() for stock changes
     async updateStock(id, quantity, operation = 'set') {
-        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
-        const item = inventory[id];
+        // Get fresh state at the start
+        const currentInventory = this.state.get('inventory');
+        const item = currentInventory[id];
 
-        if (!item) return false;
+        if (!item) {
+            console.warn(`⚠️ Item ${id} not found in inventory`);
+            return false;
+        }
+
+        // Emit 'before-' event for undo/redo system BEFORE making changes
+        this.eventBus.emit('inventory:before-updated', item);
 
         let newStock;
         switch(operation) {
@@ -236,6 +243,8 @@ export class InventoryModule {
                 break;
         }
 
+        console.log(`📦 Updating stock for ${item.brand}: ${item.stock} → ${newStock} (${operation})`);
+
         // Try Supabase first if we have database ID
         if (item.dbId) {
             try {
@@ -248,39 +257,57 @@ export class InventoryModule {
                     ordered: item.ordered
                 });
 
-                console.log('✅ Stock updated in Supabase:', updatedItem.brand);
+                console.log('✅ Stock updated in Supabase:', updatedItem.brand, 'stock:', updatedItem.stock);
 
-                // ✅ FIX: Use Supabase response to update local state
-                inventory[id] = updatedItem;
-                this.storage.save('inventory', inventory);
-                this.state.set('inventory', inventory);
+                // Get FRESH state after async operation to avoid overwriting concurrent changes
+                const freshInventory = { ...this.state.get('inventory') };
+                freshInventory[id] = updatedItem;
+
+                // Update state and storage atomically
+                this.state.set('inventory', freshInventory);
+                this.storage.save('inventory', freshInventory);
                 this.eventBus.emit('inventory:updated', updatedItem);
 
                 return true;
 
             } catch (err) {
-                console.warn('⚠️ Stock update failed, updating localStorage only:', err.message);
+                console.warn('⚠️ Supabase stock update failed, updating localStorage only:', err.message);
             }
         }
 
         // Fallback: Update local state only (no dbId or Supabase failed)
         const updatedItem = { ...item, stock: newStock };
-        inventory[id] = updatedItem;
-        this.storage.save('inventory', inventory);
-        this.state.set('inventory', inventory);
+
+        // Get FRESH state to avoid overwriting concurrent changes
+        const freshInventory = { ...this.state.get('inventory') };
+        freshInventory[id] = updatedItem;
+
+        // Update state and storage atomically
+        this.state.set('inventory', freshInventory);
+        this.storage.save('inventory', freshInventory);
         this.eventBus.emit('inventory:updated', updatedItem);
 
+        console.log('✅ Stock updated locally:', updatedItem.brand, 'stock:', updatedItem.stock);
         return true;
     }
 
     // ✅ FIXED: Use SupabaseService.updateInventoryItem() for ordered changes
     async updateOrdered(id, quantity) {
-        const inventory = { ...this.state.get('inventory') };  // Clone to ensure state change detection
-        const item = inventory[id];
+        // Get fresh state at the start
+        const currentInventory = this.state.get('inventory');
+        const item = currentInventory[id];
 
-        if (!item) return false;
+        if (!item) {
+            console.warn(`⚠️ Item ${id} not found in inventory`);
+            return false;
+        }
+
+        // Emit 'before-' event for undo/redo system BEFORE making changes
+        this.eventBus.emit('inventory:before-updated', item);
 
         const newOrdered = Math.max(0, quantity);
+
+        console.log(`📦 Updating ordered for ${item.brand}: ${item.ordered} → ${newOrdered}`);
 
         // Try Supabase first if we have database ID
         if (item.dbId) {
@@ -296,10 +323,13 @@ export class InventoryModule {
 
                 console.log('✅ Ordered quantity updated in Supabase:', updatedItem.brand);
 
-                // ✅ FIX: Use Supabase response to update local state
-                inventory[id] = updatedItem;
-                this.storage.save('inventory', inventory);
-                this.state.set('inventory', inventory);
+                // Get FRESH state after async operation
+                const freshInventory = { ...this.state.get('inventory') };
+                freshInventory[id] = updatedItem;
+
+                // Update state and storage atomically
+                this.state.set('inventory', freshInventory);
+                this.storage.save('inventory', freshInventory);
                 this.eventBus.emit('inventory:updated', updatedItem);
 
                 return true;
@@ -311,11 +341,17 @@ export class InventoryModule {
 
         // Fallback: Update local state only (no dbId or Supabase failed)
         const updatedItem = { ...item, ordered: newOrdered };
-        inventory[id] = updatedItem;
-        this.storage.save('inventory', inventory);
-        this.state.set('inventory', inventory);
+
+        // Get FRESH state to avoid overwriting concurrent changes
+        const freshInventory = { ...this.state.get('inventory') };
+        freshInventory[id] = updatedItem;
+
+        // Update state and storage atomically
+        this.state.set('inventory', freshInventory);
+        this.storage.save('inventory', freshInventory);
         this.eventBus.emit('inventory:updated', updatedItem);
 
+        console.log('✅ Ordered updated locally:', updatedItem.brand);
         return true;
     }
 
