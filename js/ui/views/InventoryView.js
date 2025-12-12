@@ -175,9 +175,9 @@ export default class InventoryView {
                 <td>${item.sellPrice.toFixed(2)} €</td>
                 <td>
                     <div class="stock-control">
-                        <button class="stock-btn" data-action="decrease" data-id="${item.id}">-</button>
+                        <button class="stock-btn" data-stock-action="decrease" data-id="${item.id}">-</button>
                         <span class="stock-value">${item.stock}</span>
-                        <button class="stock-btn" data-action="increase" data-id="${item.id}">+</button>
+                        <button class="stock-btn" data-stock-action="increase" data-id="${item.id}">+</button>
                     </div>
                 </td>
                 <td>
@@ -275,20 +275,34 @@ export default class InventoryView {
             await this.refresh();
         });
 
-        // Stock controls
+        // Stock controls - use data-stock-action to avoid conflict with [data-action] handler
         document.querySelectorAll('.stock-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => { // MAKE ASYNC
-                const id = e.target.dataset.id;
-                const action = e.target.dataset.action;
+            btn.addEventListener('click', async (e) => {
+                const button = e.currentTarget;
+                const id = button.dataset.id;
+                const action = button.dataset.stockAction; // Use stockAction, not action
+
+                // Prevent double-clicks by disabling the button during update
+                if (button.disabled) return;
+                button.disabled = true;
+                button.style.opacity = '0.5';
 
                 try {
+                    console.log(`📦 Stock update: ${action} for item ${id}`);
+
                     if (action === 'increase') {
                         await this.inventoryModule.updateStock(id, 1, 'add');
                     } else if (action === 'decrease') {
                         await this.inventoryModule.updateStock(id, 1, 'subtract');
                     }
 
-                    await this.refresh(); // ADD AWAIT
+                    // Show success feedback
+                    this.eventBus.emit('notification:show', {
+                        message: action === 'increase' ? 'Наличността е увеличена' : 'Наличността е намалена',
+                        type: 'success'
+                    });
+
+                    await this.refresh();
 
                 } catch (error) {
                     console.error('❌ Stock update failed:', error);
@@ -296,6 +310,10 @@ export default class InventoryView {
                         message: 'Грешка при обновяване на наличността',
                         type: 'error'
                     });
+                } finally {
+                    // Re-enable button after refresh (button may be replaced by refresh)
+                    button.disabled = false;
+                    button.style.opacity = '1';
                 }
             });
         });
