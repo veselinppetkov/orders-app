@@ -1,167 +1,252 @@
-/* Stats Cards */
+/* ============================================
+   PREMIUM COMPONENTS - "IVORY & ONYX"
+   ============================================ */
+
+/* ============================================
+   STATS CARDS - REFINED
+   ============================================ */
+
 .month-stats {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 15px;
-    margin-bottom: 20px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-lg);
     display: flex;
     justify-content: space-around;
     flex-wrap: wrap;
-    gap: 20px;
+    gap: var(--space-lg);
+    box-shadow: var(--shadow-sm);
 }
 
 .stat-item {
     text-align: center;
+    padding: var(--space-sm);
 }
 
 .stat-label {
-    font-size: 12px;
-    opacity: 0.9;
-    margin-bottom: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
 }
 
 .stat-value {
     font-size: 24px;
-    font-weight: bold;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
 }
 
-/* Filter Section */
+/* ============================================
+   FILTER SECTION - MINIMAL
+   ============================================ */
+
 .filter-section {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-lg);
     display: flex;
-    gap: 15px;
+    gap: var(--space-md);
     flex-wrap: wrap;
 }
 
 .filter-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-sm);
+    flex: 1;
+    min-width: 180px;
 }
 
 .filter-group label {
-    font-weight: 600;
-    color: #495057;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
 }
 
-/* Cards */
+/* ============================================
+   CARDS - PREMIUM MATTE
+   ============================================ */
+
 .client-card, .settings-card, .report-card {
-    background: #f8f9fa;
-    padding: 20px;
-    border-radius: 15px;
-    border: 2px solid #e9ecef;
-    transition: all 0.3s ease;
+    background: var(--bg-elevated);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    transition: all 150ms ease-out;
+    box-shadow: var(--shadow-sm);
 }
 
 .client-card:hover, .settings-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-beige);
 }
 
-/* Grids */
-.clients-grid, .settings-grid, .reports-grid {
+/* ============================================
+   GRIDS - CONSISTENT SPACING
+   ============================================ */
+
+.clients-grid, .settings-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    gap: var(--space-lg);
+    margin-top: var(--space-lg);
 }
 
-/* Forms */
+.reports-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-lg);
+    margin-top: var(--space-lg);
+}
+
+/* ============================================
+   FORMS - REFINED INPUTS
+   ============================================ */
+
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-lg);
 }
 
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #495057;
-    font-weight: 600;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 13px;
 }
 
 input, select, textarea {
     width: 100%;
-    padding: 8px 12px;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
     font-size: 14px;
-    transition: all 0.3s ease;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    transition: all 120ms ease-out;
+}
+
+input:hover, select:hover, textarea:hover {
+    border-color: var(--accent-beige);
 }
 
 input:focus, select:focus, textarea:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(216, 199, 163, 0.1);
+    background: var(--bg-surface);
 }
 
-/* Status Badges */
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* ============================================
+   STATUS BADGES - MUTED COLORS
+   ============================================ */
+
 .status-badge {
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
     font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.status-badge {
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    /* Background and color will be set via inline styles */
+.status-badge.in-stock {
+    background: rgba(155, 191, 154, 0.12);
+    color: var(--success-sage);
+    border-color: rgba(155, 191, 154, 0.2);
 }
 
-/* Summary Cards */
+.status-badge.low-stock {
+    background: rgba(210, 180, 140, 0.12);
+    color: var(--warning-sand);
+    border-color: rgba(210, 180, 140, 0.2);
+}
+
+.status-badge.out-of-stock {
+    background: rgba(201, 139, 139, 0.12);
+    color: var(--danger-rose);
+    border-color: rgba(201, 139, 139, 0.2);
+}
+
+/* ============================================
+   SUMMARY CARDS - ELEGANT
+   ============================================ */
+
 .summary-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
 }
 
 .summary-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 25px;
-    border-radius: 15px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
     text-align: center;
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-    transition: transform 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    transition: all 150ms ease-out;
 }
 
 .summary-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-beige);
 }
 
 .summary-card h3 {
-    font-size: 14px;
-    opacity: 0.9;
-    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
 }
 
 .summary-card .value {
     font-size: 32px;
-    font-weight: bold;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
 }
 
-/* Expense Items */
+/* ============================================
+   EXPENSE ITEMS - CARD-LIKE
+   ============================================ */
+
 .expense-item {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    padding: var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-sm);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all 0.3s ease;
+    transition: all 120ms ease-out;
 }
 
 .expense-item:hover {
-    background: #e9ecef;
-    transform: translateX(5px);
+    border-color: var(--accent-beige);
+    box-shadow: var(--shadow-sm);
 }
 
 .expense-info {
@@ -169,61 +254,98 @@ input:focus, select:focus, textarea:focus {
 }
 
 .expense-name {
-    font-weight: 600;
-    color: #495057;
-    margin-bottom: 5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    font-size: 14px;
 }
 
 .expense-amount {
-    font-size: 20px;
-    color: #667eea;
-    font-weight: bold;
+    font-size: 18px;
+    color: var(--accent-strong);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
 .expense-note {
     font-size: 12px;
-    color: #6c757d;
-    margin-top: 5px;
+    color: var(--text-secondary);
+    margin-top: 4px;
 }
 
 .expense-actions {
     display: flex;
-    gap: 10px;
+    gap: 6px;
 }
 
-/* Total Section */
+/* ============================================
+   TOTAL SECTION
+   ============================================ */
+
 .total-expenses {
-    margin-top: 30px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 15px;
+    margin-top: var(--space-xl);
+    padding: var(--space-lg);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
     text-align: center;
 }
 
 .total-amount {
     font-size: 36px;
-    font-weight: bold;
-    color: #dc3545;
+    font-weight: 600;
+    color: var(--danger-rose);
+    font-variant-numeric: tabular-nums;
 }
 
-/* Controls */
+/* ============================================
+   CONTROLS - REFINED BUTTONS
+   ============================================ */
+
 .controls {
-    margin-bottom: 20px;
+    margin-bottom: var(--space-lg);
     display: flex;
-    gap: 10px;
+    gap: var(--space-sm);
     flex-wrap: wrap;
 }
 
-/* Badge */
+/* ============================================
+   BADGES - MINIMAL
+   ============================================ */
+
 .badge {
-    padding: 3px 8px;
-    border-radius: 5px;
-    color: white;
-    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
     display: inline-block;
+    letter-spacing: 0.03em;
 }
 
-/* Model Images in Table */
+.badge.premium {
+    background: var(--accent-strong);
+    color: var(--text-primary);
+}
+
+.badge.standard {
+    background: var(--text-secondary);
+    color: #FFFFFF;
+}
+
+/* Origin badges - muted colors */
+.origin-badge {
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid;
+}
+
+/* ============================================
+   MODEL IMAGES - PREMIUM TREATMENT
+   ============================================ */
+
 .image-cell {
     text-align: center;
     vertical-align: middle;
@@ -233,80 +355,89 @@ input:focus, select:focus, textarea:focus {
     width: 60px;
     height: 60px;
     object-fit: cover;
-    border-radius: 8px;
-    border: 2px solid #e9ecef;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 150ms ease-out;
+    box-shadow: var(--shadow-sm);
 }
 
 .model-image:hover {
-    transform: scale(1.1);
-    border-color: #667eea;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    transform: scale(1.08);
+    border-color: var(--accent-beige);
+    box-shadow: var(--shadow-md);
 }
 
 .no-image-placeholder {
-    padding: 10px;
-    background: #f8f9fa;
-    border-radius: 8px;
-    color: #6c757d;
-    font-size: 12px;
+    padding: 12px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
 }
 
+/* ============================================
+   BULK ACTIONS - REFINED
+   ============================================ */
+
 .bulk-actions {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent-beige);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-lg);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    animation: slideDown 0.3s ease;
+    animation: slideDown 180ms ease-out;
+    box-shadow: var(--shadow-sm);
 }
 
 .bulk-info {
-    font-weight: 600;
-    color: #495057;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 14px;
 }
 
 .bulk-controls {
     display: flex;
-    gap: 10px;
+    gap: var(--space-sm);
     align-items: center;
 }
 
 .bulk-select {
-    padding: 8px 12px;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    font-size: 14px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
     min-width: 180px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
 }
 
 .selected-row {
-    background: rgba(102, 126, 234, 0.1) !important;
+    background: rgba(216, 199, 163, 0.08) !important;
 }
 
 .selected-row:hover {
-    background: rgba(102, 126, 234, 0.15) !important;
+    background: rgba(216, 199, 163, 0.12) !important;
 }
 
-.order-checkbox {
+.order-checkbox, #select-all {
     width: 18px;
     height: 18px;
     cursor: pointer;
-}
-
-#select-all {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
+    accent-color: var(--accent-strong);
 }
 
 @keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateY(-8px);
     }
     to {
         opacity: 1;
@@ -314,172 +445,204 @@ input:focus, select:focus, textarea:focus {
     }
 }
 
+/* ============================================
+   INVENTORY STATS - REFINED
+   ============================================ */
+
 .inventory-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-    margin-bottom: 30px;
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
 }
 
 .inventory-stats .stat-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 15px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
     text-align: center;
-    transition: transform 0.3s ease;
+    transition: all 150ms ease-out;
+    box-shadow: var(--shadow-sm);
 }
 
 .inventory-stats .stat-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-beige);
 }
 
 .inventory-stats .stat-card.warning {
-    background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+    border-color: var(--warning-sand);
+    background: rgba(210, 180, 140, 0.04);
 }
 
 .inventory-stats .stat-card.danger {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border-color: var(--danger-rose);
+    background: rgba(201, 139, 139, 0.04);
 }
 
 .inventory-stats .stat-label {
-    font-size: 12px;
-    opacity: 0.9;
-    margin-bottom: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
 }
 
 .inventory-stats .stat-value {
     font-size: 24px;
-    font-weight: bold;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
 }
+
+/* ============================================
+   STOCK CONTROLS - MINIMALIST
+   ============================================ */
 
 .stock-control {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-sm);
     justify-content: center;
 }
 
 .stock-btn {
-    width: 25px;
-    height: 25px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    border: none;
-    background: #667eea;
-    color: white;
+    border: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
     cursor: pointer;
-    font-size: 16px;
-    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 120ms ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .stock-btn:hover {
-    background: #764ba2;
+    background: var(--accent-beige);
+    border-color: var(--accent-strong);
     transform: scale(1.1);
 }
 
 .stock-value {
-    font-weight: bold;
+    font-weight: 600;
     min-width: 30px;
     text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
 }
 
-.badge.premium {
-    background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
-    color: #333;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-    font-weight: 600;
-}
+/* ============================================
+   REPORT CARDS - PREMIUM LAYOUT
+   ============================================ */
 
-.badge.standard {
-    background: #6c757d;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-}
-
-.status-badge.in-stock {
-    background: #d4edda;
-    color: #155724;
-}
-
-.status-badge.low-stock {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.status-badge.out-of-stock {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.btn.warning {
-    background: #ffc107;
-}
-
-.btn.warning:hover {
-    background: #e0a800;
-}
-
-.btn.info {
-    background: #17a2b8;
-}
-
-.btn.info:hover {
-    background: #138496;
-}
-
-/* Add this CSS to css/components.css or css/main.css */
-
-/* Override the reports grid to make 3 columns fill the page */
-.reports-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
-    gap: 25px; /* Slightly more gap for better spacing */
-    margin-top: 20px;
-}
-
-/* Make sure report cards don't have a max width */
 .report-card {
-    background: #f8f9fa;
-    padding: 20px;
-    border-radius: 15px;
-    border: 2px solid #e9ecef;
-    transition: all 0.3s ease;
-    min-height: 400px; /* Ensure consistent height */
+    background: var(--bg-elevated);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    transition: all 150ms ease-out;
+    min-height: 400px;
+    box-shadow: var(--shadow-sm);
 }
 
 .report-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--accent-beige);
 }
 
 .report-card h3 {
-    margin-bottom: 15px;
-    color: #495057;
-    font-size: 18px;
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 10px;
+    margin-bottom: var(--space-md);
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-default);
+    padding-bottom: var(--space-sm);
 }
 
-/* Responsive design for smaller screens */
+/* ============================================
+   ACTIVE FILTER BADGE
+   ============================================ */
+
+.active-filter-badge {
+    background: rgba(216, 199, 163, 0.1);
+    border: 1px solid var(--accent-beige);
+    color: var(--text-primary);
+    padding: var(--space-sm) var(--space-md);
+    margin: var(--space-md) 0;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+}
+
+.active-filter-badge .btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
 @media (max-width: 1200px) {
     .reports-grid {
-        grid-template-columns: repeat(2, 1fr); /* 2 columns on medium screens */
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
 @media (max-width: 768px) {
-    .reports-grid {
-        grid-template-columns: 1fr; /* 1 column on mobile */
-        gap: 15px;
+    .reports-grid, .clients-grid, .settings-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
     }
 
     .report-card {
         min-height: auto;
     }
-}
 
+    .filter-section {
+        flex-direction: column;
+    }
+
+    .filter-group {
+        min-width: 100%;
+    }
+
+    .month-stats {
+        gap: var(--space-md);
+    }
+
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .bulk-actions {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+
+    .bulk-controls {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .controls {
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+
+    .controls .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
