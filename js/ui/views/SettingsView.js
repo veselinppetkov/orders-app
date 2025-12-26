@@ -31,7 +31,6 @@ export default class SettingsView {
             // GET SETTINGS FROM SUPABASE/ASYNC
             const s = await this.settingsModule.getSettings() || {};
 
-            const usdRate = this._escape(s.usdRate ?? 1.71);
             const eurRate = this._escape(s.eurRate ?? 0.92);
             const factoryShipping = this._escape(s.factoryShipping ?? 1.5);
             const origins = Array.isArray(s.origins) ? s.origins : (typeof s.origins === 'string' ? s.origins.split('\n') : []);
@@ -48,11 +47,6 @@ export default class SettingsView {
                   <label>Курс USD → EUR (€):</label>
                   <input type="number" id="eurRate" value="${eurRate}" step="0.01">
                   <small style="color:#6c757d;">Пазарен курс за нови поръчки (обновявайте ежеседмично)</small>
-                </div>
-                <div class="form-group" style="margin-top:15px;">
-                  <label>Курс USD → EUR (€):</label>
-                  <input type="number" id="usdRate" value="${usdRate}" step="0.01">
-                  <small style="color:#6c757d;">Използва се само за исторически данни</small>
                 </div>
               </div>
 
@@ -119,7 +113,6 @@ export default class SettingsView {
         $('save-settings')?.addEventListener('click', async () => {
             const settings = {
                 eurRate: this._num($('eurRate')?.value, 0.92),
-                usdRate: this._num($('usdRate')?.value, 1.71),
                 factoryShipping: this._num($('factoryShipping')?.value, 1.5),
                 origins: this._lines($('originsList')?.value),
                 vendors: this._lines($('vendorsList')?.value)
