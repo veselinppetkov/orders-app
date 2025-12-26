@@ -531,13 +531,13 @@ export class ModalsManager {
                                                              title: '${o.model}',
                                                              caption: 'Клиент: ${o.client} | Дата: ${formattedDate}'
                                                          })">` :
-            `<div class="no-image-placeholder">${o.model}</div>`
-        }`}).join('')}
+            `<div class="no-image-placeholder">${o.model}</div>`}
                                             </td>
                                             <td>${(o.sellEUR || 0).toFixed(2)} €</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
                                         </tr>
-                                    `).join('')}
+                                    `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                         ` : '<p>Няма поръчки</p>'}
