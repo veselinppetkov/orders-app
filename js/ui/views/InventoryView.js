@@ -205,19 +205,19 @@ export default class InventoryView {
     }
 
     // Render health bar (fuel gauge) for stock level
-    renderHealthBar(stock, maxStock = 20) {
+    // >20 = Green (Full), <5 = Orange (Medium), <3 = Red (Critical with pulse)
+    renderHealthBar(stock, maxStock = 30) {
         const percentage = Math.min((stock / maxStock) * 100, 100);
         let fillClass = 'full';
 
-        if (stock === 0) {
-            fillClass = 'critical';
-        } else if (stock < 3) {
-            fillClass = 'critical';
-        } else if (stock < 10) {
-            fillClass = 'low';
-        } else if (stock < 20) {
-            fillClass = 'medium';
+        if (stock < 3) {
+            fillClass = 'critical'; // Red with pulse animation
+        } else if (stock < 5) {
+            fillClass = 'medium'; // Orange
+        } else if (stock <= 20) {
+            fillClass = 'low'; // Light orange/yellow
         }
+        // >20 stays 'full' (green)
 
         return `
             <div class="health-bar" title="${stock} налични">
@@ -228,12 +228,12 @@ export default class InventoryView {
 
     renderItemRow(item) {
         const total = item.stock + item.ordered;
-        const statusClass = item.stock === 0 ? 'out-of-stock' : item.stock <= 2 ? 'low-stock' : 'in-stock';
-        const statusText = item.stock === 0 ? 'Изчерпан' : item.stock <= 2 ? 'Ниска наличност' : 'Наличен';
+        const statusClass = item.stock < 3 ? 'out-of-stock' : item.stock < 5 ? 'low-stock' : 'in-stock';
+        const statusText = item.stock < 3 ? 'Критично' : item.stock < 5 ? 'Ниска наличност' : 'Наличен';
         const itemValue = item.stock * item.purchasePrice;
 
-        // Determine stock count color class
-        const stockColorClass = item.stock === 0 ? 'critical' : item.stock <= 2 ? 'low' : 'healthy';
+        // Stock count color: <3 red, <5 orange, >20 green
+        const stockColorClass = item.stock < 3 ? 'critical' : item.stock < 5 ? 'low' : 'healthy';
 
         return `
             <tr data-item-id="${item.id}" class="${statusClass}">

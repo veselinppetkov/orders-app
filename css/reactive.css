@@ -1,55 +1,10 @@
 /* ============================================
    REACTIVE INTERFACE PATTERNS
-   Anticipatory UI, Skeleton Loading, Alive Feel
+   Skeleton Loading, Health Bars, Compact UI
    ============================================ */
 
 /* ============================================
-   1. CONTEXTUAL DELTAS & TREND INDICATORS
-   ============================================ */
-
-.delta-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: var(--radius-full);
-    font-family: var(--font-data);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    margin-left: 8px;
-    vertical-align: middle;
-}
-
-.delta-chip.positive {
-    background: rgba(155, 191, 154, 0.15);
-    color: var(--text-success-strong);
-}
-
-.delta-chip.negative {
-    background: rgba(201, 139, 139, 0.15);
-    color: var(--text-danger-strong);
-}
-
-.delta-chip.neutral {
-    background: rgba(90, 85, 78, 0.1);
-    color: var(--text-secondary);
-}
-
-.delta-arrow {
-    font-size: 10px;
-    font-weight: bold;
-}
-
-.trend-label {
-    font-size: 10px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-    display: block;
-}
-
-/* ============================================
-   2. HEALTH BARS / FUEL GAUGES
+   1. HEALTH BARS / FUEL GAUGES
    ============================================ */
 
 .health-bar {
@@ -68,18 +23,22 @@
     transition: width 300ms ease-out, background 300ms ease-out;
 }
 
+/* >20 items = Green (healthy) */
 .health-bar-fill.full {
     background: linear-gradient(90deg, var(--success-sage), #8AAE89);
 }
 
-.health-bar-fill.medium {
-    background: linear-gradient(90deg, var(--warning-sand), #C9A67A);
+/* 5-20 items = Light yellow/green (good) */
+.health-bar-fill.low {
+    background: linear-gradient(90deg, #B8C99A, var(--success-sage));
 }
 
-.health-bar-fill.low {
+/* <5 items = Orange (warning) */
+.health-bar-fill.medium {
     background: linear-gradient(90deg, #E6A700, var(--warning-sand));
 }
 
+/* <3 items = Red with pulse (critical) */
 .health-bar-fill.critical {
     background: linear-gradient(90deg, var(--danger-rose), #B87A7A);
     animation: pulse-critical 1.5s ease-in-out infinite;
@@ -539,158 +498,7 @@
     background: rgba(0, 0, 0, 0.2);
 }
 
-/* ============================================
-   7. FOCUS MODE DASHBOARD (PULSE VIEW)
-   ============================================ */
-
-.pulse-dashboard {
-    padding: var(--space-lg);
-}
-
-.pulse-header {
-    margin-bottom: var(--space-xl);
-}
-
-.pulse-header h2 {
-    font-size: 24px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-}
-
-.pulse-header .pulse-subtitle {
-    color: var(--text-secondary);
-    font-size: 14px;
-}
-
-.pulse-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-lg);
-    margin-bottom: var(--space-xl);
-}
-
-.pulse-card {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    padding: var(--space-lg);
-    transition: all 150ms ease-out;
-    box-shadow: var(--shadow-sm);
-    cursor: pointer;
-}
-
-.pulse-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--accent-beige);
-}
-
-.pulse-card.urgent {
-    border-left: 4px solid var(--danger-rose);
-}
-
-.pulse-card.warning {
-    border-left: 4px solid var(--warning-sand);
-}
-
-.pulse-card.success {
-    border-left: 4px solid var(--success-sage);
-}
-
-.pulse-card.info {
-    border-left: 4px solid var(--accent-beige);
-}
-
-.pulse-card-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-}
-
-.pulse-card-icon {
-    font-size: 24px;
-}
-
-.pulse-card-title {
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary);
-}
-
-.pulse-card-value {
-    font-family: var(--font-headings);
-    font-size: 36px;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-    font-feature-settings: "tnum" 1;
-}
-
-.pulse-card-detail {
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.pulse-card-action {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border-default);
-}
-
-.pulse-card-action .btn {
-    width: 100%;
-    justify-content: center;
-}
-
-/* Pulse Summary Row */
-.pulse-summary {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-md);
-    margin-bottom: var(--space-xl);
-    padding: var(--space-lg);
-    background: var(--bg-elevated);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-default);
-}
-
-.pulse-summary-item {
-    text-align: center;
-}
-
-.pulse-summary-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
-
-.pulse-summary-value {
-    font-family: var(--font-headings);
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-/* Quick Actions */
-.pulse-quick-actions {
-    display: flex;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-}
-
-/* ============================================
-   8. TECHNICAL QUICK WINS
-   ============================================ */
-
-/* Sticky Table Headers (already in main.css, reinforced) */
+/* Sticky Table Headers (reinforced) */
 th {
     position: sticky;
     top: 0;
@@ -714,6 +522,10 @@ tr:hover .row-actions {
         opacity: 1;
     }
 }
+
+/* ============================================
+   7. TECHNICAL QUICK WINS
+   ============================================ */
 
 /* Input Clear Buttons */
 .input-with-clear {
@@ -759,18 +571,10 @@ tr:hover .row-actions {
 }
 
 /* ============================================
-   9. RESPONSIVE ADJUSTMENTS
+   8. RESPONSIVE ADJUSTMENTS
    ============================================ */
 
 @media (max-width: 1024px) {
-    .pulse-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .pulse-summary {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .skeleton-stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -784,23 +588,137 @@ tr:hover .row-actions {
         max-width: none;
     }
 
-    .pulse-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .pulse-summary {
-        grid-template-columns: 1fr;
-        gap: var(--space-sm);
-    }
-
     .skeleton-stats-grid {
         grid-template-columns: 1fr;
     }
+}
 
-    .delta-chip {
-        display: block;
-        margin-left: 0;
-        margin-top: 4px;
+/* ============================================
+   9. COMPACT TABLE LAYOUT
+   ============================================ */
+
+.compact-table {
+    font-size: 13px;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.compact-table th,
+.compact-table td {
+    padding: 10px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compact-table th {
+    font-size: 11px;
+}
+
+/* Cell-specific styles */
+.date-cell {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.client-cell {
+    max-width: 120px;
+}
+
+.phone-cell {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.model-cell {
+    max-width: 80px;
+    font-size: 12px;
+}
+
+.money-cell {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 12px;
+}
+
+.money-cell.positive {
+    color: var(--text-success-strong);
+}
+
+.money-cell.negative {
+    color: var(--text-danger-strong);
+}
+
+.set-cell {
+    text-align: center;
+    font-size: 14px;
+}
+
+.notes-cell {
+    max-width: 100px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Origin dot badge (compact) */
+.origin-dot-badge {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    cursor: help;
+}
+
+/* Compact status badge */
+.status-badge.compact {
+    padding: 3px 8px;
+    font-size: 10px;
+}
+
+/* Vertical action buttons */
+.action-buttons-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+.btn-icon-sm {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 120ms ease-out;
+}
+
+.btn-icon-sm:hover {
+    background: var(--bg-surface);
+    transform: scale(1.1);
+}
+
+/* Hide action buttons by default, show on row hover */
+.action-buttons-vertical {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+}
+
+tr:hover .action-buttons-vertical {
+    opacity: 1;
+}
+
+/* Always show on mobile */
+@media (max-width: 768px) {
+    .action-buttons-vertical {
+        opacity: 1;
+        flex-direction: row;
     }
 }
 

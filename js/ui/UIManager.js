@@ -78,7 +78,7 @@ export class UIManager {
         this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
         this.eventBus.on('modal:open', (data) => this.openModal(data));
 
-        await this.switchView('dashboard');
+        await this.switchView('orders');
     }
 
 
@@ -149,8 +149,7 @@ export class UIManager {
             </header>
             
             <nav class="tabs">
-                <button class="tab active" data-view="dashboard">🏠 Пулс</button>
-                <button class="tab" data-view="orders">📋 Поръчки</button>
+                <button class="tab active" data-view="orders">📋 Поръчки</button>
                 <button class="tab" data-view="clients">👥 Клиенти</button>
                 <button class="tab" data-view="inventory">📦 Инвентар</button>
                 <button class="tab" data-view="expenses">💰 Разходи</button>
@@ -312,27 +311,6 @@ export class UIManager {
     // Generate skeleton loading HTML based on view type
     getSkeletonHTML(viewName) {
         switch (viewName) {
-            case 'dashboard':
-                return `
-                    <div class="skeleton-loading fade-in">
-                        <div class="skeleton skeleton-heading" style="width: 30%;"></div>
-                        <div class="skeleton-stats-grid" style="margin-top: 24px;">
-                            ${[1, 2, 3, 4].map(() => `
-                                <div class="skeleton-stat-card">
-                                    <div class="skeleton skeleton-text short"></div>
-                                    <div class="skeleton skeleton-stat"></div>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px;">
-                            ${[1, 2, 3].map(() => `<div class="skeleton skeleton-card" style="height: 180px;"></div>`).join('')}
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 32px;">
-                            ${[1, 2, 3, 4].map(() => `<div class="skeleton skeleton-card" style="height: 140px;"></div>`).join('')}
-                        </div>
-                    </div>
-                `;
-
             case 'orders':
                 return `
                     <div class="skeleton-loading fade-in">

@@ -153,33 +153,30 @@ export default class OrdersView {
 
     renderTable(orders) {
         return `
-            <div style="overflow-x: auto;">
-                <table class="orders-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" id="select-all">
-                            </th>
-                            <th>Дата</th>
-                            <th>Клиент</th>
-                            <th>Телефон</th>
-                            <th>Източник</th>
-                            <th>Доставчик</th>
-                            <th>Модел</th>
-                            <th>Общо (€)</th>
-                            <th>П-на цена (€)</th>
-                            <th>Баланс (€)</th>
-                            <th>Пълен сет</th>
-                            <th>Статус</th>
-                            <th>Бележки</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${orders.map(order => this.renderOrderRow(order)).join('')}
-                    </tbody>
-                </table>
-            </div>
+            <table class="orders-table compact-table">
+                <thead>
+                    <tr>
+                        <th style="width: 32px;">
+                            <input type="checkbox" id="select-all">
+                        </th>
+                        <th style="width: 55px;">Дата</th>
+                        <th>Клиент</th>
+                        <th style="width: 90px;">Телефон</th>
+                        <th style="width: 70px;">Източник</th>
+                        <th style="width: 65px;">Модел</th>
+                        <th style="width: 65px;">Общо</th>
+                        <th style="width: 65px;">Продажба</th>
+                        <th style="width: 65px;">Баланс</th>
+                        <th style="width: 35px;">Сет</th>
+                        <th style="width: 75px;">Статус</th>
+                        <th>Бележки</th>
+                        <th style="width: 45px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${orders.map(order => this.renderOrderRow(order)).join('')}
+                </tbody>
+            </table>
         `;
     }
 
@@ -194,7 +191,6 @@ export default class OrdersView {
     }
 
     renderOrderRow(order) {
-        const statusClass = this.ordersModule.getStatusClass(order.status);
         const isSelected = this.selectedOrders.has(order.id);
         const statusColor = FormatUtils.getStatusColor(order.status);
         const textColor = FormatUtils.getContrastTextColor(statusColor);
@@ -207,54 +203,62 @@ export default class OrdersView {
                        data-id="${order.id}"
                        ${isSelected ? 'checked' : ''}>
             </td>
-            <td>${this.formatDate(order.date)}</td>
-            <td>${order.client}</td>
-            <td>${order.phone || ''}</td>
+            <td class="date-cell">${this.formatDateCompact(order.date)}</td>
+            <td class="client-cell" title="${order.client}">${order.client}</td>
+            <td class="phone-cell">${order.phone || ''}</td>
             <td>
-                <span class="badge origin-badge"
-                      style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
-                    ${order.origin}
-                </span>
+                <span class="origin-dot-badge" style="background: ${FormatUtils.getOriginColor(order.origin)}" title="${order.origin}"></span>
             </td>
-            <td>${order.vendor}</td>
-            <td class="image-cell">
-                ${order.imageData ?
-            `<img src="${order.imageData}"
-                         class="model-image"
-                         alt="${order.model}"
-                         title="${order.model}"
-                         onclick="window.app.ui.modals.open({
-                             type: 'image',
-                             imageSrc: '${order.imageData}',
-                             title: '${order.model}',
-                             caption: 'Клиент: ${order.client} | Дата: ${this.formatDate(order.date)}'
-                         })">` :
-            `<div class="no-image-placeholder">${order.model}</div>`
-        }
-            </td>
-            <td><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></td>
-            <td>${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</td>
-            <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
-            <td>${order.fullSet ? '✅' : '❌'}</td>
+            <td class="model-cell" title="${order.model}${order.imageData ? ' (кликни за снимка)' : ''}"
+                ${order.imageData ? `onclick="window.app.ui.modals.open({
+                    type: 'image',
+                    imageSrc: '${order.imageData}',
+                    title: '${order.model}',
+                    caption: 'Клиент: ${order.client}'
+                })"` : ''}
+                style="${order.imageData ? 'cursor: pointer; text-decoration: underline;' : ''}"
+            >${order.model}</td>
+            <td class="money-cell">${order.totalEUR.toFixed(0)}</td>
+            <td class="money-cell">${order.sellEUR.toFixed(0)}</td>
+            <td class="money-cell ${order.balanceEUR < 0 ? 'negative' : 'positive'}">${order.balanceEUR.toFixed(0)}</td>
+            <td class="set-cell">${order.fullSet ? '✓' : '✗'}</td>
             <td style="position: relative;">
-                <span class="status-toggle status-badge"
+                <span class="status-toggle status-badge compact"
                       data-order-id="${order.id}"
                       data-current-status="${order.status}"
                       style="background: ${statusColor}; color: ${textColor}"
-                      title="Кликни за смяна на статуса">
-                    ${order.status}
+                      title="Кликни за смяна">
+                    ${this.getStatusShort(order.status)}
                 </span>
             </td>
-            <td>${order.notes}</td>
+            <td class="notes-cell" title="${order.notes}">${order.notes}</td>
             <td>
-                <div class="action-buttons row-actions">
-                    <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
-                    <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
-                    <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+                <div class="action-buttons-vertical row-actions">
+                    <button class="btn-icon-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
+                    <button class="btn-icon-sm" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
                 </div>
             </td>
         </tr>
     `;
+    }
+
+    // Short status labels for compact display
+    getStatusShort(status) {
+        const map = {
+            'Очакван': 'Очакв.',
+            'Доставен': 'Дост.',
+            'Свободен': 'Своб.',
+            'Други': 'Други'
+        };
+        return map[status] || status;
+    }
+
+    // Compact date format: "6 Dec"
+    formatDateCompact(dateString) {
+        const date = new Date(dateString);
+        const day = date.getDate();
+        const months = ['Ян', 'Фев', 'Мар', 'Апр', 'Май', 'Юн', 'Юл', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
+        return `${day} ${months[date.getMonth()]}`;
     }
 
     // Create status popover HTML
