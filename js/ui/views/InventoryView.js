@@ -14,22 +14,16 @@ export default class InventoryView {
             const items = this.getFilteredItems();
 
             return `
-                <div class="inventory-view">
+                <div class="inventory-view fade-in">
                     <h2>📦 Управление на инвентар - Кутии за часовници</h2>
                     <p style="margin-bottom: 20px; color: #6c757d;">Следете наличността и управлявайте кутиите</p>
-                    
+
                     ${this.renderStats(stats)}
                     ${this.renderControls()}
                     ${this.renderFilters()}
                     ${this.renderTable(items)}
-                    
-                    ${items.length === 0 ? `
-                        <div class="empty-state">
-                            <h3>Няма намерени продукти</h3>
-                            <p>Променете филтрите или добавете нови кутии</p>
-                            <button class="btn" onclick="document.getElementById('new-inventory-btn').click()">➕ Добави кутия</button>
-                        </div>
-                    ` : ''}
+
+                    ${items.length === 0 ? this.renderEmptyState() : ''}
                 </div>
             `;
 
@@ -43,6 +37,56 @@ export default class InventoryView {
                 </div>
             `;
         }
+    }
+
+    // Smart empty state for inventory
+    renderEmptyState() {
+        const hasSearch = this.searchTerm.length > 0;
+        const hasFilter = this.filter !== 'all';
+
+        if (hasSearch) {
+            return `
+                <div class="smart-empty-state search-empty">
+                    <div class="empty-icon">🔍</div>
+                    <h3>Няма намерени продукти за "${this.searchTerm}"</h3>
+                    <p>Опитайте с различни ключови думи или проверете правописа</p>
+                    <div class="empty-actions">
+                        <button class="btn secondary" onclick="document.getElementById('searchInventory').value = ''; window.app.ui.currentView.searchTerm = ''; window.app.ui.currentView.refresh();">
+                            Изчисти търсенето
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (hasFilter) {
+            const filterLabel = this.filter === 'low-stock' ? 'ниска наличност' : 'изчерпани';
+            return `
+                <div class="smart-empty-state fresh-empty">
+                    <div class="empty-icon">✨</div>
+                    <h3>Няма продукти с ${filterLabel}</h3>
+                    <p>Всичко е наред! Нямате продукти в тази категория.</p>
+                    <div class="empty-actions">
+                        <button class="btn" onclick="document.querySelector('[data-filter=\"all\"]').click()">
+                            Покажи всички продукти
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="smart-empty-state fresh-empty">
+                <div class="empty-icon">📦</div>
+                <h3>Все още няма добавени кутии</h3>
+                <p>Добавете първата си кутия за часовници, за да започнете да следите инвентара</p>
+                <div class="empty-actions">
+                    <button class="btn" onclick="document.getElementById('new-inventory-btn').click()">
+                        ➕ Добави първата кутия
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     renderStats(stats) {
@@ -96,7 +140,10 @@ export default class InventoryView {
             <div class="filter-section">
                 <div class="filter-group">
                     <label>Търсене:</label>
-                    <input type="text" id="searchInventory" placeholder="Бранд, тип..." value="${this.searchTerm}">
+                    <div class="input-with-clear ${this.searchTerm ? 'has-value' : ''}">
+                        <input type="text" id="searchInventory" placeholder="Бранд, тип..." value="${this.searchTerm}">
+                        <button type="button" class="input-clear-btn" data-clear="searchInventory" title="Изчисти">×</button>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label>Филтър:</label>
@@ -157,11 +204,36 @@ export default class InventoryView {
         `;
     }
 
+    // Render health bar (fuel gauge) for stock level
+    // >20 = Green (Full), <5 = Orange (Medium), <3 = Red (Critical with pulse)
+    renderHealthBar(stock, maxStock = 30) {
+        const percentage = Math.min((stock / maxStock) * 100, 100);
+        let fillClass = 'full';
+
+        if (stock < 3) {
+            fillClass = 'critical'; // Red with pulse animation
+        } else if (stock < 5) {
+            fillClass = 'medium'; // Orange
+        } else if (stock <= 20) {
+            fillClass = 'low'; // Light orange/yellow
+        }
+        // >20 stays 'full' (green)
+
+        return `
+            <div class="health-bar" title="${stock} налични">
+                <div class="health-bar-fill ${fillClass}" style="width: ${percentage}%"></div>
+            </div>
+        `;
+    }
+
     renderItemRow(item) {
         const total = item.stock + item.ordered;
-        const statusClass = item.stock === 0 ? 'out-of-stock' : item.stock <= 2 ? 'low-stock' : 'in-stock';
-        const statusText = item.stock === 0 ? 'Изчерпан' : item.stock <= 2 ? 'Ниска наличност' : 'Наличен';
+        const statusClass = item.stock < 3 ? 'out-of-stock' : item.stock < 5 ? 'low-stock' : 'in-stock';
+        const statusText = item.stock < 3 ? 'Критично' : item.stock < 5 ? 'Ниска наличност' : 'Наличен';
         const itemValue = item.stock * item.purchasePrice;
+
+        // Stock count color: <3 red, <5 orange, >20 green
+        const stockColorClass = item.stock < 3 ? 'critical' : item.stock < 5 ? 'low' : 'healthy';
 
         return `
             <tr data-item-id="${item.id}" class="${statusClass}">
@@ -174,10 +246,13 @@ export default class InventoryView {
                 <td>${item.purchasePrice.toFixed(2)} €</td>
                 <td>${item.sellPrice.toFixed(2)} €</td>
                 <td>
-                    <div class="stock-control">
-                        <button class="stock-btn" data-stock-action="decrease" data-id="${item.id}">-</button>
-                        <span class="stock-value">${item.stock}</span>
-                        <button class="stock-btn" data-stock-action="increase" data-id="${item.id}">+</button>
+                    <div class="stock-with-gauge">
+                        <div class="stock-control">
+                            <button class="stock-btn" data-stock-action="decrease" data-id="${item.id}">-</button>
+                            <span class="stock-value stock-count ${stockColorClass}">${item.stock}</span>
+                            <button class="stock-btn" data-stock-action="increase" data-id="${item.id}">+</button>
+                        </div>
+                        ${this.renderHealthBar(item.stock)}
                     </div>
                 </td>
                 <td>
@@ -189,7 +264,7 @@ export default class InventoryView {
                 <td><strong>${itemValue.toFixed(2)} €</strong></td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
-                    <div class="action-buttons">
+                    <div class="action-buttons row-actions">
                         <button class="btn btn-sm" data-action="edit" data-id="${item.id}" title="Редактиране">✏️</button>
                         <button class="btn btn-sm danger" data-action="delete" data-id="${item.id}" title="Изтриване">🗑️</button>
                     </div>
@@ -263,7 +338,24 @@ export default class InventoryView {
         // Search input
         document.getElementById('searchInventory')?.addEventListener('input', async (e) => { // MAKE ASYNC
             this.searchTerm = e.target.value;
+            // Update has-value class
+            const wrapper = e.target.closest('.input-with-clear');
+            if (wrapper) {
+                wrapper.classList.toggle('has-value', e.target.value.length > 0);
+            }
             await this.refresh(); // ADD AWAIT
+        });
+
+        // Clear button for search
+        document.querySelector('[data-clear="searchInventory"]')?.addEventListener('click', async () => {
+            const input = document.getElementById('searchInventory');
+            if (input) {
+                input.value = '';
+                this.searchTerm = '';
+                const wrapper = input.closest('.input-with-clear');
+                if (wrapper) wrapper.classList.remove('has-value');
+                await this.refresh();
+            }
         });
 
         // Type and sort filters

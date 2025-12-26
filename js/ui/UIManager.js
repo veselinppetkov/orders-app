@@ -308,6 +308,110 @@ export class UIManager {
         return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
 
+    // Generate skeleton loading HTML based on view type
+    getSkeletonHTML(viewName) {
+        switch (viewName) {
+            case 'orders':
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton-stats-grid">
+                            ${[1, 2, 3, 4].map(() => `
+                                <div class="skeleton-stat-card">
+                                    <div class="skeleton skeleton-text short"></div>
+                                    <div class="skeleton skeleton-stat"></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+                            ${[1, 2, 3, 4, 5].map(() => `<div class="skeleton skeleton-badge" style="width: 100px;"></div>`).join('')}
+                        </div>
+                        <div class="skeleton-table">
+                            <div class="skeleton-row" style="background: var(--bg-surface);">
+                                ${[1, 2, 3, 4, 5, 6, 7, 8].map(() => `<div class="skeleton skeleton-cell" style="flex: 1;"></div>`).join('')}
+                            </div>
+                            ${[1, 2, 3, 4, 5].map(() => `
+                                <div class="skeleton-row">
+                                    ${[1, 2, 3, 4, 5, 6, 7, 8].map(() => `<div class="skeleton skeleton-cell" style="flex: 1;"></div>`).join('')}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'clients':
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; margin-top: 24px;">
+                            ${[1, 2, 3, 4, 5, 6].map(() => `
+                                <div class="skeleton skeleton-card"></div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'inventory':
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div class="skeleton-stats-grid" style="grid-template-columns: repeat(7, 1fr);">
+                            ${[1, 2, 3, 4, 5, 6, 7].map(() => `
+                                <div class="skeleton-stat-card">
+                                    <div class="skeleton skeleton-text short"></div>
+                                    <div class="skeleton skeleton-stat"></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="skeleton-table">
+                            ${[1, 2, 3, 4, 5, 6].map(() => `
+                                <div class="skeleton-row">
+                                    ${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(() => `<div class="skeleton skeleton-cell" style="flex: 1;"></div>`).join('')}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'reports':
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div class="skeleton-stats-grid">
+                            ${[1, 2, 3, 4].map(() => `
+                                <div class="skeleton-stat-card" style="height: 100px;">
+                                    <div class="skeleton skeleton-text short"></div>
+                                    <div class="skeleton skeleton-stat" style="height: 40px;"></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 24px;">
+                            ${[1, 2, 3].map(() => `<div class="skeleton skeleton-card" style="height: 300px;"></div>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+            case 'expenses':
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 24px;">
+                            ${[1, 2, 3, 4, 5, 6, 7, 8].map(() => `
+                                <div class="skeleton" style="height: 60px; border-radius: 8px;"></div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+            default:
+                return `
+                    <div class="skeleton-loading fade-in">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div class="skeleton skeleton-card" style="height: 200px; margin-top: 24px;"></div>
+                    </div>
+                `;
+        }
+    }
+
     // UPDATED: Make view switching completely async
     async switchView(viewName) {
         document.querySelectorAll('.tab').forEach(tab => {
@@ -318,13 +422,8 @@ export class UIManager {
         if (!container) return;
 
         try {
-            // Show loading state
-            container.innerHTML = `
-                <div class="loading-state">
-                    <h3>📦 Loading ${viewName}...</h3>
-                    <p>Fetching data from database...</p>
-                </div>
-            `;
+            // Show skeleton loading state instead of simple text
+            container.innerHTML = this.getSkeletonHTML(viewName);
 
             const moduleName = viewName === 'inventory' ? 'InventoryView' :
                 viewName.charAt(0).toUpperCase() + viewName.slice(1) + 'View';
@@ -363,16 +462,106 @@ export class UIManager {
         }
     }
 
-    showNotification(message, type = 'info') {
+    // Notification queue for stacking
+    notificationQueue = [];
+    maxNotifications = 5;
+
+    showNotification(message, type = 'info', options = {}) {
         const container = document.getElementById('notification-container');
         if (!container) return;
 
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        container.appendChild(notification);
+        const {
+            duration = 4000,
+            action = null,
+            actionLabel = 'Undo',
+            dismissible = true
+        } = options;
 
-        setTimeout(() => notification.remove(), 3000);
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        // Toast icon based on type
+        const icons = {
+            success: '✓',
+            error: '✕',
+            warning: '⚠',
+            info: 'ℹ'
+        };
+
+        toast.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <div class="toast-content">
+                <div class="toast-message">${message}</div>
+                ${action ? `
+                    <div class="toast-action">
+                        <button class="undo-btn">${actionLabel}</button>
+                    </div>
+                ` : ''}
+            </div>
+            ${dismissible ? '<button class="toast-close">×</button>' : ''}
+        `;
+
+        // Add to container
+        container.appendChild(toast);
+        this.notificationQueue.push(toast);
+
+        // Limit max notifications
+        while (this.notificationQueue.length > this.maxNotifications) {
+            const oldToast = this.notificationQueue.shift();
+            if (oldToast && oldToast.parentNode) {
+                oldToast.classList.add('exiting');
+                setTimeout(() => oldToast.remove(), 200);
+            }
+        }
+
+        // Handle action button
+        if (action) {
+            const actionBtn = toast.querySelector('.undo-btn');
+            actionBtn?.addEventListener('click', () => {
+                action();
+                this.dismissToast(toast);
+            });
+        }
+
+        // Handle close button
+        if (dismissible) {
+            const closeBtn = toast.querySelector('.toast-close');
+            closeBtn?.addEventListener('click', () => {
+                this.dismissToast(toast);
+            });
+        }
+
+        // Auto-dismiss
+        if (duration > 0) {
+            setTimeout(() => {
+                this.dismissToast(toast);
+            }, duration);
+        }
+
+        return toast;
+    }
+
+    dismissToast(toast) {
+        if (!toast || !toast.parentNode) return;
+
+        toast.classList.add('exiting');
+        setTimeout(() => {
+            toast.remove();
+            const index = this.notificationQueue.indexOf(toast);
+            if (index > -1) {
+                this.notificationQueue.splice(index, 1);
+            }
+        }, 200);
+    }
+
+    // Show notification with undo capability
+    showUndoNotification(message, undoAction) {
+        return this.showNotification(message, 'success', {
+            action: undoAction,
+            actionLabel: 'Отмяна',
+            duration: 6000
+        });
     }
 
     async openModal(data) {

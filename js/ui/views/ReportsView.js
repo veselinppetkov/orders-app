@@ -1,4 +1,4 @@
-// js/ui/views/ReportsView.js - CLEANED VERSION
+// js/ui/views/ReportsView.js - CLEAN VERSION (No deltas/trends)
 
 export default class ReportsView {
     constructor(modules, state, eventBus) {
@@ -9,17 +9,16 @@ export default class ReportsView {
 
     async render() {
         try {
-            // ALL DATA LOADING IS NOW ASYNC
+            // Load data - absolute values only
             const allTimeStats = await this.reportsModule.getAllTimeStats();
             const originReport = await this.reportsModule.getReportByOrigin();
             const vendorReport = await this.reportsModule.getReportByVendor();
             const monthlyReport = await this.reportsModule.getReportByMonth();
-            // REMOVED: const topClients = await this.reportsModule.getTopClients(5);
 
             return `
-                <div class="reports-view">
+                <div class="reports-view fade-in">
                     <h2>📊 Отчети и анализи</h2>
-                    
+
                     <div class="summary-cards">
                         <div class="summary-card">
                             <h3>ОБЩО ПОРЪЧКИ</h3>
@@ -38,29 +37,26 @@ export default class ReportsView {
                             <div class="value">${allTimeStats.avgProfit.toFixed(2)} €</div>
                         </div>
                     </div>
-                    
+
                     <div class="reports-grid">
                         <div class="report-card">
                             <h3>📊 По източник</h3>
                             ${this.renderReportTable(originReport, 'Източник')}
                         </div>
-                        
+
                         <div class="report-card">
                             <h3>👥 По доставчик</h3>
                             ${this.renderReportTable(vendorReport, 'Доставчик')}
                         </div>
-                        
+
                         <div class="report-card">
                             <h3>📅 По месец</h3>
                             ${this.renderMonthlyTable(monthlyReport)}
                         </div>
-                        
-                        <!-- REMOVED: Top Clients section -->
                     </div>
-                    
+
                     <div class="report-actions">
                         <button class="btn" id="refresh-reports">🔄 Обнови отчетите</button>
-                        <!-- REMOVED: CSV Export button -->
                     </div>
                 </div>
             `;
@@ -138,8 +134,8 @@ export default class ReportsView {
                 </thead>
                 <tbody>
                     ${sorted.map(([month, value]) => {
-            const netProfit = value.profit - value.expenses;
-            return `
+                        const netProfit = value.profit - value.expenses;
+                        return `
                             <tr>
                                 <td><strong>${this.formatMonth(month)}</strong></td>
                                 <td>${value.count}</td>
@@ -150,7 +146,7 @@ export default class ReportsView {
                                 </td>
                             </tr>
                         `;
-        }).join('')}
+                    }).join('')}
                 </tbody>
                 <tfoot>
                     <tr class="total-row">
@@ -165,8 +161,6 @@ export default class ReportsView {
         `;
     }
 
-    // REMOVED: renderTopClients method completely
-
     formatMonth(monthKey) {
         const [year, month] = monthKey.split('-');
         const months = ['Ян', 'Фев', 'Мар', 'Апр', 'Май', 'Юни', 'Юли', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
@@ -174,7 +168,6 @@ export default class ReportsView {
     }
 
     attachListeners() {
-        // Refresh reports button (KEEP THIS)
         document.getElementById('refresh-reports')?.addEventListener('click', async () => {
             this.eventBus.emit('notification:show', {
                 message: '🔄 Обновяване на отчетите...',
@@ -194,17 +187,11 @@ export default class ReportsView {
                 });
             }
         });
-
-        // REMOVED: Export reports button event listener
     }
 
-    // REMOVED: exportReportsToCSV method completely
-
-    // ASYNC REFRESH METHOD (KEEP THIS)
     async refresh() {
         const container = document.getElementById('view-container');
         if (container) {
-            // Show loading state
             container.innerHTML = `
                 <div class="loading-state">
                     <h3>📊 Loading reports...</h3>

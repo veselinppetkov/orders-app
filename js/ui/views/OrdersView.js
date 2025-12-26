@@ -46,15 +46,17 @@ export default class OrdersView {
             const ordersForPage = this.getCurrentPageOrders(allOrders);
 
             return `
-        <div class="orders-view">
+        <div class="orders-view fade-in">
             ${this.renderStats(stats)}
             ${this.renderControls(freeCount)}
             ${this.renderBulkActions()}
             ${await this.renderFilters()}
             ${this.renderActiveFilters()}
-            ${this.renderPaginationInfo()}
-            ${this.renderTable(ordersForPage)}
-            ${this.renderPaginationControls()}
+            ${allOrders.length === 0 ? this.renderEmptyState() : `
+                ${this.renderPaginationInfo()}
+                ${this.renderTable(ordersForPage)}
+                ${this.renderPaginationControls()}
+            `}
         </div>
         `;
 
@@ -68,6 +70,57 @@ export default class OrdersView {
             </div>
         `;
         }
+    }
+
+    // Smart empty state for orders
+    renderEmptyState() {
+        const hasSearch = this.filters.search.length > 0;
+        const hasStatusFilter = this.filters.status !== 'all';
+        const hasOtherFilters = this.filters.origin || this.filters.vendor || this.filters.model;
+
+        if (hasSearch) {
+            return `
+                <div class="smart-empty-state search-empty">
+                    <div class="empty-icon">🔍</div>
+                    <h3>Няма намерени поръчки за "${this.filters.search}"</h3>
+                    <p>Опитайте с различни ключови думи или проверете правописа</p>
+                    <div class="empty-actions">
+                        <button class="btn secondary" onclick="window.app.ui.currentView.clearFilters()">
+                            Изчисти търсенето
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        if (hasStatusFilter || hasOtherFilters) {
+            return `
+                <div class="smart-empty-state search-empty">
+                    <div class="empty-icon">📋</div>
+                    <h3>Няма поръчки с тези филтри</h3>
+                    <p>Опитайте да промените филтрите или да ги изчистите</p>
+                    <div class="empty-actions">
+                        <button class="btn" onclick="window.app.ui.currentView.clearFilters()">
+                            Изчисти филтрите
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fresh state - no orders at all
+        return `
+            <div class="smart-empty-state fresh-empty">
+                <div class="empty-icon">📦</div>
+                <h3>Все още няма поръчки този месец</h3>
+                <p>Създайте първата си поръчка, за да започнете да следите бизнеса си</p>
+                <div class="empty-actions">
+                    <button class="btn" onclick="document.getElementById('new-order-btn').click()">
+                        ➕ Създай първата поръчка
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     renderBulkActions() {
@@ -100,97 +153,194 @@ export default class OrdersView {
 
     renderTable(orders) {
         return `
-            <div style="overflow-x: auto;">
-                <table class="orders-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" id="select-all">
-                            </th>
-                            <th>Дата</th>
-                            <th>Клиент</th>
-                            <th>Телефон</th>
-                            <th>Източник</th>
-                            <th>Доставчик</th>
-                            <th>Модел</th>
-                            <th>Общо (€)</th>
-                            <th>П-на цена (€)</th>
-                            <th>Баланс (€)</th>
-                            <th>Пълен сет</th>
-                            <th>Статус</th>
-                            <th>Бележки</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${orders.map(order => this.renderOrderRow(order)).join('')}
-                    </tbody>
-                </table>
-            </div>
+            <table class="orders-table compact-table">
+                <thead>
+                    <tr>
+                        <th style="width: 32px;">
+                            <input type="checkbox" id="select-all">
+                        </th>
+                        <th style="width: 55px;">Дата</th>
+                        <th>Клиент</th>
+                        <th style="width: 90px;">Телефон</th>
+                        <th style="width: 70px;">Източник</th>
+                        <th style="width: 65px;">Модел</th>
+                        <th style="width: 65px;">Общо</th>
+                        <th style="width: 65px;">Продажба</th>
+                        <th style="width: 65px;">Баланс</th>
+                        <th style="width: 35px;">Сет</th>
+                        <th style="width: 75px;">Статус</th>
+                        <th>Бележки</th>
+                        <th style="width: 45px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${orders.map(order => this.renderOrderRow(order)).join('')}
+                </tbody>
+            </table>
         `;
     }
 
+    // Status options for inline toggle
+    getStatusOptions() {
+        return [
+            { value: 'Очакван', label: 'Очакван', color: '#E6A700' },
+            { value: 'Доставен', label: 'Доставен', color: '#9BBF9A' },
+            { value: 'Свободен', label: 'Свободен', color: '#17a2b8' },
+            { value: 'Други', label: 'Други', color: '#5A554E' }
+        ];
+    }
+
     renderOrderRow(order) {
-        const statusClass = this.ordersModule.getStatusClass(order.status);
         const isSelected = this.selectedOrders.has(order.id);
+        const statusColor = FormatUtils.getStatusColor(order.status);
+        const textColor = FormatUtils.getContrastTextColor(statusColor);
 
         return `
         <tr data-order-id="${order.id}" class="${isSelected ? 'selected-row' : ''}">
             <td>
-                <input type="checkbox" 
-                       class="order-checkbox" 
+                <input type="checkbox"
+                       class="order-checkbox"
                        data-id="${order.id}"
                        ${isSelected ? 'checked' : ''}>
             </td>
-            <td>${this.formatDate(order.date)}</td>
-            <td>${order.client}</td>
-            <td>${order.phone || ''}</td>
+            <td class="date-cell">${this.formatDateCompact(order.date)}</td>
+            <td class="client-cell" title="${order.client}">${order.client}</td>
+            <td class="phone-cell">${order.phone || ''}</td>
             <td>
-                <span class="badge origin-badge" 
-                      style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
-                    ${order.origin}
+                <span class="origin-dot-badge" style="background: ${FormatUtils.getOriginColor(order.origin)}" title="${order.origin}"></span>
+            </td>
+            <td class="model-cell" title="${order.model}${order.imageData ? ' (кликни за снимка)' : ''}"
+                ${order.imageData ? `onclick="window.app.ui.modals.open({
+                    type: 'image',
+                    imageSrc: '${order.imageData}',
+                    title: '${order.model}',
+                    caption: 'Клиент: ${order.client}'
+                })"` : ''}
+                style="${order.imageData ? 'cursor: pointer; text-decoration: underline;' : ''}"
+            >${order.model}</td>
+            <td class="money-cell">${order.totalEUR.toFixed(0)}</td>
+            <td class="money-cell">${order.sellEUR.toFixed(0)}</td>
+            <td class="money-cell ${order.balanceEUR < 0 ? 'negative' : 'positive'}">${order.balanceEUR.toFixed(0)}</td>
+            <td class="set-cell">${order.fullSet ? '✓' : '✗'}</td>
+            <td style="position: relative;">
+                <span class="status-toggle status-badge compact"
+                      data-order-id="${order.id}"
+                      data-current-status="${order.status}"
+                      style="background: ${statusColor}; color: ${textColor}"
+                      title="Кликни за смяна">
+                    ${this.getStatusShort(order.status)}
                 </span>
             </td>
-            <td>${order.vendor}</td>
-            <td class="image-cell">
-                ${order.imageData ?
-            `<img src="${order.imageData}" 
-                         class="model-image" 
-                         alt="${order.model}" 
-                         title="${order.model}"
-                         onclick="window.app.ui.modals.open({
-                             type: 'image',
-                             imageSrc: '${order.imageData}',
-                             title: '${order.model}',
-                             caption: 'Клиент: ${order.client} | Дата: ${this.formatDate(order.date)}'
-                         })">` :
-            `<div class="no-image-placeholder">${order.model}</div>`
-        }
-            </td>
-            <td><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></td>
-            <td>${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</td>
-            <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
-            <td>${order.fullSet ? '✅' : '❌'}</td>
+            <td class="notes-cell" title="${order.notes}">${order.notes}</td>
             <td>
-                <span class="status-badge" 
-                      style="background: ${FormatUtils.getStatusColor(order.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(order.status))}">
-                    ${order.status}
-                </span>
-            </td>
-            <td>${order.notes}</td>
-            <td>
-                <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
-                <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
-                <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+                <div class="action-buttons-vertical row-actions">
+                    <button class="btn-icon-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
+                    <button class="btn-icon-sm" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+                </div>
             </td>
         </tr>
     `;
+    }
+
+    // Short status labels for compact display
+    getStatusShort(status) {
+        const map = {
+            'Очакван': 'Очакв.',
+            'Доставен': 'Дост.',
+            'Свободен': 'Своб.',
+            'Други': 'Други'
+        };
+        return map[status] || status;
+    }
+
+    // Compact date format: "6 Dec"
+    formatDateCompact(dateString) {
+        const date = new Date(dateString);
+        const day = date.getDate();
+        const months = ['Ян', 'Фев', 'Мар', 'Апр', 'Май', 'Юн', 'Юл', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
+        return `${day} ${months[date.getMonth()]}`;
+    }
+
+    // Create status popover HTML
+    createStatusPopover(orderId, currentStatus) {
+        const options = this.getStatusOptions();
+        return `
+            <div class="status-popover" data-popover-for="${orderId}">
+                ${options.map(opt => `
+                    <div class="status-popover-item ${opt.value === currentStatus ? 'active' : ''}"
+                         data-status="${opt.value}"
+                         data-order-id="${orderId}">
+                        <span class="status-dot" style="background: ${opt.color}"></span>
+                        ${opt.label}
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    // Handle inline status change with optimistic update
+    async handleStatusChange(orderId, newStatus) {
+        const toggle = document.querySelector(`.status-toggle[data-order-id="${orderId}"]`);
+        if (!toggle) return;
+
+        // Store original state for rollback
+        const originalStatus = toggle.dataset.currentStatus;
+
+        // Optimistic update - immediately update UI
+        toggle.classList.add('status-updating');
+        toggle.textContent = newStatus;
+        toggle.dataset.currentStatus = newStatus;
+
+        // Update color
+        const statusOption = this.getStatusOptions().find(o => o.value === newStatus);
+        if (statusOption) {
+            toggle.style.background = statusOption.color;
+            toggle.style.color = FormatUtils.getContrastTextColor(statusOption.color);
+        }
+
+        try {
+            // Find and update the order
+            const result = await this.ordersModule.findOrderById(orderId);
+            if (result && result.order) {
+                const updatedOrderData = { ...result.order, status: newStatus };
+                await this.ordersModule.update(orderId, updatedOrderData);
+
+                // Success animation
+                toggle.classList.remove('status-updating');
+                toggle.classList.add('status-updated');
+                setTimeout(() => toggle.classList.remove('status-updated'), 500);
+
+                this.eventBus.emit('notification:show', {
+                    message: `Статусът е променен на "${newStatus}"`,
+                    type: 'success'
+                });
+            }
+        } catch (error) {
+            console.error('❌ Status update failed:', error);
+
+            // Rollback to original state
+            toggle.textContent = originalStatus;
+            toggle.dataset.currentStatus = originalStatus;
+            const originalOption = this.getStatusOptions().find(o => o.value === originalStatus);
+            if (originalOption) {
+                toggle.style.background = originalOption.color;
+                toggle.style.color = FormatUtils.getContrastTextColor(originalOption.color);
+            }
+            toggle.classList.remove('status-updating');
+
+            this.eventBus.emit('notification:show', {
+                message: '❌ Грешка при промяна на статуса',
+                type: 'error'
+            });
+        }
     }
 
     attachListeners() {
         // All existing listeners made async
         this.attachExistingListeners();
         this.attachBulkListeners();
+        this.attachStatusToggleListeners();
+        this.attachClearButtonListeners();
         document.addEventListener('click', (e) => {
             if (e.target.id === 'page-first') {
                 this.goToPage(1);
@@ -256,6 +406,98 @@ export default class OrdersView {
 
         document.getElementById('bulk-delete')?.addEventListener('click', async () => {
             await this.bulkDelete();
+        });
+    }
+
+    // Attach status toggle listeners for inline status changes
+    attachStatusToggleListeners() {
+        let activePopover = null;
+
+        // Close popover when clicking outside
+        document.addEventListener('click', (e) => {
+            if (activePopover && !e.target.closest('.status-popover') && !e.target.closest('.status-toggle')) {
+                activePopover.remove();
+                activePopover = null;
+            }
+        });
+
+        // Status toggle click handlers
+        document.querySelectorAll('.status-toggle').forEach(toggle => {
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                const orderId = parseInt(toggle.dataset.orderId);
+                const currentStatus = toggle.dataset.currentStatus;
+
+                // Remove any existing popover
+                if (activePopover) {
+                    activePopover.remove();
+                    activePopover = null;
+                }
+
+                // Create and show new popover
+                const popoverHtml = this.createStatusPopover(orderId, currentStatus);
+                toggle.insertAdjacentHTML('afterend', popoverHtml);
+                activePopover = document.querySelector(`.status-popover[data-popover-for="${orderId}"]`);
+
+                // Add click handlers to popover items
+                activePopover.querySelectorAll('.status-popover-item').forEach(item => {
+                    item.addEventListener('click', async (evt) => {
+                        const newStatus = evt.currentTarget.dataset.status;
+                        const targetOrderId = parseInt(evt.currentTarget.dataset.orderId);
+
+                        // Close popover
+                        activePopover.remove();
+                        activePopover = null;
+
+                        // Handle status change
+                        if (newStatus !== currentStatus) {
+                            await this.handleStatusChange(targetOrderId, newStatus);
+                        }
+                    });
+                });
+            });
+        });
+    }
+
+    // Attach clear button listeners for input fields
+    attachClearButtonListeners() {
+        document.querySelectorAll('.input-clear-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const inputId = e.target.dataset.clear;
+                const input = document.getElementById(inputId);
+
+                if (input) {
+                    input.value = '';
+
+                    // Update filter state
+                    if (inputId === 'searchInput') {
+                        this.filters.search = '';
+                    } else if (inputId === 'modelFilter') {
+                        this.filters.model = '';
+                    }
+
+                    // Update the wrapper class
+                    const wrapper = input.closest('.input-with-clear');
+                    if (wrapper) {
+                        wrapper.classList.remove('has-value');
+                    }
+
+                    // Refresh view
+                    this.pagination.currentPage = 1;
+                    await this.refresh();
+                }
+            });
+        });
+
+        // Update has-value class on input
+        document.querySelectorAll('.input-with-clear input').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const wrapper = e.target.closest('.input-with-clear');
+                if (wrapper) {
+                    wrapper.classList.toggle('has-value', e.target.value.length > 0);
+                }
+            });
         });
     }
 
@@ -562,11 +804,17 @@ export default class OrdersView {
                 <div class="filter-section">
                     <div class="filter-group">
                         <label>Търсене:</label>
-                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                        <div class="input-with-clear ${this.filters.search ? 'has-value' : ''}">
+                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                            <button type="button" class="input-clear-btn" data-clear="searchInput" title="Изчисти">×</button>
+                        </div>
                     </div>
                     <div class="filter-group">
                         <label>Марка:</label>
-                        <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
+                        <div class="input-with-clear ${this.filters.model ? 'has-value' : ''}">
+                            <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
+                            <button type="button" class="input-clear-btn" data-clear="modelFilter" title="Изчисти">×</button>
+                        </div>
                     </div>
                     <div class="filter-group">
                         <label>Източник:</label>

@@ -1,0 +1,758 @@
+/* ============================================
+   REACTIVE INTERFACE PATTERNS
+   Skeleton Loading, Health Bars, Compact UI
+   ============================================ */
+
+/* ============================================
+   1. HEALTH BARS / FUEL GAUGES
+   ============================================ */
+
+.health-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    position: relative;
+}
+
+.health-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 300ms ease-out, background 300ms ease-out;
+}
+
+/* >20 items = Green (healthy) */
+.health-bar-fill.full {
+    background: linear-gradient(90deg, var(--success-sage), #8AAE89);
+}
+
+/* 5-20 items = Light yellow/green (good) */
+.health-bar-fill.low {
+    background: linear-gradient(90deg, #B8C99A, var(--success-sage));
+}
+
+/* <5 items = Orange (warning) */
+.health-bar-fill.medium {
+    background: linear-gradient(90deg, #E6A700, var(--warning-sand));
+}
+
+/* <3 items = Red with pulse (critical) */
+.health-bar-fill.critical {
+    background: linear-gradient(90deg, var(--danger-rose), #B87A7A);
+    animation: pulse-critical 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.stock-with-gauge {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 80px;
+}
+
+.stock-count {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.stock-count.critical {
+    color: var(--danger-rose);
+}
+
+.stock-count.low {
+    color: #E6A700;
+}
+
+.stock-count.healthy {
+    color: var(--text-success-strong);
+}
+
+/* ============================================
+   3. INLINE STATUS TOGGLES
+   ============================================ */
+
+.status-toggle {
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 150ms ease-out;
+    position: relative;
+}
+
+.status-toggle:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-md);
+}
+
+.status-toggle:active {
+    transform: scale(0.98);
+}
+
+.status-toggle::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid currentColor;
+    opacity: 0;
+    transition: opacity 150ms;
+}
+
+.status-toggle:hover::after {
+    opacity: 0.5;
+}
+
+/* Status Toggle Popover */
+.status-popover {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    min-width: 140px;
+    overflow: hidden;
+    animation: popIn 150ms ease-out;
+}
+
+@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-4px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+.status-popover-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 120ms ease-out;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.status-popover-item:last-child {
+    border-bottom: none;
+}
+
+.status-popover-item:hover {
+    background: var(--bg-surface);
+}
+
+.status-popover-item.active {
+    background: rgba(216, 199, 163, 0.1);
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-dot.pending { background: #E6A700; }
+.status-dot.delivered { background: var(--success-sage); }
+.status-dot.free { background: #17a2b8; }
+.status-dot.other { background: var(--text-secondary); }
+
+/* Optimistic update animation */
+.status-updating {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.status-updated {
+    animation: statusFlash 500ms ease-out;
+}
+
+@keyframes statusFlash {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* ============================================
+   4. SMART EMPTY STATES
+   ============================================ */
+
+.smart-empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-md);
+    border: 2px dashed var(--border-default);
+    margin: var(--space-lg) 0;
+}
+
+.smart-empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.8;
+}
+
+.smart-empty-state h3 {
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-size: 18px;
+}
+
+.smart-empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.smart-empty-state .empty-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.smart-empty-state.search-empty {
+    border-color: var(--accent-beige);
+    background: rgba(216, 199, 163, 0.02);
+}
+
+.smart-empty-state.fresh-empty {
+    border-color: var(--success-sage);
+    background: rgba(155, 191, 154, 0.02);
+}
+
+.smart-empty-state.error-empty {
+    border-color: var(--danger-rose);
+    background: rgba(201, 139, 139, 0.02);
+}
+
+/* ============================================
+   5. SKELETON LOADING (SHIMMER EFFECTS)
+   ============================================ */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-surface) 0%,
+        var(--bg-elevated) 20%,
+        var(--bg-surface) 40%,
+        var(--bg-surface) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-text {
+    height: 14px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-text.medium {
+    width: 80%;
+}
+
+.skeleton-heading {
+    height: 24px;
+    width: 40%;
+    margin-bottom: 16px;
+}
+
+.skeleton-card {
+    height: 120px;
+    border-radius: var(--radius-md);
+}
+
+.skeleton-row {
+    display: flex;
+    gap: 16px;
+    padding: 18px 16px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+}
+
+.skeleton-row td {
+    padding: 18px 16px;
+}
+
+.skeleton-cell {
+    height: 16px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-badge {
+    height: 24px;
+    width: 80px;
+    border-radius: var(--radius-full);
+}
+
+.skeleton-image {
+    width: 60px;
+    height: 60px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-stat {
+    height: 48px;
+    border-radius: var(--radius-sm);
+}
+
+/* Skeleton containers */
+.skeleton-table {
+    margin-top: var(--space-lg);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.skeleton-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.skeleton-stat-card {
+    background: var(--bg-elevated);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+}
+
+/* ============================================
+   6. TOAST NOTIFICATION STACKING
+   ============================================ */
+
+#notification-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    top: auto;
+    z-index: 10000;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    animation: toastSlideIn 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-default);
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: 100%;
+
+    /* Glass morphism effect */
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.toast.exiting {
+    animation: toastSlideOut 200ms ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%) scale(0.95);
+    }
+}
+
+.toast-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.toast-message {
+    font-size: 14px;
+    font-weight: 500;
+    word-wrap: break-word;
+}
+
+.toast-action {
+    margin-top: 8px;
+}
+
+.toast-action button {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 120ms ease-out;
+}
+
+.toast-close {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 120ms;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
+.toast.success {
+    background: rgba(155, 191, 154, 0.95);
+    border-color: var(--success-sage);
+    color: #1a3a18;
+}
+
+.toast.error {
+    background: rgba(201, 139, 139, 0.95);
+    border-color: var(--danger-rose);
+    color: #4a1a1a;
+}
+
+.toast.info {
+    background: rgba(216, 199, 163, 0.95);
+    border-color: var(--accent-beige);
+    color: var(--text-primary);
+}
+
+.toast.warning {
+    background: rgba(210, 180, 140, 0.95);
+    border-color: var(--warning-sand);
+    color: #4a3a1a;
+}
+
+/* Toast with undo action */
+.toast-action .undo-btn {
+    background: rgba(0, 0, 0, 0.1);
+    color: inherit;
+}
+
+.toast-action .undo-btn:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Sticky Table Headers (reinforced) */
+th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-elevated);
+}
+
+/* Row Hover Actions - Hidden by default */
+.row-actions {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+}
+
+tr:hover .row-actions {
+    opacity: 1;
+}
+
+/* Alternative: Always visible on mobile */
+@media (max-width: 768px) {
+    .row-actions {
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   7. TECHNICAL QUICK WINS
+   ============================================ */
+
+/* Input Clear Buttons */
+.input-with-clear {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+}
+
+.input-with-clear input {
+    padding-right: 32px;
+}
+
+.input-clear-btn {
+    position: absolute;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--text-secondary);
+    color: var(--bg-elevated);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 150ms, transform 150ms;
+    transform: scale(0.8);
+}
+
+.input-with-clear input:not(:placeholder-shown) + .input-clear-btn,
+.input-with-clear.has-value .input-clear-btn {
+    opacity: 0.6;
+    transform: scale(1);
+}
+
+.input-clear-btn:hover {
+    opacity: 1;
+    background: var(--text-primary);
+}
+
+/* ============================================
+   8. RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 1024px) {
+    .skeleton-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    #notification-container {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        max-width: none;
+    }
+
+    .skeleton-stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   9. COMPACT TABLE LAYOUT
+   ============================================ */
+
+.compact-table {
+    font-size: 13px;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.compact-table th,
+.compact-table td {
+    padding: 10px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compact-table th {
+    font-size: 11px;
+}
+
+/* Cell-specific styles */
+.date-cell {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.client-cell {
+    max-width: 120px;
+}
+
+.phone-cell {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.model-cell {
+    max-width: 80px;
+    font-size: 12px;
+}
+
+.money-cell {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 12px;
+}
+
+.money-cell.positive {
+    color: var(--text-success-strong);
+}
+
+.money-cell.negative {
+    color: var(--text-danger-strong);
+}
+
+.set-cell {
+    text-align: center;
+    font-size: 14px;
+}
+
+.notes-cell {
+    max-width: 100px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Origin dot badge (compact) */
+.origin-dot-badge {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    cursor: help;
+}
+
+/* Compact status badge */
+.status-badge.compact {
+    padding: 3px 8px;
+    font-size: 10px;
+}
+
+/* Vertical action buttons */
+.action-buttons-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+.btn-icon-sm {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 120ms ease-out;
+}
+
+.btn-icon-sm:hover {
+    background: var(--bg-surface);
+    transform: scale(1.1);
+}
+
+/* Hide action buttons by default, show on row hover */
+.action-buttons-vertical {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+}
+
+tr:hover .action-buttons-vertical {
+    opacity: 1;
+}
+
+/* Always show on mobile */
+@media (max-width: 768px) {
+    .action-buttons-vertical {
+        opacity: 1;
+        flex-direction: row;
+    }
+}
+
+/* ============================================
+   10. TRANSITION UTILITIES
+   ============================================ */
+
+.fade-in {
+    animation: fadeIn 200ms ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.slide-up {
+    animation: slideUp 250ms ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Content loading transition */
+.view-transitioning {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 150ms ease-out;
+}

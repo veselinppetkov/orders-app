@@ -15,6 +15,79 @@ export class ReportsModule {
         return { sellEUR, totalEUR, balanceEUR };
     }
 
+    // Calculate previous month key
+    getPreviousMonth(monthKey) {
+        const [year, month] = monthKey.split('-').map(Number);
+        const prevDate = new Date(year, month - 2, 1); // month is 0-indexed
+        const prevYear = prevDate.getFullYear();
+        const prevMonth = (prevDate.getMonth() + 1).toString().padStart(2, '0');
+        return `${prevYear}-${prevMonth}`;
+    }
+
+    // Calculate delta percentage
+    calculateDelta(current, previous) {
+        if (previous === 0) {
+            return current > 0 ? 100 : 0;
+        }
+        return ((current - previous) / Math.abs(previous)) * 100;
+    }
+
+    // Get stats with deltas for comparison
+    async getMonthlyStatsWithDeltas(month = null) {
+        const targetMonth = month || this.state.get('currentMonth');
+        const previousMonth = this.getPreviousMonth(targetMonth);
+
+        const currentStats = await this.getMonthlyStats(targetMonth);
+        const previousStats = await this.getMonthlyStats(previousMonth);
+
+        return {
+            ...currentStats,
+            deltas: {
+                orderCount: this.calculateDelta(currentStats.orderCount, previousStats.orderCount),
+                revenue: this.calculateDelta(currentStats.revenue, previousStats.revenue),
+                profit: this.calculateDelta(currentStats.profit, previousStats.profit),
+                avgProfit: this.calculateDelta(currentStats.avgProfit, previousStats.avgProfit)
+            },
+            previousMonth: previousMonth,
+            previousStats: previousStats
+        };
+    }
+
+    // Get all-time stats with trend data
+    async getAllTimeStatsWithTrends() {
+        const allTimeStats = await this.getAllTimeStats();
+        const monthlyReport = await this.getReportByMonth();
+
+        // Get last 3 months for trend calculation
+        const months = Object.keys(monthlyReport).sort().reverse();
+        const recentMonths = months.slice(0, 3);
+
+        let trend = 'neutral';
+        if (recentMonths.length >= 2) {
+            const current = monthlyReport[recentMonths[0]]?.profit || 0;
+            const previous = monthlyReport[recentMonths[1]]?.profit || 0;
+            trend = current > previous ? 'up' : current < previous ? 'down' : 'neutral';
+        }
+
+        // Calculate month-over-month velocity
+        let velocity = 0;
+        if (recentMonths.length >= 2) {
+            const current = monthlyReport[recentMonths[0]]?.profit || 0;
+            const previous = monthlyReport[recentMonths[1]]?.profit || 0;
+            velocity = this.calculateDelta(current, previous);
+        }
+
+        return {
+            ...allTimeStats,
+            trend,
+            velocity,
+            recentMonths: recentMonths.map(m => ({
+                month: m,
+                ...monthlyReport[m]
+            }))
+        };
+    }
+
     async getMonthlyStats(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
 
