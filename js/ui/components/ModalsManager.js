@@ -513,23 +513,26 @@ export class ModalsManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${orders.map(o => `
+                                    ${orders.map(o => {
+                                        const date = new Date(o.date);
+                                        const formattedDate = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
+                                        return `
                                         <tr>
-                                            <td>${new Date(o.date).toLocaleDateString('bg-BG')}</td>
+                                            <td>${formattedDate}</td>
                                             <td class="image-cell">
                                                 ${o.imageData ?
-            `<img src="${o.imageData}" 
-                                                         class="model-image" 
-                                                         alt="${o.model}" 
+            `<img src="${o.imageData}"
+                                                         class="model-image"
+                                                         alt="${o.model}"
                                                          title="${o.model}"
                                                          onclick="window.app.ui.modals.open({
                                                              type: 'image',
                                                              imageSrc: '${o.imageData}',
                                                              title: '${o.model}',
-                                                             caption: 'Клиент: ${o.client} | Дата: ${new Date(o.date).toLocaleDateString('bg-BG')}'
+                                                             caption: 'Клиент: ${o.client} | Дата: ${formattedDate}'
                                                          })">` :
             `<div class="no-image-placeholder">${o.model}</div>`
-        }
+        }`}).join('')}
                                             </td>
                                             <td>${(o.sellEUR || 0).toFixed(2)} €</td>
                                             <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>

@@ -547,7 +547,6 @@ export default class OrdersView {
             <button class="btn secondary" data-filter-status="all">Всички</button>
             <button class="btn" style="background: #ffc107;" data-filter-status="Очакван">Очаквани</button>
             <button class="btn success" data-filter-status="Доставен">Доставени</button>
-            <button class="btn info" data-filter-status="Свободен">Свободни</button>
             <button class="btn info" data-filter-status="Други">Други</button>
             <button class="btn success" id="show-free-btn">🆓 Свободни часовници (${freeCount})</button>
         </div>
@@ -566,7 +565,7 @@ export default class OrdersView {
                         <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
                     </div>
                     <div class="filter-group">
-                        <label>Модел/Марка:</label>
+                        <label>Марка:</label>
                         <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
                     </div>
                     <div class="filter-group">
@@ -625,7 +624,12 @@ export default class OrdersView {
     }
 
     formatDate(dateStr) {
-        return new Date(dateStr).toLocaleDateString('bg-BG');
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
     }
 
 // ADD: Pagination logic methods
