@@ -16,7 +16,9 @@ export default class OrdersView {
             status: 'all',
             search: '',
             origin: '',
-            vendor: ''
+            vendor: '',
+            model: '',
+            showAllMonths: false
         };
         this.selectedOrders = new Set(); // For bulk operations
 
@@ -33,6 +35,10 @@ export default class OrdersView {
             const stats = await this.reportsModule.getMonthlyStats();
             const allOrders = await this.ordersModule.filterOrders(this.filters);
 
+            // Calculate free watches count across all months
+            const allMonthsOrders = await this.ordersModule.getOrders(null);
+            const freeCount = allMonthsOrders.filter(o => o.status === 'Свободен').length;
+
             // ADD: Update pagination totals
             this.updatePaginationTotals(allOrders.length);
 
@@ -42,9 +48,10 @@ export default class OrdersView {
             return `
         <div class="orders-view">
             ${this.renderStats(stats)}
-            ${this.renderControls()}
+            ${this.renderControls(freeCount)}
             ${this.renderBulkActions()}
-            ${await this.renderFilters()} 
+            ${await this.renderFilters()}
+            ${this.renderActiveFilters()}
             ${this.renderPaginationInfo()}
             ${this.renderTable(ordersForPage)}
             ${this.renderPaginationControls()}
@@ -366,10 +373,20 @@ export default class OrdersView {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
         });
 
+        // Free watches button - Show all free items across all months
+        document.getElementById('show-free-btn')?.addEventListener('click', async () => {
+            this.filters.status = 'Свободен';
+            this.filters.showAllMonths = true;
+            this.filters.search = ''; // Clear search to show all free items
+            this.pagination.currentPage = 1; // Reset to first page
+            await this.refresh();
+        });
+
         // Status filters
         document.querySelectorAll('[data-filter-status]').forEach(btn => {
             btn.addEventListener('click', async (e) => { // MAKE ASYNC
                 this.filters.status = e.target.dataset.filterStatus;
+                this.filters.showAllMonths = false; // Reset showAllMonths when using regular status filter
                 await this.refresh(); // ADD AWAIT
             });
         });
@@ -378,6 +395,13 @@ export default class OrdersView {
         document.getElementById('searchInput')?.addEventListener('input', (e) => {
             this.filters.search = e.target.value;
             this.debouncedRefresh(); // This calls refresh() which is now async
+        });
+
+        // Model filter input
+        document.getElementById('modelFilter')?.addEventListener('input', (e) => {
+            this.filters.model = e.target.value;
+            this.pagination.currentPage = 1; // Reset to first page
+            this.debouncedRefresh();
         });
 
         // Origin filter
@@ -516,7 +540,7 @@ export default class OrdersView {
         `;
     }
 
-    renderControls() {
+    renderControls(freeCount = 0) {
         return `
         <div class="controls">
             <button class="btn" id="new-order-btn">➕ Нова поръчка</button>
@@ -525,6 +549,7 @@ export default class OrdersView {
             <button class="btn success" data-filter-status="Доставен">Доставени</button>
             <button class="btn info" data-filter-status="Свободен">Свободни</button>
             <button class="btn info" data-filter-status="Други">Други</button>
+            <button class="btn success" id="show-free-btn">🆓 Свободни часовници (${freeCount})</button>
         </div>
     `;
     }
@@ -539,6 +564,10 @@ export default class OrdersView {
                     <div class="filter-group">
                         <label>Търсене:</label>
                         <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                    </div>
+                    <div class="filter-group">
+                        <label>Модел/Марка:</label>
+                        <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
                     </div>
                     <div class="filter-group">
                         <label>Източник:</label>
@@ -568,6 +597,31 @@ export default class OrdersView {
                 </div>
             `;
         }
+    }
+
+    renderActiveFilters() {
+        if (this.filters.showAllMonths && this.filters.status === 'Свободен') {
+            return `
+                <div class="active-filter-badge" style="background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>📊 Показване на всички свободни часовници от всички месеци</span>
+                    <button onclick="window.app.ui.currentView.clearFilters()" class="btn btn-sm" style="background: #0c5460; color: white;">✕ Изчисти</button>
+                </div>
+            `;
+        }
+        return '';
+    }
+
+    clearFilters() {
+        this.filters = {
+            status: 'all',
+            search: '',
+            origin: '',
+            vendor: '',
+            model: '',
+            showAllMonths: false
+        };
+        this.pagination.currentPage = 1;
+        this.refresh();
     }
 
     formatDate(dateStr) {

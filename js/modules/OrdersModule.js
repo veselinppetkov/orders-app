@@ -393,7 +393,8 @@ export class OrdersModule {
     // FILTER ORDERS with optimizations
     async filterOrders(filters) {
         try {
-            const targetMonth = this.state.get('currentMonth');
+            // Get orders - if showAllMonths is true, get all orders, otherwise get current month
+            const targetMonth = filters.showAllMonths ? null : this.state.get('currentMonth');
             let orders = await this.getOrders(targetMonth);
 
             // Apply filters efficiently
@@ -408,6 +409,11 @@ export class OrdersModule {
                     o.phone.toLowerCase().includes(searchTerm) ||
                     o.model.toLowerCase().includes(searchTerm)
                 );
+            }
+
+            if (filters.model) {
+                const modelTerm = filters.model.toLowerCase();
+                orders = orders.filter(o => o.model.toLowerCase().includes(modelTerm));
             }
 
             if (filters.origin) {
