@@ -393,9 +393,10 @@ export class OrdersModule {
     // FILTER ORDERS with optimizations
     async filterOrders(filters) {
         try {
-            // Get orders - if showAllMonths is true, get all orders, otherwise get current month
-            const targetMonth = filters.showAllMonths ? null : this.state.get('currentMonth');
-            let orders = await this.getOrders(targetMonth);
+            // Get orders - if showAllMonths is true, use getAllOrders(), otherwise get current month
+            let orders = filters.showAllMonths
+                ? await this.getAllOrders()
+                : await this.getOrders(this.state.get('currentMonth'));
 
             // Apply filters efficiently
             if (filters.status && filters.status !== 'all') {

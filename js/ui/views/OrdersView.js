@@ -35,8 +35,8 @@ export default class OrdersView {
             const stats = await this.reportsModule.getMonthlyStats();
             const allOrders = await this.ordersModule.filterOrders(this.filters);
 
-            // Calculate free watches count across all months
-            const allMonthsOrders = await this.ordersModule.getOrders(null);
+            // Calculate free watches count across all months - use getAllOrders() not getOrders(null)
+            const allMonthsOrders = await this.ordersModule.getAllOrders();
             const freeCount = allMonthsOrders.filter(o => o.status === 'Свободен').length;
 
             // ADD: Update pagination totals
