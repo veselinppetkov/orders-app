@@ -1,4 +1,4 @@
-// js/ui/views/ReportsView.js - CLEANED VERSION
+// js/ui/views/ReportsView.js - WITH REACTIVE PATTERNS
 
 export default class ReportsView {
     constructor(modules, state, eventBus) {
@@ -7,35 +7,64 @@ export default class ReportsView {
         this.eventBus = eventBus;
     }
 
+    // Render delta chip for KPIs
+    renderDeltaChip(delta, label = 'vs миналия месец') {
+        if (delta === 0 || isNaN(delta)) {
+            return `<span class="delta-chip neutral">
+                <span class="delta-arrow">━</span> 0%
+            </span>`;
+        }
+
+        const isPositive = delta > 0;
+        const chipClass = isPositive ? 'positive' : 'negative';
+        const arrow = isPositive ? '↑' : '↓';
+        const displayValue = Math.abs(delta).toFixed(1);
+
+        return `
+            <span class="delta-chip ${chipClass}" title="${label}">
+                <span class="delta-arrow">${arrow}</span> ${displayValue}%
+            </span>
+        `;
+    }
+
     async render() {
         try {
-            // ALL DATA LOADING IS NOW ASYNC
-            const allTimeStats = await this.reportsModule.getAllTimeStats();
+            // Load data with trend information
+            const allTimeStats = await this.reportsModule.getAllTimeStatsWithTrends();
             const originReport = await this.reportsModule.getReportByOrigin();
             const vendorReport = await this.reportsModule.getReportByVendor();
             const monthlyReport = await this.reportsModule.getReportByMonth();
-            // REMOVED: const topClients = await this.reportsModule.getTopClients(5);
+
+            // Calculate velocity from recent months
+            const velocityChip = this.renderDeltaChip(allTimeStats.velocity, 'спрямо предходен месец');
 
             return `
-                <div class="reports-view">
+                <div class="reports-view fade-in">
                     <h2>📊 Отчети и анализи</h2>
-                    
+
                     <div class="summary-cards">
                         <div class="summary-card">
                             <h3>ОБЩО ПОРЪЧКИ</h3>
                             <div class="value">${allTimeStats.totalOrders}</div>
+                            <span class="trend-label">Всички времена</span>
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                             <h3>ОБЩО ПРИХОДИ</h3>
                             <div class="value">${allTimeStats.totalRevenue.toFixed(2)} €</div>
+                            <span class="trend-label">Всички времена</span>
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                             <h3>НЕТНА ПЕЧАЛБА</h3>
-                            <div class="value">${allTimeStats.netProfit.toFixed(2)} €</div>
+                            <div class="value">
+                                ${allTimeStats.netProfit.toFixed(2)} €
+                                ${velocityChip}
+                            </div>
+                            <span class="trend-label">Тенденция: ${allTimeStats.trend === 'up' ? '📈 нагоре' : allTimeStats.trend === 'down' ? '📉 надолу' : '➡️ стабилна'}</span>
                         </div>
                         <div class="summary-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
                             <h3>СРЕДНА ПЕЧАЛБА</h3>
                             <div class="value">${allTimeStats.avgProfit.toFixed(2)} €</div>
+                            <span class="trend-label">На поръчка</span>
                         </div>
                     </div>
                     
@@ -125,6 +154,20 @@ export default class ReportsView {
 
         const sorted = Object.entries(data).sort((a, b) => b[0].localeCompare(a[0]));
 
+        // Calculate deltas between consecutive months
+        const withDeltas = sorted.map(([month, value], index) => {
+            const prevMonth = sorted[index + 1];
+            let delta = 0;
+            if (prevMonth) {
+                const prevProfit = prevMonth[1].profit - prevMonth[1].expenses;
+                const currentProfit = value.profit - value.expenses;
+                if (prevProfit !== 0) {
+                    delta = ((currentProfit - prevProfit) / Math.abs(prevProfit)) * 100;
+                }
+            }
+            return { month, value, delta };
+        });
+
         return `
             <table class="report-table">
                 <thead>
@@ -134,10 +177,11 @@ export default class ReportsView {
                         <th>Приходи</th>
                         <th>Разходи</th>
                         <th>Нетна печалба</th>
+                        <th>Промяна</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${sorted.map(([month, value]) => {
+                    ${withDeltas.map(({ month, value, delta }) => {
             const netProfit = value.profit - value.expenses;
             return `
                             <tr>
@@ -148,6 +192,7 @@ export default class ReportsView {
                                 <td class="${netProfit >= 0 ? 'profit-positive' : 'profit-negative'}">
                                     <strong>${netProfit.toFixed(2)} €</strong>
                                 </td>
+                                <td>${this.renderDeltaChip(delta, 'vs предишен месец')}</td>
                             </tr>
                         `;
         }).join('')}
@@ -159,6 +204,7 @@ export default class ReportsView {
                         <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} €</strong></td>
                         <td><strong>${sorted.reduce((sum, [, val]) => sum + val.expenses, 0).toFixed(2)} €</strong></td>
                         <td><strong>${sorted.reduce((sum, [, val]) => sum + (val.profit - val.expenses), 0).toFixed(2)} €</strong></td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
