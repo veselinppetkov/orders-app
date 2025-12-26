@@ -16,6 +16,13 @@
     --warning-sand: #D2B48C;
     --danger-rose: #C98B8B;
 
+    /* Financial Colors - High Contrast */
+    --text-success-strong: #2D5A27;
+    --text-danger-strong: #8C2B2B;
+    --bg-success-subtle: #F0F7F0;
+    --bg-danger-subtle: #FDF2F2;
+    --text-neutral: #5A554E;
+
     /* Shadows */
     --shadow-sm: 0 1px 2px rgba(15, 15, 16, 0.04), 0 1px 4px rgba(15, 15, 16, 0.02);
     --shadow-md: 0 2px 4px rgba(15, 15, 16, 0.06), 0 4px 8px rgba(15, 15, 16, 0.04);
@@ -35,8 +42,9 @@
     --radius-lg: 18px;
     --radius-full: 9999px;
 
-    /* Typography */
-    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'SF Pro Display', system-ui, sans-serif;
+    /* Typography - Premium Fonts */
+    --font-headings: 'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --font-data: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-mono: 'SF Mono', 'Consolas', 'Monaco', monospace;
 }
 
@@ -51,7 +59,7 @@
 }
 
 body {
-    font-family: var(--font-sans);
+    font-family: var(--font-data);
     background: var(--bg-base);
     color: var(--text-primary);
     min-height: 100vh;
@@ -60,17 +68,27 @@ body {
     font-weight: 400;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "tnum" 1;
 }
 
 h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-headings);
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     line-height: 1.2;
 }
 
 h1 { font-size: 28px; }
 h2 { font-size: 22px; }
 h3 { font-size: 18px; }
+
+/* KPI Values - Manrope Bold */
+.kpi-value, .stat-value, .summary-card .value {
+    font-family: var(--font-headings);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-feature-settings: "tnum" 1;
+}
 
 /* ============================================
    LAYOUT CONTAINER
@@ -306,21 +324,24 @@ th {
     color: var(--text-secondary);
     padding: 12px 16px;
     text-align: left;
+    font-family: var(--font-data);
     font-weight: 600;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--border-default);
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid var(--accent-beige);
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 td {
-    padding: 16px;
+    padding: 18px 16px;
     border-bottom: 1px solid var(--border-default);
     background: var(--bg-elevated);
     font-size: 14px;
+    font-family: var(--font-data);
+    font-weight: 400;
 }
 
 tr:last-child td {
@@ -732,19 +753,22 @@ tr:hover td {
 }
 
 .insight-label {
-    font-size: 11px;
+    font-family: var(--font-data);
+    font-size: 10px;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 1px;
     margin-bottom: 6px;
     font-weight: 600;
 }
 
 .insight-value {
-    font-size: 18px;
-    font-weight: 600;
+    font-family: var(--font-headings);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
 /* ============================================
@@ -879,4 +903,193 @@ tr:hover td {
 
 .pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================
+   FINANCIAL CHIPS - HIGH CONTRAST
+   ============================================ */
+
+.financial-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: var(--font-headings);
+    font-weight: 600;
+    font-size: 14px;
+    font-feature-settings: "tnum" 1;
+}
+
+.financial-chip.positive {
+    color: var(--text-success-strong);
+    background: var(--bg-success-subtle);
+}
+
+.financial-chip.negative {
+    color: var(--text-danger-strong);
+    background: var(--bg-danger-subtle);
+}
+
+.financial-chip.neutral {
+    color: var(--text-neutral);
+    background: var(--bg-surface);
+}
+
+/* Large Financial Display (for KPIs) */
+.financial-large {
+    font-family: var(--font-headings);
+    font-weight: 700;
+    font-size: 32px;
+    letter-spacing: -0.03em;
+    font-feature-settings: "tnum" 1;
+}
+
+.financial-large.positive {
+    color: var(--text-success-strong);
+}
+
+.financial-large.negative {
+    color: var(--text-danger-strong);
+}
+
+/* ============================================
+   SOFT OUTLINE BADGES - PREMIUM
+   ============================================ */
+
+.badge-soft {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-family: var(--font-data);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid;
+}
+
+/* Status Badges - Soft Outline */
+.badge-soft.delivered {
+    background: rgba(46, 204, 113, 0.1);
+    color: #219150;
+    border-color: rgba(46, 204, 113, 0.3);
+}
+
+.badge-soft.pending {
+    background: rgba(255, 193, 7, 0.1);
+    color: #E6A700;
+    border-color: rgba(255, 193, 7, 0.3);
+}
+
+.badge-soft.free {
+    background: rgba(155, 191, 154, 0.1);
+    color: var(--text-success-strong);
+    border-color: rgba(155, 191, 154, 0.3);
+}
+
+.badge-soft.other {
+    background: rgba(90, 85, 78, 0.1);
+    color: var(--text-secondary);
+    border-color: rgba(90, 85, 78, 0.3);
+}
+
+/* ============================================
+   DOT INDICATORS - CLEAN BRAND TAGS
+   ============================================ */
+
+.origin-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-data);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.origin-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Brand Colors for Origin Dots */
+.origin-dot.olx {
+    background: #002F34;
+}
+
+.origin-dot.facebook {
+    background: #1877F2;
+}
+
+.origin-dot.instagram {
+    background: #E4405F;
+}
+
+.origin-dot.website {
+    background: var(--accent-strong);
+}
+
+.origin-dot.referral {
+    background: var(--success-sage);
+}
+
+.origin-dot.other {
+    background: var(--text-secondary);
+}
+
+/* ============================================
+   ENHANCED KPI CARDS - MICRO-LABEL STYLE
+   ============================================ */
+
+.kpi-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-left: 4px solid var(--accent-beige);
+    padding: var(--space-lg);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: all 150ms ease-out;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-left-color: var(--accent-strong);
+}
+
+.kpi-label {
+    font-family: var(--font-data);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.kpi-value {
+    font-family: var(--font-headings);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    font-feature-settings: "tnum" 1;
+}
+
+/* Active Tab/Filter - High Contrast Bottom Border */
+.tab.active {
+    color: var(--text-primary);
+    font-weight: 600;
+    border-bottom: 3px solid var(--text-primary);
+    background: transparent;
+}
+
+/* Active Filter Chips */
+.filter-chip.active {
+    background: var(--text-primary);
+    color: var(--bg-elevated);
+    border-color: var(--text-primary);
 }

@@ -25,19 +25,22 @@
 }
 
 .stat-label {
-    font-size: 11px;
+    font-family: var(--font-data);
+    font-size: 10px;
     color: var(--text-secondary);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 1px;
     font-weight: 600;
 }
 
 .stat-value {
-    font-size: 24px;
-    font-weight: 600;
+    font-family: var(--font-headings);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
 /* ============================================
@@ -213,19 +216,22 @@ textarea {
 }
 
 .summary-card h3 {
-    font-size: 12px;
+    font-family: var(--font-data);
+    font-size: 10px;
     color: var(--text-secondary);
     margin-bottom: var(--space-sm);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 1px;
     font-weight: 600;
 }
 
 .summary-card .value {
+    font-family: var(--font-headings);
     font-size: 32px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
 /* ============================================
@@ -483,19 +489,22 @@ textarea {
 }
 
 .inventory-stats .stat-label {
-    font-size: 11px;
+    font-family: var(--font-data);
+    font-size: 10px;
     color: var(--text-secondary);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 1px;
     font-weight: 600;
 }
 
 .inventory-stats .stat-value {
-    font-size: 24px;
-    font-weight: 600;
+    font-family: var(--font-headings);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
 /* ============================================
