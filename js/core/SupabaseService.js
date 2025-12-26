@@ -733,8 +733,8 @@ async getExpenses(month = null) {
             const inventoryId = `box_${data.id}`;
             const transformedItem = this.transformInventoryFromDB(data);
             return {
-                id: inventoryId,
                 ...transformedItem,
+                id: inventoryId,
                 dbId: data.id
             };
         });
@@ -775,8 +775,8 @@ async getExpenses(month = null) {
             const inventoryId = `box_${data.id}`;
             const transformedItem = this.transformInventoryFromDB(data);
             return {
-                id: inventoryId,
                 ...transformedItem,
+                id: inventoryId,
                 dbId: data.id
             };
         });
@@ -846,7 +846,6 @@ async getExpenses(month = null) {
         }
 
         return {
-            id: dbItem.id,
             brand: dbItem.brand,
             type: dbItem.type,
             purchasePrice: purchasePriceEUR,  // Always use EUR
