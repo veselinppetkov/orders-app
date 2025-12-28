@@ -1137,6 +1137,142 @@ textarea {
 }
 
 /* ============================================
+   QUICK WIN A: STICKY TABLE HEADERS
+   ============================================ */
+
+.orders-table thead th,
+.inventory-table thead th,
+.clients-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    z-index: 15;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Ensure header text remains readable with solid background */
+.orders-table thead th::before,
+.inventory-table thead th::before,
+.clients-table thead th::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-elevated);
+    z-index: -1;
+}
+
+/* ============================================
+   QUICK WIN B: ROW HOVER ACTIONS (PROGRESSIVE DISCLOSURE)
+   ============================================ */
+
+/* Hide action buttons by default */
+.orders-table tbody tr .action-buttons,
+.inventory-table tbody tr .action-buttons,
+.clients-table tbody tr .action-buttons {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
+}
+
+/* Show action buttons on row hover */
+.orders-table tbody tr:hover .action-buttons,
+.inventory-table tbody tr:hover .action-buttons,
+.clients-table tbody tr:hover .action-buttons {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Always show on touch devices (no hover support) */
+@media (hover: none) {
+    .orders-table tbody tr .action-buttons,
+    .inventory-table tbody tr .action-buttons,
+    .clients-table tbody tr .action-buttons {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Add subtle row highlight on hover for better UX */
+.orders-table tbody tr:hover,
+.inventory-table tbody tr:hover,
+.clients-table tbody tr:hover {
+    background: rgba(216, 199, 163, 0.04);
+    transition: background 150ms ease-out;
+}
+
+/* Exception: Keep checkboxes and status badges always visible */
+.order-checkbox,
+.status-badge {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* ============================================
+   QUICK WIN C: INPUT CLEAR BUTTONS
+   ============================================ */
+
+/* Wrapper for input + clear button */
+.input-with-clear {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.input-with-clear input {
+    width: 100%;
+    padding-right: 32px; /* Space for clear button */
+}
+
+/* Clear button styling */
+.input-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    color: var(--bg-elevated);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    transition: all 120ms ease-out;
+    opacity: 0.6;
+}
+
+.input-clear-btn:hover {
+    opacity: 1;
+    background: var(--text-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.input-clear-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Show clear button when input has value */
+.input-with-clear.has-value .input-clear-btn {
+    display: flex;
+}
+
+/* Ensure clear button works with filter inputs */
+.filter-group {
+    position: relative;
+}
+
+.filter-group .input-with-clear {
+    width: 100%;
+}
+
+/* ============================================
    RESPONSIVE DESIGN
    ============================================ */
 

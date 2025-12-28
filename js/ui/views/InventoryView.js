@@ -99,7 +99,10 @@ export default class InventoryView {
             <div class="filter-section">
                 <div class="filter-group">
                     <label>Търсене:</label>
-                    <input type="text" id="searchInventory" placeholder="Бранд, тип..." value="${this.searchTerm}">
+                    <div class="input-with-clear ${this.searchTerm ? 'has-value' : ''}">
+                        <input type="text" id="searchInventory" placeholder="Бранд, тип..." value="${this.searchTerm}">
+                        <button class="input-clear-btn" type="button" aria-label="Clear search">×</button>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label>Филтър:</label>
@@ -285,20 +288,46 @@ export default class InventoryView {
             });
         });
 
-        // Search input with debouncing
-        document.getElementById('searchInventory')?.addEventListener('input', (e) => {
-            this.searchTerm = e.target.value;
+        // Search input with clear button and debouncing
+        const searchInputWrapper = document.querySelector('.input-with-clear');
+        const searchInput = document.getElementById('searchInventory');
+        const clearBtn = searchInputWrapper?.querySelector('.input-clear-btn');
 
-            // Clear existing timer
-            if (this.searchDebounceTimer) {
-                clearTimeout(this.searchDebounceTimer);
+        if (searchInput && searchInputWrapper) {
+            // Toggle has-value class based on input value
+            searchInput.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value;
+                searchInputWrapper.classList.toggle('has-value', e.target.value.length > 0);
+
+                // Clear existing timer
+                if (this.searchDebounceTimer) {
+                    clearTimeout(this.searchDebounceTimer);
+                }
+
+                // Set new timer to refresh after 300ms of inactivity
+                this.searchDebounceTimer = setTimeout(async () => {
+                    await this.refresh();
+                }, 300);
+            });
+
+            // Clear button click handler
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    this.searchTerm = '';
+                    searchInput.value = '';
+                    searchInputWrapper.classList.remove('has-value');
+                    searchInput.focus();
+
+                    // Clear any pending debounce timer
+                    if (this.searchDebounceTimer) {
+                        clearTimeout(this.searchDebounceTimer);
+                    }
+
+                    // Refresh immediately
+                    this.refresh();
+                });
             }
-
-            // Set new timer to refresh after 300ms of inactivity
-            this.searchDebounceTimer = setTimeout(async () => {
-                await this.refresh();
-            }, 300);
-        });
+        }
 
         // Type and sort filters
         document.getElementById('typeFilter')?.addEventListener('change', async (e) => {

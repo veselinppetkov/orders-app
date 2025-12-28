@@ -408,11 +408,30 @@ export default class OrdersView {
             });
         });
 
-        // Search input - DEBOUNCED ASYNC
-        document.getElementById('searchInput')?.addEventListener('input', (e) => {
-            this.filters.search = e.target.value;
-            this.debouncedRefresh(); // This calls refresh() which is now async
-        });
+        // Search input with clear button - DEBOUNCED ASYNC
+        const searchInputWrapper = document.querySelector('.input-with-clear');
+        const searchInput = document.getElementById('searchInput');
+        const clearBtn = searchInputWrapper?.querySelector('.input-clear-btn');
+
+        if (searchInput && searchInputWrapper) {
+            // Toggle has-value class based on input value
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                searchInputWrapper.classList.toggle('has-value', e.target.value.length > 0);
+                this.debouncedRefresh(); // This calls refresh() which is now async
+            });
+
+            // Clear button click handler
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    this.filters.search = '';
+                    searchInput.value = '';
+                    searchInputWrapper.classList.remove('has-value');
+                    searchInput.focus();
+                    this.debouncedRefresh();
+                });
+            }
+        }
 
         // Origin filter
         document.getElementById('filterOrigin')?.addEventListener('change', async (e) => { // MAKE ASYNC
@@ -572,7 +591,10 @@ export default class OrdersView {
                 <div class="filter-section">
                     <div class="filter-group">
                         <label>Търсене:</label>
-                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                        <div class="input-with-clear ${this.filters.search ? 'has-value' : ''}">
+                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                            <button class="input-clear-btn" type="button" aria-label="Clear search">×</button>
+                        </div>
                     </div>
                     <div class="filter-group">
                         <label>Източник:</label>
