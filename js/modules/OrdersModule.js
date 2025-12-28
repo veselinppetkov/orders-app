@@ -374,9 +374,10 @@ export class OrdersModule {
         let settings = this.state.get('settings');
 
         // If settings not loaded or invalid, load them first
+        // ✅ FIX: Check for eurRate specifically (required for current system)
         // ✅ FIX: Check for undefined/null explicitly, not falsy (0 is valid for factoryShipping)
         if (!settings ||
-            (!settings.usdRate && !settings.eurRate) ||
+            !settings.eurRate ||
             settings.factoryShipping === undefined ||
             settings.factoryShipping === null) {
             try {
