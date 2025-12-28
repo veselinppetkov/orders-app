@@ -701,13 +701,9 @@ export class OrdersModule {
 
         const rate = parseFloat(settings.eurRate) || 0.92;
 
-        // Normalize amounts: accept legacy BGN input but convert to EUR immediately
-        const extrasEUR = parseFloat(data.extrasEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.extrasBGN) || 0);
-        const sellEUR = parseFloat(data.sellEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.sellBGN) || 0);
-
-        // BGN values for backward compatibility (calculated from EUR)
-        const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
-        const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
+        // Use EUR values directly (no BGN conversion)
+        const extrasEUR = parseFloat(data.extrasEUR) || 0;
+        const sellEUR = parseFloat(data.sellEUR) || 0;
 
         // Prepare order with guaranteed settings
         const order = {
@@ -721,9 +717,9 @@ export class OrdersModule {
             costUSD: costUSD,
             shippingUSD: shippingUSD,
             rate: rate,
-            // BGN fields (legacy/historical)
-            extrasBGN: extrasBGN,
-            sellBGN: sellBGN,
+            // BGN fields (kept for database audit, not used in calculations)
+            extrasBGN: 0,
+            sellBGN: 0,
             // EUR fields (primary)
             extrasEUR: extrasEUR,
             sellEUR: sellEUR,
@@ -735,13 +731,13 @@ export class OrdersModule {
             imageData: data.imageData || null
         };
 
-        // Calculate derived fields (EUR primary)
+        // Calculate derived fields (EUR only)
         order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         order.balanceEUR = sellEUR - order.totalEUR;
 
-        // Backward-compatible BGN values derived from EUR
-        order.totalBGN = CurrencyUtils.convertEURtoBGN(order.totalEUR);
-        order.balanceBGN = CurrencyUtils.convertEURtoBGN(order.balanceEUR);
+        // BGN fields kept for database audit (not calculated)
+        order.totalBGN = 0;
+        order.balanceBGN = 0;
 
         return order;
     }
@@ -936,13 +932,13 @@ export class OrdersModule {
         const rate = parseFloat(settings.eurRate) || order.rate || 0.92;
 
         const updatedOrder = { ...order, rate };
-        const extrasEUR = order.extrasEUR ?? CurrencyUtils.convertBGNtoEUR(order.extrasBGN || 0);
-        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const extrasEUR = order.extrasEUR || 0;
+        const sellEUR = order.sellEUR || 0;
 
         updatedOrder.totalEUR = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR;
         updatedOrder.balanceEUR = sellEUR - updatedOrder.totalEUR;
-        updatedOrder.totalBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.totalEUR);
-        updatedOrder.balanceBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.balanceEUR);
+        updatedOrder.totalBGN = 0;
+        updatedOrder.balanceBGN = 0;
 
         return updatedOrder;
     }

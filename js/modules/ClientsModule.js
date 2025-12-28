@@ -419,8 +419,8 @@ export class ClientsModule {
     }
 
     getOrderEurMetrics(order) {
-        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
-        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+        const sellEUR = order.sellEUR || 0;
+        const balanceEUR = order.balanceEUR || 0;
 
         return { sellEUR, balanceEUR };
     }

@@ -319,13 +319,9 @@ console.log('✅ Business modules initialized');
 
     getDefaultSettings() {
         return {
-            // EUR is now the primary currency (Bulgaria euro adoption Jan 1, 2026)
+            // EUR-only currency settings
             eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
             baseCurrency: 'EUR',
-            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
-
-            // Legacy BGN settings (kept for historical data)
-            usdRate: 1.71, // Legacy USD to BGN rate
 
             // Other settings
             factoryShipping: 1.5,
