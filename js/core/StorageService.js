@@ -132,24 +132,19 @@ export class StorageService {
         }
     }
 
-    // EXPORT/IMPORT (basic functionality)
+    // EXPORT settings and UI preferences only (not business data)
     async exportData() {
         try {
-            console.log('📤 Starting data export...');
+            console.log('📤 Starting settings export...');
 
             const data = {
-                monthlyData: this.load('monthlyData') || {},
-                clientsData: this.load('clientsData') || {},
-                inventory: this.load('inventory') || {},
                 settings: this.load('settings') || {},
+                currentMonth: localStorage.getItem('orderSystem_currentMonth'),
+                availableMonths: JSON.parse(localStorage.getItem('orderSystem_availableMonths') || '[]'),
                 exportDate: new Date().toISOString(),
-                version: '2.0'
+                version: '2.0',
+                type: 'settings-only'
             };
-
-            // Calculate totals for user info
-            data.totalOrders = Object.values(data.monthlyData)
-                .reduce((sum, month) => sum + (month.orders?.length || 0), 0);
-            data.totalClients = Object.keys(data.clientsData).length;
 
             const jsonStr = JSON.stringify(data, null, 2);
             const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -157,13 +152,13 @@ export class StorageService {
 
             const a = document.createElement('a');
             a.href = url;
-            a.download = `orders-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `settings-backup-${new Date().toISOString().split('T')[0]}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            console.log('✅ Data export completed');
+            console.log('✅ Settings export completed');
             return true;
 
         } catch (error) {
@@ -186,13 +181,18 @@ export class StorageService {
                     const data = JSON.parse(e.target.result);
                     this.validateImportData(data);
 
-                    // Import data (overwrites existing)
-                    if (data.monthlyData) this.save('monthlyData', data.monthlyData);
-                    if (data.clientsData) this.save('clientsData', data.clientsData);
-                    if (data.inventory) this.save('inventory', data.inventory);
-                    if (data.settings) this.save('settings', data.settings);
+                    // Import settings and UI preferences only
+                    if (data.settings) {
+                        this.save('settings', data.settings);
+                    }
+                    if (data.currentMonth) {
+                        localStorage.setItem('orderSystem_currentMonth', data.currentMonth);
+                    }
+                    if (data.availableMonths) {
+                        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(data.availableMonths));
+                    }
 
-                    console.log('✅ Data import completed');
+                    console.log('✅ Settings import completed');
                     resolve(data);
 
                 } catch (error) {
@@ -214,10 +214,16 @@ export class StorageService {
             throw new Error('Invalid import data format');
         }
 
-        const requiredFields = ['monthlyData', 'clientsData', 'settings'];
-        for (const field of requiredFields) {
-            if (!(field in data)) {
-                throw new Error(`Missing required field: ${field}`);
+        // For settings-only exports, only require settings field
+        if (data.type === 'settings-only') {
+            if (!('settings' in data)) {
+                throw new Error('Missing required field: settings');
+            }
+        } else {
+            // For legacy exports, warn that business data will be ignored
+            console.warn('⚠️ This appears to be a legacy backup file. Only settings will be imported.');
+            if (!('settings' in data)) {
+                throw new Error('No settings found in import file');
             }
         }
     }

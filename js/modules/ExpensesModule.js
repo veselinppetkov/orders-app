@@ -34,7 +34,6 @@ export class ExpensesModule {
         this.stats = {
             totalOperations: 0,
             supabaseOperations: 0,
-            fallbackOperations: 0,
             monthsInitialized: 0,
             defaultExpensesAdded: 0,
             customExpensesCreated: 0
@@ -68,59 +67,33 @@ export class ExpensesModule {
     // CORE CRUD OPERATIONS WITH SUPABASE
     // ============================================
 
-    // GET EXPENSES with Supabase priority
-// GET EXPENSES with Supabase priority (preserves defaults)
-async getExpenses(month = null) {
-    const targetMonth = month || this.state.get('currentMonth');
-
-    try {
-        // Ensure month structure exists with defaults
-        await this.ensureMonthExpenses(targetMonth);
+    // Get expenses from Supabase (merged with default templates)
+    async getExpenses(month = null) {
+        const targetMonth = month || this.state.get('currentMonth');
 
         try {
-            // Try Supabase first
+            // Ensure month structure exists with defaults
+            await this.ensureMonthExpenses(targetMonth);
+
+            // Load custom expenses from Supabase
             const supabaseExpenses = await this.supabase.getExpenses(targetMonth);
             this.stats.supabaseOperations++;
 
-            // Smart backup: Don't overwrite defaults with empty Supabase results
-            if (supabaseExpenses.length > 0) {
-                // Supabase has data - merge with defaults and return combined result
-                this.backupExpensesToLocalStorage(targetMonth, supabaseExpenses);
+            // Get default expenses from localStorage
+            const defaults = this.getExpensesFromLocalStorage(targetMonth);
+            const defaultExpenses = defaults.filter(e => e.isDefault === true);
 
-                // CRITICAL: Return the merged result (defaults + customs) from localStorage
-                const mergedExpenses = this.getExpensesFromLocalStorage(targetMonth);
-                console.log(`✅ Loaded ${supabaseExpenses.length} expenses from Supabase, merged with defaults. Total: ${mergedExpenses.length} expenses for ${targetMonth}`);
-                return mergedExpenses;
-            } else {
-                // Supabase empty - check if localStorage has defaults
-                const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
+            // Merge defaults with custom expenses from Supabase
+            const mergedExpenses = [...defaultExpenses, ...supabaseExpenses];
 
-                if (localExpenses.length > 0) {
-                    // Keep localStorage defaults (don't overwrite with empty)
-                    console.log(`✅ Using ${localExpenses.length} default expenses from localStorage for ${targetMonth}`);
-                    return localExpenses;
-                } else {
-                    // Both empty - return empty array
-                    console.log(`ℹ️ No expenses found for ${targetMonth}`);
-                    return [];
-                }
-            }
+            console.log(`✅ Loaded ${supabaseExpenses.length} custom expenses from Supabase + ${defaultExpenses.length} defaults. Total: ${mergedExpenses.length} for ${targetMonth}`);
+            return mergedExpenses;
 
-        } catch (supabaseError) {
-            console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
-            this.stats.fallbackOperations++;
-
-            // Fallback to localStorage (which has defaults from ensureMonthExpenses)
-            const localExpenses = this.getExpensesFromLocalStorage(targetMonth);
-            console.log(`✅ Loaded ${localExpenses.length} expenses from localStorage for ${targetMonth}`);
-            return localExpenses;
+        } catch (error) {
+            console.error('❌ Failed to get expenses:', error);
+            throw error;
         }
-
-    } catch (error) {
-        console.error('❌ Failed to get expenses:', error);
-        return [];
     }
-}
 
     // GET EXPENSES sorted by amount (highest to lowest)
 async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
@@ -171,74 +144,31 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
             // Emit before-create event for undo/redo
             this.eventBus.emit('expense:before-created', expenseData);
 
-            try {
-                // Prepare expense data for Supabase
-                const expenseToCreate = {
-                    month: currentMonth,
-                    name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
-                    note: expenseData.note?.trim() || '',
-                    isDefault: false
-                };
+            // Prepare expense data for Supabase
+            const expenseToCreate = {
+                month: currentMonth,
+                name: expenseData.name.trim(),
+                amount: parseFloat(expenseData.amount) || 0,
+                note: expenseData.note?.trim() || '',
+                isDefault: false
+            };
 
-                // Try Supabase first
-                const savedExpense = await this.supabase.createExpense(expenseToCreate);
-                this.stats.supabaseOperations++;
-                this.stats.totalOperations++;
-                this.stats.customExpensesCreated++;
+            // Create in Supabase
+            const savedExpense = await this.supabase.createExpense(expenseToCreate);
+            this.stats.supabaseOperations++;
+            this.stats.totalOperations++;
+            this.stats.customExpensesCreated++;
 
-                // Backup to localStorage (use Supabase ID)
-                const localExpense = {
-                    id: savedExpense.id,  // Use Supabase ID for consistency
-                    name: savedExpense.name,
-                    amount: savedExpense.amount,
-                    note: savedExpense.note || '',
-                    isDefault: false,
-                    createdAt: new Date().toISOString()
-                };
+            // Emit successful creation
+            this.eventBus.emit('expense:created', {
+                expense: savedExpense,
+                month: currentMonth,
+                operationId,
+                source: 'supabase'
+            });
 
-                await this.addExpenseToLocalStorage(currentMonth, localExpense);
-
-                // Emit successful creation
-                this.eventBus.emit('expense:created', {
-                    expense: savedExpense,
-                    month: currentMonth,
-                    operationId,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Expense created successfully in Supabase:', savedExpense.id);
-                return savedExpense;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
-                this.stats.fallbackOperations++;
-                this.stats.totalOperations++;
-                this.stats.customExpensesCreated++;
-
-                // Fallback: Create with local ID
-                const localExpense = {
-                    id: this.nextCustomId++,
-                    name: expenseData.name.trim(),
-                    amount: parseFloat(expenseData.amount) || 0,
-                    note: expenseData.note?.trim() || '',
-                    isDefault: false,
-                    createdAt: new Date().toISOString()
-                };
-
-                await this.addExpenseToLocalStorage(currentMonth, localExpense);
-
-                // Emit fallback creation
-                this.eventBus.emit('expense:created', {
-                    expense: localExpense,
-                    month: currentMonth,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Expense created in localStorage fallback:', localExpense.id);
-                return localExpense;
-            }
+            console.log('✅ Expense created successfully in Supabase:', savedExpense.id);
+            return savedExpense;
 
         } catch (error) {
             this.eventBus.emit('expense:create-failed', { error, expenseData, operationId });
@@ -279,7 +209,6 @@ async update(expenseId, expenseData) {
         // ============================================
         if (isDefaultExpense) {
             console.log('📝 Updating default expense (local-only):', expenseId);
-            this.stats.fallbackOperations++;
             this.stats.totalOperations++;
 
             // Update localStorage only, PRESERVING isDefault flag
@@ -304,58 +233,26 @@ async update(expenseId, expenseData) {
         }
 
         // ============================================
-        // Custom expenses: Try Supabase first
+        // Custom expenses: Update in Supabase
         // ============================================
-        try {
-            const updatedExpense = await this.supabase.updateExpense(expenseId, {
-                name: expenseData.name.trim(),
-                amount: parseFloat(expenseData.amount) || 0,
-                note: expenseData.note?.trim() || ''
-            });
+        const updatedExpense = await this.supabase.updateExpense(expenseId, {
+            name: expenseData.name.trim(),
+            amount: parseFloat(expenseData.amount) || 0,
+            note: expenseData.note?.trim() || ''
+        });
 
-            this.stats.supabaseOperations++;
-            this.stats.totalOperations++;
+        this.stats.supabaseOperations++;
+        this.stats.totalOperations++;
 
-            // Update localStorage backup (custom expenses have isDefault: false)
-            await this.updateExpenseInLocalStorage(currentMonth, expenseId, {
-                ...updatedExpense,
-                isDefault: false  // Explicit for clarity
-            });
+        this.eventBus.emit('expense:updated', {
+            expense: updatedExpense,
+            month: currentMonth,
+            operationId,
+            source: 'supabase'
+        });
 
-            this.eventBus.emit('expense:updated', {
-                expense: updatedExpense,
-                month: currentMonth,
-                operationId,
-                source: 'supabase'
-            });
-
-            console.log('✅ Custom expense updated in Supabase:', expenseId);
-            return updatedExpense;
-
-        } catch (supabaseError) {
-            console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
-            this.stats.fallbackOperations++;
-            this.stats.totalOperations++;
-
-            const updates = {
-                name: expenseData.name.trim(),
-                amount: parseFloat(expenseData.amount) || 0,
-                note: expenseData.note?.trim() || '',
-                isDefault: false  // Custom expenses are not defaults
-            };
-
-            const localExpense = await this.updateExpenseInLocalStorage(currentMonth, expenseId, updates);
-
-            this.eventBus.emit('expense:updated', {
-                expense: localExpense,
-                month: currentMonth,
-                operationId,
-                source: 'localStorage'
-            });
-
-            console.log('✅ Custom expense updated in localStorage fallback:', expenseId);
-            return localExpense;
-        }
+        console.log('✅ Custom expense updated in Supabase:', expenseId);
+        return updatedExpense;
 
     } catch (error) {
         this.eventBus.emit('expense:update-failed', { error, expenseId, expenseData, operationId });
@@ -383,43 +280,15 @@ async update(expenseId, expenseData) {
             // Emit before-delete event for undo/redo
             this.eventBus.emit('expense:before-deleted', expenseToDelete);
 
-            try {
-                // Try Supabase first (only if it has a numeric ID from Supabase)
-                if (typeof expenseId === 'number' && expenseId < 1000) {
-                    await this.supabase.deleteExpense(expenseId);
-                    this.stats.supabaseOperations++;
-                } else {
-                    // Skip Supabase for local-only expenses (ID >= 1000)
-                    console.log('⚠️ Local-only expense, skipping Supabase delete');
-                    this.stats.fallbackOperations++;
-                }
+            // Check if this is a default expense (local-only)
+            const isDefaultExpense = expenseToDelete.isDefault === true;
 
+            if (isDefaultExpense) {
+                // Default expenses are localStorage-only
                 this.stats.totalOperations++;
 
-                // Remove from localStorage backup
                 await this.deleteExpenseFromLocalStorage(currentMonth, expenseId);
 
-                // Emit successful deletion
-                this.eventBus.emit('expense:deleted', {
-                    expenseId,
-                    expense: expenseToDelete,
-                    month: currentMonth,
-                    operationId,
-                    source: typeof expenseId === 'number' && expenseId < 1000 ? 'supabase' : 'localStorage'
-                });
-
-                console.log('✅ Expense deleted successfully:', expenseId);
-                return true;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase delete failed, falling back to localStorage:', supabaseError.message);
-                this.stats.fallbackOperations++;
-                this.stats.totalOperations++;
-
-                // Fallback: Delete from localStorage only
-                await this.deleteExpenseFromLocalStorage(currentMonth, expenseId);
-
-                // Emit fallback deletion
                 this.eventBus.emit('expense:deleted', {
                     expenseId,
                     expense: expenseToDelete,
@@ -428,9 +297,26 @@ async update(expenseId, expenseData) {
                     source: 'localStorage'
                 });
 
-                console.log('✅ Expense deleted in localStorage fallback:', expenseId);
+                console.log('✅ Default expense deleted from localStorage:', expenseId);
                 return true;
             }
+
+            // Custom expenses - delete from Supabase
+            await this.supabase.deleteExpense(expenseId);
+            this.stats.supabaseOperations++;
+            this.stats.totalOperations++;
+
+            // Emit successful deletion
+            this.eventBus.emit('expense:deleted', {
+                expenseId,
+                expense: expenseToDelete,
+                month: currentMonth,
+                operationId,
+                source: 'supabase'
+            });
+
+            console.log('✅ Custom expense deleted from Supabase:', expenseId);
+            return true;
 
         } catch (error) {
             this.eventBus.emit('expense:delete-failed', { error, expenseId, operationId });
@@ -450,42 +336,6 @@ async update(expenseId, expenseData) {
         return monthlyData[month]?.expenses || [];
     }
 
-    backupExpensesToLocalStorage(month, expenses) {
-        const monthlyData = this.state.get('monthlyData') || {};
-        if (!monthlyData[month]) {
-            monthlyData[month] = { orders: [], expenses: [] };
-        }
-
-        // CRITICAL FIX: Merge instead of replace to preserve default expenses
-        // 1. Keep all default expenses (isDefault: true) from localStorage
-        const existingDefaults = (monthlyData[month].expenses || [])
-            .filter(expense => expense.isDefault === true);
-
-        // 2. Get all custom expenses from Supabase (they don't have isDefault or it's false)
-        const customExpenses = expenses.filter(expense => expense.isDefault !== true);
-
-        // 3. Merge: defaults first, then customs
-        monthlyData[month].expenses = [...existingDefaults, ...customExpenses];
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        console.log(`✅ Merged expenses for ${month}: ${existingDefaults.length} defaults + ${customExpenses.length} customs = ${monthlyData[month].expenses.length} total`);
-    }
-
-    async addExpenseToLocalStorage(month, expense) {
-        const monthlyData = this.state.get('monthlyData') || {};
-
-        // Ensure month structure exists
-        if (!monthlyData[month]) {
-            monthlyData[month] = { orders: [], expenses: [] };
-        }
-
-        monthlyData[month].expenses.push(expense);
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-    }
 
     async updateExpenseInLocalStorage(month, expenseId, updates) {
         const monthlyData = this.state.get('monthlyData') || {};
@@ -808,8 +658,6 @@ async update(expenseId, expenseData) {
     getStatistics() {
         return {
             ...this.stats,
-            successRate: (this.stats.supabaseOperations + this.stats.fallbackOperations) > 0 ?
-                ((this.stats.supabaseOperations / (this.stats.supabaseOperations + this.stats.fallbackOperations)) * 100).toFixed(1) + '%' : '0%',
             pendingOperations: this.pendingOperations.size,
             defaultExpenseCount: this.defaultExpenses.length,
             nextCustomId: this.nextCustomId
