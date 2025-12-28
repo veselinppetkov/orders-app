@@ -180,10 +180,12 @@ export default class OrdersView {
                 </span>
             </td>
             <td>${order.notes}</td>
-            <td>
-                <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
-                <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
-                <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+            <td class="actions-cell">
+                <div class="row-actions">
+                    <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
+                    <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
+                    <button class="btn btn-sm danger" data-action="delete" data-id="${order.id}" title="Изтриване">🗑️</button>
+                </div>
             </td>
         </tr>
     `;
@@ -547,21 +549,29 @@ export default class OrdersView {
 
     // Utility methods remain the same
     renderStats(stats) {
+        // Helper function to get KPI class based on type and value
+        const getKpiClass = (type, value) => {
+            if (type === 'profit') return value >= 0 ? 'kpi-profit' : 'kpi-loss';
+            if (type === 'expense') return 'kpi-expense';
+            return '';
+        };
+
+        const soldCount = stats.orderCount || 0;
+        const freeCount = stats.freeWatchCount || 0;
+        const totalCount = soldCount + freeCount;
+
         return `
             <div class="month-stats">
                 <div class="stat-item">
-                    <div class="stat-label">Поръчки този месец</div>
-                    <div class="stat-value">${stats.orderCount}</div>
+                    <div class="stat-label">Часовници този месец</div>
+                    <div class="stat-value">${totalCount}</div>
+                    <div class="stat-sublabel">Продадени: ${soldCount} • Свободни: ${freeCount}</div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-label">Приходи</div>
-                    <div class="stat-value">${stats.revenue.toFixed(2)} €</div>
+                <div class="stat-item ${getKpiClass('expense', stats.operatingExpenses)}">
+                    <div class="stat-label">Оперативни разходи</div>
+                    <div class="stat-value">${stats.operatingExpenses.toFixed(2)} €</div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-label">Разходи</div>
-                    <div class="stat-value">${stats.expenses.toFixed(2)} €</div>
-                </div>
-                <div class="stat-item">
+                <div class="stat-item ${getKpiClass('profit', stats.profit)}">
                     <div class="stat-label">Печалба</div>
                     <div class="stat-value">${stats.profit.toFixed(2)} €</div>
                 </div>
