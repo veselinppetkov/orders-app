@@ -359,8 +359,9 @@ async update(expenseId, expenseData) {
     }
 
     async findExpenseById(month, expenseId) {
-        const monthlyData = this.state.get('monthlyData') || {};
-        return monthlyData[month]?.expenses?.find(e => e.id === expenseId);
+        // Search in merged expenses list (includes both localStorage defaults AND Supabase custom expenses)
+        const allExpenses = await this.getExpenses(month);
+        return allExpenses.find(e => e.id === expenseId);
     }
 
     async deleteExpenseFromLocalStorage(month, expenseId) {
