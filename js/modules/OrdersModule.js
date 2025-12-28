@@ -373,25 +373,16 @@ export class OrdersModule {
         // If settings not loaded or invalid, load them first
         if (!settings || (!settings.usdRate && !settings.eurRate) || !settings.factoryShipping) {
             try {
-                // Use the settings module to get fresh settings
-                const settingsModule = this.state.get('modules')?.settings;
-                if (settingsModule) {
-                    settings = await settingsModule.getSettings();
-                } else {
-                    // Fallback to default values (EUR as primary)
-                    settings = {
-                        eurRate: 0.92,
-                        usdRate: 1.71, // Legacy
-                        factoryShipping: 1.5,
-                        baseCurrency: 'EUR',
-                        conversionRate: 1.95583
-                    };
-                }
+                // Load settings directly from Supabase
+                settings = await this.supabase.getSettings();
+                // Update state so future calls can use cached settings
+                this.state.set('settings', settings);
+                console.log('✅ Loaded settings for order calculation:', { eurRate: settings.eurRate });
             } catch (error) {
-                console.warn('⚠️ Failed to load settings, using defaults:', error);
+                console.error('❌ Failed to load settings from Supabase, using defaults:', error);
                 settings = {
                     eurRate: 0.92,
-                    usdRate: 1.71,
+                    usdRate: 1.71, // Legacy
                     factoryShipping: 1.5,
                     baseCurrency: 'EUR',
                     conversionRate: 1.95583
@@ -408,7 +399,7 @@ export class OrdersModule {
             ? parseFloat(data.shippingUSD) || 0
             : parseFloat(settings.factoryShipping) || 0;
 
-        const rate = parseFloat(settings.eurRate) || 0.92;
+        const rate = parseFloat(settings.eurRate);
 
         // Use EUR values directly (no BGN conversion)
         const extrasEUR = parseFloat(data.extrasEUR) || 0;
@@ -550,7 +541,11 @@ export class OrdersModule {
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
-        const rate = parseFloat(settings.eurRate) || order.rate || 0.92;
+        const rate = parseFloat(settings.eurRate) || order.rate;
+
+        if (!rate) {
+            console.warn('⚠️ No exchange rate available for recalculation, using order stored rate');
+        }
 
         const updatedOrder = { ...order, rate };
         const extrasEUR = order.extrasEUR || 0;
