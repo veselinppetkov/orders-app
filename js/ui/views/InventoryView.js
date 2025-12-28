@@ -183,7 +183,6 @@ export default class InventoryView {
                 <div class="health-bar ${barClass}">
                     <div class="health-bar-fill" style="width: ${fillPercentage}%"></div>
                 </div>
-                <span class="health-bar-value">${stock}</span>
             </div>
         `;
     }
