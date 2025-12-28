@@ -156,8 +156,7 @@ SELECT
     rate,
     -- What total would be with rate=1.0 (current WRONG value)
     ROUND((cost_usd + shipping_usd) * 1.0 + COALESCE(extras_eur, 0), 2) AS total_with_rate_1,
-    -- What total should be with correct rate (e.g., 0.86)
-    -- ⚠️ REPLACE 0.86 WITH YOUR ACTUAL eurRate FROM settings
+    -- What total should be with correct rate (0.86)
     ROUND((cost_usd + shipping_usd) * 0.86 + COALESCE(extras_eur, 0), 2) AS total_with_correct_rate,
     ROUND(sell_eur - ((cost_usd + shipping_usd) * 0.86 + COALESCE(extras_eur, 0)), 2) AS balance_with_correct_rate
 FROM orders
@@ -211,14 +210,13 @@ END $$;
 -- 1. Check your settings table to get the correct eurRate value
 SELECT data->>'eurRate' AS current_eur_rate FROM settings WHERE id = 1;
 
--- 2. Replace 0.86 in the query below with your actual eurRate
--- 3. Uncomment and run this UPDATE
+-- 2. Uncomment and run this UPDATE (rate 0.86 confirmed by user)
 
 /*
 -- Fix orders with rate=1.0 by applying correct USD→EUR rate
 UPDATE orders
 SET
-    rate = 0.86,  -- ⚠️ REPLACE WITH YOUR ACTUAL eurRate
+    rate = 0.86,  -- ✅ Confirmed USD→EUR rate
     total_eur = ROUND(
         (COALESCE(cost_usd, 0) + COALESCE(shipping_usd, 0)) * 0.86 + COALESCE(extras_eur, 0),
         2

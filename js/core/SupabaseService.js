@@ -268,6 +268,17 @@ export class SupabaseService {
             const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
             const sellEUR = parseFloat(orderData.sellEUR) || 0;
 
+            // ✅ FIX: Store calculated totals (already computed by prepareOrder)
+            const totalEUR = parseFloat(orderData.totalEUR) || 0;
+            const balanceEUR = parseFloat(orderData.balanceEUR) || 0;
+            const rate = parseFloat(orderData.rate);
+
+            // ❌ CRITICAL: Don't default rate to 1, throw error instead
+            if (!rate || rate <= 0) {
+                console.error('❌ Invalid exchange rate for order creation:', { orderData, rate });
+                throw new Error(`Invalid exchange rate: ${orderData.rate}. Cannot create order without valid USD→EUR rate.`);
+            }
+
             const { data, error } = await this.supabase
                 .from('orders')
                 .insert([{
@@ -279,11 +290,13 @@ export class SupabaseService {
                     model: orderData.model,
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
-                    rate: parseFloat(orderData.rate) || 1,
+                    rate: rate,  // ✅ No default, validated above
                     extras_bgn: 0,
                     sell_bgn: 0,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
+                    total_eur: totalEUR,  // ✅ Store calculated total
+                    balance_eur: balanceEUR,  // ✅ Store calculated profit
                     currency: 'EUR',
                     status: orderData.status || 'Очакван',
                     full_set: orderData.fullSet || false,
@@ -353,6 +366,17 @@ export class SupabaseService {
             const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
             const sellEUR = parseFloat(orderData.sellEUR) || 0;
 
+            // ✅ FIX: Store calculated totals (already computed by prepareOrder)
+            const totalEUR = parseFloat(orderData.totalEUR) || 0;
+            const balanceEUR = parseFloat(orderData.balanceEUR) || 0;
+            const rate = parseFloat(orderData.rate);
+
+            // ❌ CRITICAL: Don't default rate to 1, throw error instead
+            if (!rate || rate <= 0) {
+                console.error('❌ Invalid exchange rate for order update:', { orderId, orderData, rate });
+                throw new Error(`Invalid exchange rate: ${orderData.rate}. Cannot update order without valid USD→EUR rate.`);
+            }
+
             const { data, error } = await this.supabase
                 .from('orders')
                 .update({
@@ -364,11 +388,13 @@ export class SupabaseService {
                     model: orderData.model,
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
-                    rate: parseFloat(orderData.rate) || 1,
+                    rate: rate,  // ✅ No default, validated above
                     extras_bgn: 0,
                     sell_bgn: 0,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
+                    total_eur: totalEUR,  // ✅ Store calculated total
+                    balance_eur: balanceEUR,  // ✅ Store calculated profit
                     currency: 'EUR',
                     status: orderData.status,
                     full_set: orderData.fullSet,
@@ -907,12 +933,33 @@ async getExpenses(month = null) {
         const extrasEUR = parseFloat(dbOrder.extras_eur) || 0;
         const sellEUR = parseFloat(dbOrder.sell_eur) || 0;
 
-        // Calculate totals in EUR only
-        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-        const balanceEUR = sellEUR - totalEUR;
+        // ✅ FIX: Use stored total_eur and balance_eur if available (avoids recalculation bugs)
+        let totalEUR, balanceEUR;
+
+        if (dbOrder.total_eur !== null && dbOrder.total_eur !== undefined) {
+            // Use pre-calculated values from database (safe, no currency ambiguity)
+            totalEUR = parseFloat(dbOrder.total_eur);
+            balanceEUR = parseFloat(dbOrder.balance_eur);
+        } else {
+            // Fallback for orders without total_eur (shouldn't happen after migration)
+            // This handles legacy data before migration or if migration fails
+            if (dbOrder.currency === 'BGN') {
+                // Legacy: Convert BGN total to EUR using official rate
+                const totalBGN = ((costUSD + shippingUSD) * rate) + (parseFloat(dbOrder.extras_bgn) || 0);
+                const balanceBGN = (parseFloat(dbOrder.sell_bgn) || 0) - totalBGN;
+                totalEUR = totalBGN / 1.95583;
+                balanceEUR = balanceBGN / 1.95583;
+                console.warn(`⚠️ Order ${dbOrder.id}: Using fallback BGN→EUR conversion. Run migration 006 to fix.`);
+            } else {
+                // Current: Calculate in EUR directly
+                totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+                balanceEUR = sellEUR - totalEUR;
+                console.warn(`⚠️ Order ${dbOrder.id}: Calculating EUR totals on-the-fly. Run migration 006 to populate total_eur.`);
+            }
+        }
 
         // System currency is now EUR
-        const currency = 'EUR';
+        const currency = dbOrder.currency || 'EUR';
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);
