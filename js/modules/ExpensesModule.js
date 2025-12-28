@@ -28,7 +28,6 @@ export class ExpensesModule {
 
         // Operation tracking
         this.pendingOperations = new Set();
-        this.nextCustomId = 1000; // Fallback IDs for localStorage-only expenses
 
         // Statistics
         this.stats = {
@@ -67,27 +66,20 @@ export class ExpensesModule {
     // CORE CRUD OPERATIONS WITH SUPABASE
     // ============================================
 
-    // Get expenses from Supabase (merged with default templates)
+    // Get all expenses from Supabase (single source of truth)
     async getExpenses(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
 
         try {
-            // Ensure month structure exists with defaults
+            // Ensure month has been seeded with default expenses
             await this.ensureMonthExpenses(targetMonth);
 
-            // Load custom expenses from Supabase
-            const supabaseExpenses = await this.supabase.getExpenses(targetMonth);
+            // Load ALL expenses from Supabase (defaults + customs)
+            const expenses = await this.supabase.getExpenses(targetMonth);
             this.stats.supabaseOperations++;
 
-            // Get default expenses from localStorage
-            const defaults = this.getExpensesFromLocalStorage(targetMonth);
-            const defaultExpenses = defaults.filter(e => e.isDefault === true);
-
-            // Merge defaults with custom expenses from Supabase
-            const mergedExpenses = [...defaultExpenses, ...supabaseExpenses];
-
-            console.log(`✅ Loaded ${supabaseExpenses.length} custom expenses from Supabase + ${defaultExpenses.length} defaults. Total: ${mergedExpenses.length} for ${targetMonth}`);
-            return mergedExpenses;
+            console.log(`✅ Loaded ${expenses.length} expenses from Supabase for ${targetMonth}`);
+            return expenses;
 
         } catch (error) {
             console.error('❌ Failed to get expenses:', error);
@@ -179,91 +171,50 @@ async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
         }
     }
 
-    // UPDATE EXPENSE with Supabase priority
-// UPDATE EXPENSE with Supabase priority
-async update(expenseId, expenseData) {
-    const operationId = `update_${expenseId}_${Date.now()}`;
-    this.pendingOperations.add(operationId);
+    // UPDATE EXPENSE in Supabase (all expenses)
+    async update(expenseId, expenseData) {
+        const operationId = `update_${expenseId}_${Date.now()}`;
+        this.pendingOperations.add(operationId);
 
-    try {
-        // Validate input
-        this.validateExpenseData(expenseData);
+        try {
+            // Validate input
+            this.validateExpenseData(expenseData);
 
-        const currentMonth = this.state.get('currentMonth');
+            const currentMonth = this.state.get('currentMonth');
 
-        // ============================================
-        // FIX: Check if this is a default expense FIRST
-        // ============================================
-        const existingExpense = await this.findExpenseById(currentMonth, expenseId);
-        if (!existingExpense) {
-            throw new Error(`Expense not found: ${expenseId}`);
-        }
+            // Emit before-update event for undo/redo
+            this.eventBus.emit('expense:before-updated', { expenseId, expenseData });
 
-        const isDefaultExpense = existingExpense.isDefault === true;
-
-        // Emit before-update event for undo/redo
-        this.eventBus.emit('expense:before-updated', { expenseId, expenseData });
-
-        // ============================================
-        // FIX: Default expenses are local-only, skip Supabase
-        // ============================================
-        if (isDefaultExpense) {
-            console.log('📝 Updating default expense (local-only):', expenseId);
-            this.stats.totalOperations++;
-
-            // Update localStorage only, PRESERVING isDefault flag
-            const updates = {
+            // Update in Supabase (all expenses, defaults and customs)
+            const updatedExpense = await this.supabase.updateExpense(expenseId, {
                 name: expenseData.name.trim(),
                 amount: parseFloat(expenseData.amount) || 0,
-                note: expenseData.note?.trim() || '',
-                isDefault: true  // CRITICAL: Preserve the flag
-            };
-
-            const localExpense = await this.updateExpenseInLocalStorage(currentMonth, expenseId, updates);
-
-            this.eventBus.emit('expense:updated', {
-                expense: localExpense,
-                month: currentMonth,
-                operationId,
-                source: 'localStorage'
+                note: expenseData.note?.trim() || ''
             });
 
-            console.log('✅ Default expense updated in localStorage:', expenseId);
-            return localExpense;
+            this.stats.supabaseOperations++;
+            this.stats.totalOperations++;
+
+            this.eventBus.emit('expense:updated', {
+                expense: updatedExpense,
+                month: currentMonth,
+                operationId,
+                source: 'supabase'
+            });
+
+            console.log('✅ Expense updated in Supabase:', expenseId);
+            return updatedExpense;
+
+        } catch (error) {
+            this.eventBus.emit('expense:update-failed', { error, expenseId, expenseData, operationId });
+            throw error;
+
+        } finally {
+            this.pendingOperations.delete(operationId);
         }
-
-        // ============================================
-        // Custom expenses: Update in Supabase
-        // ============================================
-        const updatedExpense = await this.supabase.updateExpense(expenseId, {
-            name: expenseData.name.trim(),
-            amount: parseFloat(expenseData.amount) || 0,
-            note: expenseData.note?.trim() || ''
-        });
-
-        this.stats.supabaseOperations++;
-        this.stats.totalOperations++;
-
-        this.eventBus.emit('expense:updated', {
-            expense: updatedExpense,
-            month: currentMonth,
-            operationId,
-            source: 'supabase'
-        });
-
-        console.log('✅ Custom expense updated in Supabase:', expenseId);
-        return updatedExpense;
-
-    } catch (error) {
-        this.eventBus.emit('expense:update-failed', { error, expenseId, expenseData, operationId });
-        throw error;
-
-    } finally {
-        this.pendingOperations.delete(operationId);
     }
-}
 
-    // DELETE EXPENSE with Supabase priority
+    // DELETE EXPENSE from Supabase (all expenses)
     async delete(expenseId) {
         const operationId = `delete_${expenseId}_${Date.now()}`;
         this.pendingOperations.add(operationId);
@@ -271,37 +222,10 @@ async update(expenseId, expenseData) {
         try {
             const currentMonth = this.state.get('currentMonth');
 
-            // Find expense before deletion
-            const expenseToDelete = await this.findExpenseById(currentMonth, expenseId);
-            if (!expenseToDelete) {
-                throw new Error(`Expense not found: ${expenseId}`);
-            }
-
             // Emit before-delete event for undo/redo
-            this.eventBus.emit('expense:before-deleted', expenseToDelete);
+            this.eventBus.emit('expense:before-deleted', { expenseId });
 
-            // Check if this is a default expense (local-only)
-            const isDefaultExpense = expenseToDelete.isDefault === true;
-
-            if (isDefaultExpense) {
-                // Default expenses are localStorage-only
-                this.stats.totalOperations++;
-
-                await this.deleteExpenseFromLocalStorage(currentMonth, expenseId);
-
-                this.eventBus.emit('expense:deleted', {
-                    expenseId,
-                    expense: expenseToDelete,
-                    month: currentMonth,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Default expense deleted from localStorage:', expenseId);
-                return true;
-            }
-
-            // Custom expenses - delete from Supabase
+            // Delete from Supabase (all expenses, defaults and customs)
             await this.supabase.deleteExpense(expenseId);
             this.stats.supabaseOperations++;
             this.stats.totalOperations++;
@@ -309,13 +233,12 @@ async update(expenseId, expenseData) {
             // Emit successful deletion
             this.eventBus.emit('expense:deleted', {
                 expenseId,
-                expense: expenseToDelete,
                 month: currentMonth,
                 operationId,
                 source: 'supabase'
             });
 
-            console.log('✅ Custom expense deleted from Supabase:', expenseId);
+            console.log('✅ Expense deleted from Supabase:', expenseId);
             return true;
 
         } catch (error) {
@@ -325,60 +248,6 @@ async update(expenseId, expenseData) {
         } finally {
             this.pendingOperations.delete(operationId);
         }
-    }
-
-    // ============================================
-    // LOCALSTORAGE HELPERS
-    // ============================================
-
-    getExpensesFromLocalStorage(month) {
-        const monthlyData = this.state.get('monthlyData') || {};
-        return monthlyData[month]?.expenses || [];
-    }
-
-
-    async updateExpenseInLocalStorage(month, expenseId, updates) {
-        const monthlyData = this.state.get('monthlyData') || {};
-
-        if (!monthlyData[month]?.expenses) {
-            throw new Error(`No expenses found for month: ${month}`);
-        }
-
-        const expense = monthlyData[month].expenses.find(e => e.id === expenseId);
-        if (!expense) {
-            throw new Error(`Expense not found: ${expenseId}`);
-        }
-
-        // Apply updates
-        Object.assign(expense, updates);
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        return expense;
-    }
-
-    async findExpenseById(month, expenseId) {
-        const monthlyData = this.state.get('monthlyData') || {};
-        return monthlyData[month]?.expenses?.find(e => e.id === expenseId);
-    }
-
-    async deleteExpenseFromLocalStorage(month, expenseId) {
-        const monthlyData = this.state.get('monthlyData') || {};
-
-        if (!monthlyData[month]?.expenses) {
-            throw new Error(`No expenses found for month: ${month}`);
-        }
-
-        const index = monthlyData[month].expenses.findIndex(e => e.id === expenseId);
-        if (index === -1) {
-            throw new Error(`Expense not found in localStorage: ${expenseId}`);
-        }
-
-        monthlyData[month].expenses.splice(index, 1);
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
     }
 
     // ============================================
@@ -392,39 +261,38 @@ async update(expenseId, expenseData) {
         try {
             console.log(`💰 Initializing expenses for month: ${month}`);
 
-            const monthlyData = this.state.get('monthlyData') || {};
+            // Check if month already has expenses in Supabase
+            const existing = await this.supabase.getExpenses(month);
 
-            // CRITICAL: Check if month already has orders
-            if (monthlyData[month]?.orders?.length > 0) {
-                console.log(`Month ${month} already has ${monthlyData[month].orders.length} orders, preserving data`);
-
-                // Only add expenses if missing
-                if (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0) {
-                    await this.addDefaultExpenses(month);
-                }
+            if (existing.length > 0) {
+                console.log(`Month ${month} already has ${existing.length} expenses in Supabase`);
                 return;
             }
 
-            // Initialize new month structure (local only - defaults don't sync to Supabase)
-            if (!monthlyData[month]) {
-                monthlyData[month] = {
-                    orders: [],
-                    expenses: this.createDefaultExpenses()
-                };
+            // Seed default expenses to Supabase
+            console.log(`📝 Seeding ${this.defaultExpenses.length} default expenses to Supabase for ${month}`);
 
-                this.stats.monthsInitialized++;
-                this.stats.defaultExpensesAdded++;
-
-                this.storage.save('monthlyData', monthlyData);
-                this.state.set('monthlyData', monthlyData);
-
-                this.eventBus.emit('expenses:month-initialized', {
+            for (const template of this.defaultExpenses) {
+                await this.supabase.createExpense({
                     month,
-                    expenseCount: monthlyData[month].expenses.length
+                    name: template.name,
+                    amount: template.amount,
+                    note: template.note || '',
+                    isDefault: true,
+                    templateId: template.name.toLowerCase().replace(/[^a-z0-9]/g, '_') // e.g., "ig_campaign"
                 });
-
-                console.log(`✅ Initialized new month ${month} with ${monthlyData[month].expenses.length} default expenses`);
             }
+
+            this.stats.monthsInitialized++;
+            this.stats.defaultExpensesAdded++;
+            this.stats.supabaseOperations += this.defaultExpenses.length;
+
+            this.eventBus.emit('expenses:month-initialized', {
+                month,
+                expenseCount: this.defaultExpenses.length
+            });
+
+            console.log(`✅ Seeded ${this.defaultExpenses.length} default expenses to Supabase for ${month}`);
 
         } catch (error) {
             console.error(`❌ Failed to initialize month ${month}:`, error);
@@ -435,45 +303,12 @@ async update(expenseId, expenseData) {
         }
     }
 
-    async addDefaultExpenses(month) {
-        const operationId = `add_defaults_${month}_${Date.now()}`;
-        this.pendingOperations.add(operationId);
-
-        try {
-            const monthlyData = this.state.get('monthlyData') || {};
-
-            if (monthlyData[month] && (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0)) {
-                monthlyData[month].expenses = this.createDefaultExpenses();
-
-                this.stats.defaultExpensesAdded++;
-
-                this.storage.save('monthlyData', monthlyData);
-                this.state.set('monthlyData', monthlyData);
-
-                this.eventBus.emit('expenses:defaults-added', {
-                    month,
-                    expenseCount: monthlyData[month].expenses.length
-                });
-
-                console.log(`✅ Added default expenses to ${month}`);
-            }
-
-        } catch (error) {
-            console.error(`❌ Failed to add default expenses to ${month}:`, error);
-            throw error;
-
-        } finally {
-            this.pendingOperations.delete(operationId);
-        }
-    }
-
     async ensureMonthExpenses(month) {
-        const monthlyData = this.state.get('monthlyData') || {};
+        // Check if month needs initialization in Supabase
+        const existing = await this.supabase.getExpenses(month);
 
-        if (!monthlyData[month]) {
+        if (existing.length === 0) {
             await this.initializeMonth(month);
-        } else if (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0) {
-            await this.addDefaultExpenses(month);
         }
     }
 
@@ -551,32 +386,45 @@ async update(expenseId, expenseData) {
                 return false;
             }
 
-            const monthlyData = this.state.get('monthlyData') || {};
+            // Get existing expenses from Supabase
+            const oldExpenses = await this.supabase.getExpenses(targetMonth);
 
             // Emit before-reset event for undo/redo
-            const oldExpenses = monthlyData[targetMonth]?.expenses || [];
             this.eventBus.emit('expenses:before-reset', {
                 month: targetMonth,
                 oldExpenses
             });
 
-            // Ensure month exists
-            if (!monthlyData[targetMonth]) {
-                monthlyData[targetMonth] = { orders: [], expenses: [] };
+            // Delete all existing expenses from Supabase
+            console.log(`🗑️ Deleting ${oldExpenses.length} expenses from Supabase for ${targetMonth}`);
+            for (const expense of oldExpenses) {
+                await this.supabase.deleteExpense(expense.id);
             }
+            this.stats.supabaseOperations += oldExpenses.length;
 
-            // Reset to defaults (local only)
-            monthlyData[targetMonth].expenses = this.createDefaultExpenses();
+            // Re-seed default expenses to Supabase
+            console.log(`📝 Re-seeding ${this.defaultExpenses.length} default expenses to Supabase for ${targetMonth}`);
+            for (const template of this.defaultExpenses) {
+                await this.supabase.createExpense({
+                    month: targetMonth,
+                    name: template.name,
+                    amount: template.amount,
+                    note: template.note || '',
+                    isDefault: true,
+                    templateId: template.name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+                });
+            }
+            this.stats.supabaseOperations += this.defaultExpenses.length;
 
             this.stats.totalOperations++;
             this.stats.defaultExpensesAdded++;
 
-            this.storage.save('monthlyData', monthlyData);
-            this.state.set('monthlyData', monthlyData);
+            // Get the newly seeded expenses
+            const newExpenses = await this.supabase.getExpenses(targetMonth);
 
             this.eventBus.emit('expenses:reset', {
                 month: targetMonth,
-                newExpenses: monthlyData[targetMonth].expenses,
+                newExpenses,
                 operationId
             });
 
@@ -590,18 +438,6 @@ async update(expenseId, expenseData) {
         } finally {
             this.pendingOperations.delete(operationId);
         }
-    }
-
-    createDefaultExpenses() {
-        // Create deep copy of default expenses with temporary local IDs
-        return this.defaultExpenses.map((expense, index) => ({
-            id: index + 1, // Temporary IDs for defaults (1-11)
-            name: expense.name,
-            amount: expense.amount,
-            note: expense.note,
-            isDefault: true,
-            createdAt: new Date().toISOString()
-        }));
     }
 
     validateExpenseData(expenseData) {
@@ -659,8 +495,7 @@ async update(expenseId, expenseData) {
         return {
             ...this.stats,
             pendingOperations: this.pendingOperations.size,
-            defaultExpenseCount: this.defaultExpenses.length,
-            nextCustomId: this.nextCustomId
+            defaultExpenseCount: this.defaultExpenses.length
         };
     }
 
@@ -709,19 +544,17 @@ async update(expenseId, expenseData) {
     async healthCheck() {
         try {
             const currentMonth = this.state.get('currentMonth');
-            const monthlyData = this.state.get('monthlyData') || {};
-
             const issues = [];
 
+            // Load expenses from Supabase
+            const expenses = await this.supabase.getExpenses(currentMonth);
+
             // Check if current month has expenses
-            if (!monthlyData[currentMonth]?.expenses) {
-                issues.push('Current month has no expenses');
-            } else if (monthlyData[currentMonth].expenses.length === 0) {
-                issues.push('Current month has empty expenses array');
+            if (expenses.length === 0) {
+                issues.push('Current month has no expenses (may need initialization)');
             }
 
             // Check for duplicate expense IDs
-            const expenses = monthlyData[currentMonth]?.expenses || [];
             const ids = expenses.map(e => e.id);
             const uniqueIds = new Set(ids);
             if (ids.length !== uniqueIds.size) {
