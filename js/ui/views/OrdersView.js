@@ -17,7 +17,6 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            model: '',
             showAllMonths: false
         };
         this.selectedOrders = new Set(); // For bulk operations
@@ -415,13 +414,6 @@ export default class OrdersView {
             this.debouncedRefresh(); // This calls refresh() which is now async
         });
 
-        // Model filter input
-        document.getElementById('modelFilter')?.addEventListener('input', (e) => {
-            this.filters.model = e.target.value;
-            this.pagination.currentPage = 1; // Reset to first page
-            this.debouncedRefresh();
-        });
-
         // Origin filter
         document.getElementById('filterOrigin')?.addEventListener('change', async (e) => { // MAKE ASYNC
             this.filters.origin = e.target.value;
@@ -583,10 +575,6 @@ export default class OrdersView {
                         <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
                     </div>
                     <div class="filter-group">
-                        <label>Марка:</label>
-                        <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
-                    </div>
-                    <div class="filter-group">
                         <label>Източник:</label>
                         <select id="filterOrigin">
                             <option value="">Всички</option>
@@ -634,7 +622,6 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            model: '',
             showAllMonths: false
         };
         this.pagination.currentPage = 1;
