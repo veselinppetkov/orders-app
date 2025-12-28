@@ -83,10 +83,15 @@ export class ExpensesModule {
             const defaults = this.getExpensesFromLocalStorage(targetMonth);
             const defaultExpenses = defaults.filter(e => e.isDefault === true);
 
-            // Merge defaults with custom expenses from Supabase
-            const mergedExpenses = [...defaultExpenses, ...supabaseExpenses];
+            // CRITICAL FIX: Remove localStorage defaults that have the same name as Supabase expenses
+            // This prevents duplication when old default expenses exist in both Supabase and localStorage
+            const supabaseNames = new Set(supabaseExpenses.map(e => e.name));
+            const uniqueDefaults = defaultExpenses.filter(e => !supabaseNames.has(e.name));
 
-            console.log(`✅ Loaded ${supabaseExpenses.length} custom expenses from Supabase + ${defaultExpenses.length} defaults. Total: ${mergedExpenses.length} for ${targetMonth}`);
+            // Merge unique defaults with custom expenses from Supabase
+            const mergedExpenses = [...uniqueDefaults, ...supabaseExpenses];
+
+            console.log(`✅ Loaded ${supabaseExpenses.length} from Supabase + ${uniqueDefaults.length} unique defaults (${defaultExpenses.length - uniqueDefaults.length} duplicates filtered). Total: ${mergedExpenses.length} for ${targetMonth}`);
             return mergedExpenses;
 
         } catch (error) {
