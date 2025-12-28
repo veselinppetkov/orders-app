@@ -367,6 +367,9 @@ export class OrdersModule {
 
 // UNIFIED ASYNC ORDER PREPARATION (used by create, update, duplicate)
     async prepareOrder(data) {
+        console.log('🔧 prepareOrder() called');
+        console.log('📞 Call stack:', new Error().stack);
+
         // FIXED: Ensure settings are loaded before calculation
         let settings = this.state.get('settings');
 

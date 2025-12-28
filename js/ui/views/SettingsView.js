@@ -111,6 +111,13 @@ export default class SettingsView {
 
         // Save settings - MAKE ASYNC
         $('save-settings')?.addEventListener('click', async () => {
+            console.log('💾 Save Settings clicked');
+            console.log('📋 Form elements:', {
+                eurRateElement: $('eurRate'),
+                eurRateValue: $('eurRate')?.value,
+                eurRateType: typeof $('eurRate')?.value
+            });
+
             const settings = {
                 eurRate: this._num($('eurRate')?.value, 0.92),
                 factoryShipping: this._num($('factoryShipping')?.value, 1.5),
@@ -118,12 +125,17 @@ export default class SettingsView {
                 vendors: this._lines($('vendorsList')?.value)
             };
 
+            console.log('⚙️ Settings object to save:', settings);
+
             try {
+                console.log('🚀 Calling settingsModule.updateSettings...');
                 // ASYNC SETTINGS UPDATE
                 await this.settingsModule.updateSettings(settings);
+                console.log('✅ Settings saved successfully');
                 this.eventBus?.emit('notification:show', { message: 'Настройките са запазени!', type: 'success' });
             } catch (err) {
-                console.error(err);
+                console.error('❌ Error caught in SettingsView save handler:', err);
+                console.error('Stack trace:', err.stack);
                 this.eventBus?.emit('notification:show', { message: 'Грешка при запазване: ' + err.message, type: 'error' });
             }
         });
