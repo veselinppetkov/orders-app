@@ -36,7 +36,12 @@ export default class OrdersView {
 
             // Calculate free watches count across all months - use getAllOrders() not getOrders(null)
             const allMonthsOrders = await this.ordersModule.getAllOrders();
-            const freeCount = allMonthsOrders.filter(o => o.status === 'Свободен').length;
+            const freeCountTotal = allMonthsOrders.filter(o => o.status === 'Свободен').length;
+
+            // Calculate free watches count for current month only
+            const currentMonth = this.state.get('currentMonth');
+            const currentMonthOrders = await this.ordersModule.getOrders(currentMonth);
+            const freeCountMonth = currentMonthOrders.filter(o => o.status === 'Свободен').length;
 
             // ADD: Update pagination totals
             this.updatePaginationTotals(allOrders.length);
@@ -47,7 +52,7 @@ export default class OrdersView {
             return `
         <div class="orders-view">
             ${this.renderStats(stats)}
-            ${this.renderControls(freeCount)}
+            ${this.renderControls(freeCountMonth, freeCountTotal)}
             ${this.renderBulkActions()}
             ${await this.renderFilters()}
             ${this.renderActiveFilters()}
@@ -392,8 +397,17 @@ export default class OrdersView {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
         });
 
-        // Free watches button - Show all free items across all months
-        document.getElementById('show-free-btn')?.addEventListener('click', async () => {
+        // Free watches (month) button - Show free items for current month only
+        document.getElementById('show-free-month-btn')?.addEventListener('click', async () => {
+            this.filters.status = 'Свободен';
+            this.filters.showAllMonths = false;
+            this.filters.search = ''; // Clear search to show all free items
+            this.pagination.currentPage = 1; // Reset to first page
+            await this.refresh();
+        });
+
+        // Free watches (total) button - Show all free items across all months
+        document.getElementById('show-free-total-btn')?.addEventListener('click', async () => {
             this.filters.status = 'Свободен';
             this.filters.showAllMonths = true;
             this.filters.search = ''; // Clear search to show all free items
@@ -579,7 +593,7 @@ export default class OrdersView {
         `;
     }
 
-    renderControls(freeCount = 0) {
+    renderControls(freeCountMonth = 0, freeCountTotal = 0) {
         return `
         <div class="controls">
             <button class="btn" id="new-order-btn">➕ Нова поръчка</button>
@@ -587,7 +601,8 @@ export default class OrdersView {
             <button class="btn" style="background: #ffc107;" data-filter-status="Очакван">Очаквани</button>
             <button class="btn success" data-filter-status="Доставен">Доставени</button>
             <button class="btn info" data-filter-status="Други">Други</button>
-            <button class="btn success" id="show-free-btn">🆓 Свободни часовници (${freeCount})</button>
+            <button class="btn success" id="show-free-month-btn">🆓 Свободни (месец) <strong>${freeCountMonth}</strong></button>
+            <button class="btn success" id="show-free-total-btn">🆓 Свободни (общо) <strong>${freeCountTotal}</strong></button>
         </div>
     `;
     }
