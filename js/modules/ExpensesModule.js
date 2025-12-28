@@ -2,7 +2,7 @@
 
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
 
-export class ExpensesModule {
+export class ExpensesModule {   
     constructor(state, storage, eventBus, supabase) {
         this.state = state;
         this.storage = storage;
