@@ -169,8 +169,8 @@ export class App {
                 settings: new SettingsModule(this.state, this.storage, this.eventBus, this.supabase)
             };
 
-            // Reports module depends on orders module
-            this.modules.reports = new ReportsModule(this.state, this.eventBus, this.modules.orders);
+            // Reports module depends on orders and expenses modules
+            this.modules.reports = new ReportsModule(this.state, this.eventBus, this.modules.orders, this.modules.expenses);
 
 // Line 205-211
 // Initialize undo/redo after modules exist

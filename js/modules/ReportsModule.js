@@ -1,10 +1,11 @@
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
 
 export class ReportsModule {
-    constructor(state, eventBus, ordersModule) {  // ADD ordersModule dependency
+    constructor(state, eventBus, ordersModule, expensesModule) {
         this.state = state;
         this.eventBus = eventBus;
-        this.ordersModule = ordersModule;  // NEW: Direct access to orders
+        this.ordersModule = ordersModule;
+        this.expensesModule = expensesModule;
     }
 
     getOrderEurMetrics(order) {
@@ -18,14 +19,11 @@ export class ReportsModule {
     async getMonthlyStats(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
 
-        // GET ORDERS FROM SUPABASE, not localStorage
+        // Load orders and expenses from Supabase
         const orders = await this.ordersModule.getOrders(targetMonth);
+        const expenses = await this.expensesModule.getExpenses(targetMonth);
 
-        // GET EXPENSES from localStorage (still there)
-        const monthlyData = this.state.get('monthlyData');
-        const expenses = monthlyData[targetMonth]?.expenses || [];
-
-        const totalExpenses = expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
+        const totalExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
         const revenue = orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
         const totalOrderCosts = orders.reduce((sum, o) => sum + (o.totalEUR || 0), 0);
         const profit = revenue - totalOrderCosts - totalExpenses;
@@ -40,16 +38,22 @@ export class ReportsModule {
     }
 
     async getAllTimeStats() {
-        // GET ALL ORDERS from Supabase
+        // Get all orders from Supabase
         const allOrders = await this.ordersModule.getAllOrders();
 
-        // GET ALL EXPENSES from localStorage
-        const monthlyData = this.state.get('monthlyData');
-        const allExpenses = Object.values(monthlyData).flatMap(m => m.expenses || []);
+        // Get unique months from orders
+        const uniqueMonths = new Set(allOrders.map(o => o.date.substring(0, 7)));
+
+        // Get expenses for each month from Supabase
+        const allExpenses = [];
+        for (const month of uniqueMonths) {
+            const monthExpenses = await this.expensesModule.getExpenses(month);
+            allExpenses.push(...monthExpenses);
+        }
 
         const totalRevenue = allOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
         const totalProfit = allOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0);
-        const totalExpenses = allExpenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
+        const totalExpenses = allExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
         return {
             totalOrders: allOrders.length,
@@ -73,7 +77,6 @@ export class ReportsModule {
 
     async getReportByMonth() {
         const allOrders = await this.ordersModule.getAllOrders();
-        const monthlyData = this.state.get('monthlyData');
         const report = {};
 
         // Group orders by month
@@ -85,17 +88,17 @@ export class ReportsModule {
         });
 
         // Build report combining orders and expenses
-        Object.keys(ordersByMonth).forEach(month => {
+        for (const month of Object.keys(ordersByMonth)) {
             const orders = ordersByMonth[month];
-            const expenses = monthlyData[month]?.expenses || [];
+            const expenses = await this.expensesModule.getExpenses(month);
 
             report[month] = {
                 count: orders.length,
                 revenue: orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0),
                 profit: orders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
-                expenses: expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0)
+                expenses: expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
             };
-        });
+        }
 
         return report;
     }
