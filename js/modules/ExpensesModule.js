@@ -8,7 +8,7 @@ export class ExpensesModule {
         this.storage = storage;
         this.eventBus = eventBus;
         this.supabase = supabase;
-
+        
         this.defaultExpensesHistory = [
             {
                 effectiveFrom: '2025-09',
@@ -27,7 +27,8 @@ export class ExpensesModule {
                     { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
                     { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
                 ]
-            },
+            }
+        ];
 
             // Version 2: Add future price changes here
             // Uncomment and edit when prices change:
@@ -49,6 +50,7 @@ export class ExpensesModule {
             //         { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
             //     ]
             // },
+
         // Default expense templates (EUR only)
         this.defaultExpenses = [
             { name: 'IG Campaign', amount: 1535, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
@@ -82,6 +84,7 @@ export class ExpensesModule {
         console.log('💰 ExpensesModule initialized with Supabase integration');
         this.setupEventHandlers();
     }
+
 
     setupEventHandlers() {
         // Monitor month changes to load expenses
