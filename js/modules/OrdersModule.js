@@ -374,13 +374,18 @@ export class OrdersModule {
         let settings = this.state.get('settings');
 
         // If settings not loaded or invalid, load them first
-        if (!settings || (!settings.usdRate && !settings.eurRate) || !settings.factoryShipping) {
+        // ✅ FIX: Check for undefined/null explicitly, not falsy (0 is valid for factoryShipping)
+        if (!settings ||
+            (!settings.usdRate && !settings.eurRate) ||
+            settings.factoryShipping === undefined ||
+            settings.factoryShipping === null) {
             try {
+                console.log('⚠️ Settings incomplete, reloading from Supabase...');
                 // Load settings directly from Supabase
                 settings = await this.supabase.getSettings();
                 // Update state so future calls can use cached settings
                 this.state.set('settings', settings);
-                console.log('✅ Loaded settings for order calculation:', { eurRate: settings.eurRate });
+                console.log('✅ Loaded settings for order calculation:', settings);
             } catch (error) {
                 console.error('❌ Failed to load settings from Supabase, using defaults:', error);
                 settings = {
@@ -392,6 +397,8 @@ export class OrdersModule {
                 };
             }
         }
+
+        console.log('💰 Using settings for order:', { eurRate: settings.eurRate, factoryShipping: settings.factoryShipping });
 
         // Currency is fully migrated to EUR
         const currency = 'EUR';
