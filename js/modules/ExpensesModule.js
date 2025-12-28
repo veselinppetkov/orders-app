@@ -9,27 +9,7 @@ export class ExpensesModule {
         this.eventBus = eventBus;
         this.supabase = supabase;
 
-        // ============================================
-        // VERSIONED DEFAULT EXPENSE TEMPLATES (EUR only)
-        // ============================================
-        // Each version represents default expenses effective from a specific month
-        // When creating a month, the system uses the version that was active at that time
-        // This prevents retroactive changes to historical data
-        //
-        // To add a new version:
-        // 1. Copy the most recent version
-        // 2. Update the effectiveFrom date to the month when changes take effect
-        // 3. Modify the amounts/expenses as needed
-        // 4. Historical months will keep their original prices
-        //
-        // Example: If ChatGPT increases from €17.90 to €20.00 in January 2026:
-        // - Add a new version with effectiveFrom: '2026-01' and amount: 20.00
-        // - September 2025 will still use €17.90 (from the 2025-09 version)
-        // - January 2026 onwards will use €20.00
-        // ============================================
-
         this.defaultExpensesHistory = [
-            // Version 1: Effective from September 2025
             {
                 effectiveFrom: '2025-09',
                 expenses: [
