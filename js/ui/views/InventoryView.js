@@ -157,6 +157,38 @@ export default class InventoryView {
         `;
     }
 
+    renderHealthBar(stock) {
+        let barClass = '';
+        let fillPercentage = 0;
+
+        if (stock > 10) {
+            // Full/Green: >10 items
+            barClass = 'health-bar-full';
+            fillPercentage = 100;
+        } else if (stock >= 3) {
+            // Medium/Yellow: 3-10 items
+            barClass = 'health-bar-medium';
+            fillPercentage = (stock / 10) * 100;
+        } else if (stock >= 1) {
+            // Low/Orange: 1-2 items
+            barClass = 'health-bar-low';
+            fillPercentage = (stock / 10) * 100;
+        } else {
+            // Critical/Red: 0 items with pulse animation
+            barClass = 'health-bar-critical';
+            fillPercentage = 5; // Show a small bar for visual effect
+        }
+
+        return `
+            <div class="health-bar-container">
+                <div class="health-bar ${barClass}">
+                    <div class="health-bar-fill" style="width: ${fillPercentage}%"></div>
+                </div>
+                <span class="health-bar-value">${stock}</span>
+            </div>
+        `;
+    }
+
     renderItemRow(item) {
         const total = item.stock + item.ordered;
         const statusClass = item.stock === 0 ? 'out-of-stock' : item.stock <= 2 ? 'low-stock' : 'in-stock';
@@ -174,7 +206,8 @@ export default class InventoryView {
                 <td>${item.purchasePrice.toFixed(2)} €</td>
                 <td>${item.sellPrice.toFixed(2)} €</td>
                 <td>
-                    <div class="stock-control">
+                    ${this.renderHealthBar(item.stock)}
+                    <div class="stock-control" style="margin-top: 8px;">
                         <button class="stock-btn" data-stock-action="decrease" data-id="${item.id}">-</button>
                         <span class="stock-value">${item.stock}</span>
                         <button class="stock-btn" data-stock-action="increase" data-id="${item.id}">+</button>
