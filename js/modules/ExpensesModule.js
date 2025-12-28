@@ -10,6 +10,7 @@ export class ExpensesModule {
         this.supabase = supabase;
 
         // Default expense templates (EUR only)
+        // EDIT THIS ARRAY TO CUSTOMIZE YOUR DEFAULT MONTHLY EXPENSES
         this.defaultExpenses = [
             { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
             { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
