@@ -146,27 +146,26 @@ export class ClientsModule {
                 newData: clientData
             });
 
-            try {
-                // Update in Supabase
-                const savedClient = await this.supabase.updateClient(clientId, clientData);
-                this.stats.supabaseOperations++;
+            // Update in Supabase
+            const savedClient = await this.supabase.updateClient(clientId, clientData);
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.updateClientInCache(savedClient);
+            // Update cache
+            this.updateClientInCache(savedClient);
 
-                // Clear stats cache for this client
-                this.clearStatsForClient(currentClient.name);
-                this.clearStatsForClient(savedClient.name); // In case name changed
+            // Clear stats cache for this client
+            this.clearStatsForClient(currentClient.name);
+            this.clearStatsForClient(savedClient.name); // In case name changed
 
-                // Emit successful update
-                this.eventBus.emit('client:updated', {
-                    client: savedClient,
-                    operationId,
-                    source: 'supabase'
-                });
+            // Emit successful update
+            this.eventBus.emit('client:updated', {
+                client: savedClient,
+                operationId,
+                source: 'supabase'
+            });
 
-                console.log('✅ Client updated:', clientId);
-                return savedClient;
+            console.log('✅ Client updated:', clientId);
+            return savedClient;
 
         } catch (error) {
             this.eventBus.emit('client:update-failed', { error, clientId, clientData, operationId });
@@ -198,26 +197,25 @@ export class ClientsModule {
             // Emit before-delete event for undo/redo
             this.eventBus.emit('client:before-deleted', clientToDelete);
 
-            try {
-                // Delete from Supabase
-                await this.supabase.deleteClient(clientId);
-                this.stats.supabaseOperations++;
+            // Delete from Supabase
+            await this.supabase.deleteClient(clientId);
+            this.stats.supabaseOperations++;
 
-                // Remove from cache
-                this.removeClientFromCache(clientId);
+            // Remove from cache
+            this.removeClientFromCache(clientId);
 
-                // Clear stats cache
-                this.clearStatsForClient(clientToDelete.name);
+            // Clear stats cache
+            this.clearStatsForClient(clientToDelete.name);
 
-                // Emit successful deletion
-                this.eventBus.emit('client:deleted', {
-                    clientId,
-                    client: clientToDelete,
-                    operationId,
-                    source: 'supabase'
-                });
+            // Emit successful deletion
+            this.eventBus.emit('client:deleted', {
+                clientId,
+                client: clientToDelete,
+                operationId,
+                source: 'supabase'
+            });
 
-                console.log('✅ Client deleted:', clientId);
+            console.log('✅ Client deleted:', clientId);
 
         } catch (error) {
             this.eventBus.emit('client:delete-failed', { error, clientId, operationId });
