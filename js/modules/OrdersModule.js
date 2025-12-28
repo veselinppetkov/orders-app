@@ -367,37 +367,39 @@ export class OrdersModule {
 
 // UNIFIED ASYNC ORDER PREPARATION (used by create, update, duplicate)
     async prepareOrder(data) {
+        console.log('🔧 prepareOrder() called');
+        console.log('📞 Call stack:', new Error().stack);
+
         // FIXED: Ensure settings are loaded before calculation
         let settings = this.state.get('settings');
 
         // If settings not loaded or invalid, load them first
-        if (!settings || (!settings.usdRate && !settings.eurRate) || !settings.factoryShipping) {
+        // ✅ FIX: Check for eurRate specifically (required for current system)
+        // ✅ FIX: Check for undefined/null explicitly, not falsy (0 is valid for factoryShipping)
+        if (!settings ||
+            !settings.eurRate ||
+            settings.factoryShipping === undefined ||
+            settings.factoryShipping === null) {
             try {
-                // Use the settings module to get fresh settings
-                const settingsModule = this.state.get('modules')?.settings;
-                if (settingsModule) {
-                    settings = await settingsModule.getSettings();
-                } else {
-                    // Fallback to default values (EUR as primary)
-                    settings = {
-                        eurRate: 0.92,
-                        usdRate: 1.71, // Legacy
-                        factoryShipping: 1.5,
-                        baseCurrency: 'EUR',
-                        conversionRate: 1.95583
-                    };
-                }
+                console.log('⚠️ Settings incomplete, reloading from Supabase...');
+                // Load settings directly from Supabase
+                settings = await this.supabase.getSettings();
+                // Update state so future calls can use cached settings
+                this.state.set('settings', settings);
+                console.log('✅ Loaded settings for order calculation:', settings);
             } catch (error) {
-                console.warn('⚠️ Failed to load settings, using defaults:', error);
+                console.error('❌ Failed to load settings from Supabase, using defaults:', error);
                 settings = {
                     eurRate: 0.92,
-                    usdRate: 1.71,
+                    usdRate: 1.71, // Legacy
                     factoryShipping: 1.5,
                     baseCurrency: 'EUR',
                     conversionRate: 1.95583
                 };
             }
         }
+
+        console.log('💰 Using settings for order:', { eurRate: settings.eurRate, factoryShipping: settings.factoryShipping });
 
         // Currency is fully migrated to EUR
         const currency = 'EUR';
@@ -408,7 +410,15 @@ export class OrdersModule {
             ? parseFloat(data.shippingUSD) || 0
             : parseFloat(settings.factoryShipping) || 0;
 
-        const rate = parseFloat(settings.eurRate) || 0.92;
+        const rate = parseFloat(settings.eurRate);
+
+        // Validate exchange rate
+        if (!rate || isNaN(rate) || rate <= 0) {
+            console.error('❌ Invalid exchange rate:', { eurRate: settings.eurRate, parsed: rate, settings });
+            throw new Error(`Invalid USD→EUR exchange rate: ${settings.eurRate}. Please check Settings page.`);
+        }
+
+        console.log(`💱 Using exchange rate: 1 USD = ${rate} EUR (from settings)`);
 
         // Use EUR values directly (no BGN conversion)
         const extrasEUR = parseFloat(data.extrasEUR) || 0;
@@ -443,6 +453,18 @@ export class OrdersModule {
         // Calculate derived fields (EUR only)
         order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         order.balanceEUR = sellEUR - order.totalEUR;
+
+        // Log calculation for debugging
+        console.log(`📊 Order cost calculation:
+  - Cost: $${costUSD} USD
+  - Shipping: $${shippingUSD} USD
+  - Subtotal: $${costUSD + shippingUSD} USD
+  - Exchange rate: ${rate}
+  - USD→EUR: $${costUSD + shippingUSD} × ${rate} = €${((costUSD + shippingUSD) * rate).toFixed(2)}
+  - Extras: €${extrasEUR}
+  - Total: €${order.totalEUR.toFixed(2)}
+  - Sell price: €${sellEUR}
+  - Profit: €${order.balanceEUR.toFixed(2)}`);
 
         // BGN fields kept for database audit (not calculated)
         order.totalBGN = 0;
@@ -550,7 +572,11 @@ export class OrdersModule {
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
-        const rate = parseFloat(settings.eurRate) || order.rate || 0.92;
+        const rate = parseFloat(settings.eurRate) || order.rate;
+
+        if (!rate) {
+            console.warn('⚠️ No exchange rate available for recalculation, using order stored rate');
+        }
 
         const updatedOrder = { ...order, rate };
         const extrasEUR = order.extrasEUR || 0;

@@ -43,6 +43,26 @@
     font-feature-settings: "tnum" 1;
 }
 
+.stat-sublabel {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+/* KPI Semantic Colors */
+.kpi-profit .stat-value {
+    color: #28a745;
+}
+
+.kpi-loss .stat-value {
+    color: #dc3545;
+}
+
+.kpi-expense .stat-value {
+    color: #17a2b8;
+}
+
 /* ============================================
    FILTER SECTION - MINIMAL
    ============================================ */
@@ -1170,8 +1190,11 @@ textarea {
 
 /* Hide action buttons by default */
 .orders-table tbody tr .action-buttons,
+.orders-table tbody tr .row-actions,
 .inventory-table tbody tr .action-buttons,
-.clients-table tbody tr .action-buttons {
+.inventory-table tbody tr .row-actions,
+.clients-table tbody tr .action-buttons,
+.clients-table tbody tr .row-actions {
     opacity: 0;
     pointer-events: none;
     transition: opacity 200ms ease-out;
@@ -1179,8 +1202,11 @@ textarea {
 
 /* Show action buttons on row hover */
 .orders-table tbody tr:hover .action-buttons,
+.orders-table tbody tr:hover .row-actions,
 .inventory-table tbody tr:hover .action-buttons,
-.clients-table tbody tr:hover .action-buttons {
+.inventory-table tbody tr:hover .row-actions,
+.clients-table tbody tr:hover .action-buttons,
+.clients-table tbody tr:hover .row-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -1188,8 +1214,11 @@ textarea {
 /* Always show on touch devices (no hover support) */
 @media (hover: none) {
     .orders-table tbody tr .action-buttons,
+    .orders-table tbody tr .row-actions,
     .inventory-table tbody tr .action-buttons,
-    .clients-table tbody tr .action-buttons {
+    .inventory-table tbody tr .row-actions,
+    .clients-table tbody tr .action-buttons,
+    .clients-table tbody tr .row-actions {
         opacity: 1;
         pointer-events: auto;
     }

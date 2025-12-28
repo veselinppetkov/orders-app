@@ -1,10 +1,11 @@
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
 
 export class ReportsModule {
-    constructor(state, eventBus, ordersModule) {  // ADD ordersModule dependency
+    constructor(state, eventBus, ordersModule, expensesModule) {
         this.state = state;
         this.eventBus = eventBus;
-        this.ordersModule = ordersModule;  // NEW: Direct access to orders
+        this.ordersModule = ordersModule;
+        this.expensesModule = expensesModule;
     }
 
     getOrderEurMetrics(order) {
@@ -18,91 +19,109 @@ export class ReportsModule {
     async getMonthlyStats(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
 
-        // GET ORDERS FROM SUPABASE, not localStorage
-        const orders = await this.ordersModule.getOrders(targetMonth);
+        // Load orders and expenses from Supabase
+        const allOrders = await this.ordersModule.getOrders(targetMonth);
+        const expenses = await this.expensesModule.getExpenses(targetMonth);
 
-        // GET EXPENSES from localStorage (still there)
-        const monthlyData = this.state.get('monthlyData');
-        const expenses = monthlyData[targetMonth]?.expenses || [];
+        // Filter out "Свободен" (Free/Inventory) watches - they're inventory, not sales
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const freeWatches = allOrders.filter(o => o.status === 'Свободен');
 
-        const totalExpenses = expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
-        const revenue = orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
-        const totalOrderCosts = orders.reduce((sum, o) => sum + (o.totalEUR || 0), 0);
-        const profit = revenue - totalOrderCosts - totalExpenses;
+        const operatingExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        const revenue = soldOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
+        const watchCosts = soldOrders.reduce((sum, o) => sum + (o.totalEUR || 0), 0);
+        const totalExpenses = operatingExpenses + watchCosts;
+        const profit = revenue - watchCosts - operatingExpenses;
 
         return {
-            orderCount: orders.length,
+            orderCount: soldOrders.length, // Count only sold orders, not inventory
+            totalOrders: allOrders.length, // Total including free watches
+            freeWatchCount: freeWatches.length, // Inventory count
             revenue,
-            expenses: totalExpenses,
+            expenses: totalExpenses, // Total of operating + watch costs
+            operatingExpenses, // Operating expenses only (ads, subscriptions, etc.)
+            watchCosts, // Watch purchase costs (sold orders only)
             profit,
-            avgProfit: orders.length > 0 ? profit / orders.length : 0
+            avgProfit: soldOrders.length > 0 ? profit / soldOrders.length : 0
         };
     }
 
     async getAllTimeStats() {
-        // GET ALL ORDERS from Supabase
+        // Get all orders from Supabase
         const allOrders = await this.ordersModule.getAllOrders();
 
-        // GET ALL EXPENSES from localStorage
-        const monthlyData = this.state.get('monthlyData');
-        const allExpenses = Object.values(monthlyData).flatMap(m => m.expenses || []);
+        // Filter out "Свободен" (Free/Inventory) watches
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
 
-        const totalRevenue = allOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
-        const totalProfit = allOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0);
-        const totalExpenses = allExpenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0);
+        // Get unique months from orders
+        const uniqueMonths = new Set(soldOrders.map(o => o.date.substring(0, 7)));
+
+        // Get expenses for each month from Supabase
+        const allExpenses = [];
+        for (const month of uniqueMonths) {
+            const monthExpenses = await this.expensesModule.getExpenses(month);
+            allExpenses.push(...monthExpenses);
+        }
+
+        const totalRevenue = soldOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
+        const totalProfit = soldOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0);
+        const totalExpenses = allExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
         return {
-            totalOrders: allOrders.length,
+            totalOrders: soldOrders.length, // Sold orders only
             totalRevenue,
             totalProfit,
             totalExpenses,
             netProfit: totalProfit - totalExpenses,
-            avgProfit: allOrders.length > 0 ? totalProfit / allOrders.length : 0
+            avgProfit: soldOrders.length > 0 ? totalProfit / soldOrders.length : 0
         };
     }
 
     async getReportByOrigin() {
         const allOrders = await this.ordersModule.getAllOrders();
-        return this.aggregateBy(allOrders, 'origin');
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        return this.aggregateBy(soldOrders, 'origin');
     }
 
     async getReportByVendor() {
         const allOrders = await this.ordersModule.getAllOrders();
-        return this.aggregateBy(allOrders, 'vendor');
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        return this.aggregateBy(soldOrders, 'vendor');
     }
 
     async getReportByMonth() {
         const allOrders = await this.ordersModule.getAllOrders();
-        const monthlyData = this.state.get('monthlyData');
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
         const report = {};
 
         // Group orders by month
         const ordersByMonth = {};
-        allOrders.forEach(order => {
+        soldOrders.forEach(order => {
             const month = order.date.substring(0, 7); // "2024-01"
             if (!ordersByMonth[month]) ordersByMonth[month] = [];
             ordersByMonth[month].push(order);
         });
 
         // Build report combining orders and expenses
-        Object.keys(ordersByMonth).forEach(month => {
+        for (const month of Object.keys(ordersByMonth)) {
             const orders = ordersByMonth[month];
-            const expenses = monthlyData[month]?.expenses || [];
+            const expenses = await this.expensesModule.getExpenses(month);
 
             report[month] = {
                 count: orders.length,
                 revenue: orders.reduce((sum, o) => sum + (o.sellEUR || 0), 0),
                 profit: orders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
-                expenses: expenses.reduce((sum, e) => sum + (e.amountEUR || e.amount || 0), 0)
+                expenses: expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
             };
-        });
+        }
 
         return report;
     }
 
     async getTopClients(limit = 10) {
         const allOrders = await this.ordersModule.getAllOrders();
-        const clientStats = this.aggregateBy(allOrders, 'client');
+        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const clientStats = this.aggregateBy(soldOrders, 'client');
 
         return Object.entries(clientStats)
             .sort((a, b) => b[1].profit - a[1].profit)

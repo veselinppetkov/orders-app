@@ -23,7 +23,7 @@ export class UIManager {
     }
 
     initializeMonths() {
-        // Load saved months
+        // Load saved months synchronously (will be recalculated async in init())
         let savedMonths = null;
         try {
             const saved = localStorage.getItem('orderSystem_availableMonths');
@@ -34,7 +34,7 @@ export class UIManager {
             console.error('Error loading months:', e);
         }
 
-        // Generate default if none exist
+        // Generate default if none exist (temporary, will be recalculated)
         if (!savedMonths || savedMonths.length === 0) {
             savedMonths = this.generateDefaultMonths();
         }
@@ -59,20 +59,68 @@ export class UIManager {
     }
 
     generateDefaultMonths() {
+        // Temporary fallback - generates current month only
         const months = [];
         const currentDate = new Date();
 
-        for (let i = 3; i >= 0; i--) {
-            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-            months.push({
-                key: this.formatMonthKey(date),
-                name: this.formatMonthName(date)
-            });
-        }
+        months.push({
+            key: this.formatMonthKey(currentDate),
+            name: this.formatMonthName(currentDate)
+        });
+
         return months;
     }
 
+    async generateMonthsFromOrders() {
+        try {
+            // Get all orders to find the earliest date
+            const allOrders = await this.modules.orders.getAllOrders();
+
+            if (allOrders.length === 0) {
+                // No orders yet - return current month
+                console.log('📅 No orders found - using current month');
+                return this.generateDefaultMonths();
+            }
+
+            // Find earliest order date
+            const earliestOrder = allOrders.reduce((earliest, order) => {
+                return new Date(order.date) < new Date(earliest.date) ? order : earliest;
+            });
+
+            const startDate = new Date(earliestOrder.date);
+            const currentDate = new Date();
+
+            console.log(`📅 Generating months from ${startDate.toISOString().substring(0, 7)} (first order) to ${currentDate.toISOString().substring(0, 7)} (current)`);
+
+            // Generate all months from earliest order to current month
+            const months = [];
+            let date = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+
+            while (date <= endDate) {
+                months.push({
+                    key: this.formatMonthKey(date),
+                    name: this.formatMonthName(date)
+                });
+                date = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+            }
+
+            return months;
+        } catch (error) {
+            console.error('❌ Failed to generate months from orders:', error);
+            return this.generateDefaultMonths();
+        }
+    }
+
     async init() {
+        // Recalculate available months based on actual orders
+        const monthsFromOrders = await this.generateMonthsFromOrders();
+
+        // Update available months
+        this.availableMonths = monthsFromOrders;
+        this.state.set('availableMonths', monthsFromOrders);
+        localStorage.setItem('orderSystem_availableMonths', JSON.stringify(monthsFromOrders));
+
         // Check month AFTER data is loaded
         await this.ensureCurrentMonth();
 
@@ -98,11 +146,11 @@ export class UIManager {
             monthlyData[currentMonth] = { orders: [], expenses: [] };
             this.state.set('monthlyData', monthlyData);
 
-            // Initialize expenses ONLY for new month
+            // Initialize expenses ONLY for new month (seeds to Supabase)
             await this.modules.expenses.initializeMonth(currentMonth);
-        } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
-            // Add expenses ONLY if missing, WITHOUT touching orders
-            await this.modules.expenses.addDefaultExpenses(currentMonth);
+        } else {
+            // Ensure expenses exist in Supabase (will seed if missing)
+            await this.modules.expenses.ensureMonthExpenses(currentMonth);
         }
     }
 

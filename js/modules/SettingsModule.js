@@ -27,20 +27,27 @@ export class SettingsModule {
 
     async updateSettings(settings) {
         try {
-            console.log('💾 Saving settings to Supabase...');
+            console.log('💾 SettingsModule.updateSettings() called with:', settings);
 
             // Save to Supabase
+            console.log('🚀 Calling supabase.saveSettings...');
             const savedSettings = await this.supabase.saveSettings(settings);
+            console.log('✅ Supabase.saveSettings returned:', savedSettings);
 
             // Update local state
+            console.log('📝 Updating local state and storage...');
             this.storage.save('settings', savedSettings);
             this.state.set('settings', savedSettings);
+
+            console.log('📢 Emitting settings:updated event...');
             this.eventBus.emit('settings:updated', savedSettings);
+            console.log('✅ SettingsModule.updateSettings completed');
 
             return savedSettings;
 
         } catch (error) {
             console.error('❌ Failed to save settings to Supabase:', error);
+            console.error('Stack trace:', error.stack);
 
             // Fallback to localStorage
             const currentSettings = this.state.get('settings');

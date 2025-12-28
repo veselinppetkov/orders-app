@@ -267,8 +267,15 @@ export class SupabaseService {
             // Use EUR values directly (BGN fields kept in DB for audit only)
             const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
             const sellEUR = parseFloat(orderData.sellEUR) || 0;
+            const rate = parseFloat(orderData.rate);
 
-            const { data, error } = await this.supabase
+            // ❌ CRITICAL: Don't default rate to 1, throw error instead
+            if (!rate || rate <= 0) {
+                console.error('❌ Invalid exchange rate for order creation:', { orderData, rate });
+                throw new Error(`Invalid exchange rate: ${orderData.rate}. Cannot create order without valid USD→EUR rate.`);
+            }
+
+            const { data, error} = await this.supabase
                 .from('orders')
                 .insert([{
                     date: orderData.date,
@@ -279,7 +286,7 @@ export class SupabaseService {
                     model: orderData.model,
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
-                    rate: parseFloat(orderData.rate) || 1,
+                    rate: rate,
                     extras_bgn: 0,
                     sell_bgn: 0,
                     extras_eur: extrasEUR,
@@ -352,6 +359,13 @@ export class SupabaseService {
             // Use EUR values directly (BGN fields kept in DB for audit only)
             const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
             const sellEUR = parseFloat(orderData.sellEUR) || 0;
+            const rate = parseFloat(orderData.rate);
+
+            // ❌ CRITICAL: Don't default rate to 1, throw error instead
+            if (!rate || rate <= 0) {
+                console.error('❌ Invalid exchange rate for order update:', { orderId, orderData, rate });
+                throw new Error(`Invalid exchange rate: ${orderData.rate}. Cannot update order without valid USD→EUR rate.`);
+            }
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -364,7 +378,7 @@ export class SupabaseService {
                     model: orderData.model,
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
-                    rate: parseFloat(orderData.rate) || 1,
+                    rate: rate,
                     extras_bgn: 0,
                     sell_bgn: 0,
                     extras_eur: extrasEUR,
@@ -907,12 +921,23 @@ async getExpenses(month = null) {
         const extrasEUR = parseFloat(dbOrder.extras_eur) || 0;
         const sellEUR = parseFloat(dbOrder.sell_eur) || 0;
 
-        // Calculate totals in EUR only
-        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-        const balanceEUR = sellEUR - totalEUR;
+        // ✅ FIX: Calculate EUR totals based on currency field
+        let totalEUR, balanceEUR;
+
+        if (dbOrder.currency === 'BGN') {
+            // Legacy BGN order: Convert BGN totals to EUR using official rate (1.95583)
+            const totalBGN = ((costUSD + shippingUSD) * rate) + (parseFloat(dbOrder.extras_bgn) || 0);
+            const balanceBGN = (parseFloat(dbOrder.sell_bgn) || 0) - totalBGN;
+            totalEUR = totalBGN / 1.95583;
+            balanceEUR = balanceBGN / 1.95583;
+        } else {
+            // Current EUR order: Calculate in EUR directly
+            totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+            balanceEUR = sellEUR - totalEUR;
+        }
 
         // System currency is now EUR
-        const currency = 'EUR';
+        const currency = dbOrder.currency || 'EUR';
 
         // Generate signed URL for image
         const imageUrl = await this.getImageUrl(dbOrder.image_url);

@@ -82,16 +82,16 @@ export default class ReportsView {
             return `<p class="no-data">Няма данни за ${labelTitle.toLowerCase()}</p>`;
         }
 
-        const sorted = Object.entries(data).sort((a, b) => b[1].profit - a[1].profit);
+        const sorted = Object.entries(data).sort((a, b) => b[1].count - a[1].count);
+        const total = sorted.reduce((sum, [, val]) => sum + val.count, 0);
 
         return `
-            <table class="report-table">
+            <table class="report-table compact">
                 <thead>
                     <tr>
                         <th>${labelTitle}</th>
-                        <th>Поръчки</th>
-                        <th>Приходи</th>
-                        <th>Печалба</th>
+                        <th>Брой</th>
+                        <th>%</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -99,19 +99,15 @@ export default class ReportsView {
                         <tr>
                             <td><strong>${key}</strong></td>
                             <td>${value.count}</td>
-                            <td>${value.revenue.toFixed(2)} €</td>
-                            <td class="${value.profit >= 0 ? 'profit-positive' : 'profit-negative'}">
-                                <strong>${value.profit.toFixed(2)} €</strong>
-                            </td>
+                            <td>${total > 0 ? ((value.count / total) * 100).toFixed(1) : 0}%</td>
                         </tr>
                     `).join('')}
                 </tbody>
                 <tfoot>
                     <tr class="total-row">
                         <td><strong>ОБЩО</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.count, 0)}</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.revenue, 0).toFixed(2)} €</strong></td>
-                        <td><strong>${sorted.reduce((sum, [, val]) => sum + val.profit, 0).toFixed(2)} €</strong></td>
+                        <td><strong>${total}</strong></td>
+                        <td><strong>100%</strong></td>
                     </tr>
                 </tfoot>
             </table>
