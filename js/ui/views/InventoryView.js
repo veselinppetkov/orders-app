@@ -5,6 +5,9 @@ export default class InventoryView {
         this.eventBus = eventBus;
         this.filter = 'all'; // all, low-stock, out-of-stock
         this.searchTerm = '';
+        this.searchDebounceTimer = null; // Debounce timer for search input
+        this.typeFilterValue = ''; // Type filter state
+        this.sortByValue = 'brand'; // Sort by state
     }
 
     async render() {
@@ -101,18 +104,18 @@ export default class InventoryView {
                 <div class="filter-group">
                     <label>Филтър:</label>
                     <select id="typeFilter">
-                        <option value="">Всички типове</option>
-                        <option value="стандарт">Стандарт</option>
-                        <option value="премиум">Премиум</option>
+                        <option value="" ${this.typeFilterValue === '' ? 'selected' : ''}>Всички типове</option>
+                        <option value="стандарт" ${this.typeFilterValue === 'стандарт' ? 'selected' : ''}>Стандарт</option>
+                        <option value="премиум" ${this.typeFilterValue === 'премиум' ? 'selected' : ''}>Премиум</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label>Сортиране:</label>
                     <select id="sortInventory">
-                        <option value="brand">По бранд</option>
-                        <option value="stock">По наличност</option>
-                        <option value="value">По стойност</option>
-                        <option value="type">По тип</option>
+                        <option value="brand" ${this.sortByValue === 'brand' ? 'selected' : ''}>По бранд</option>
+                        <option value="stock" ${this.sortByValue === 'stock' ? 'selected' : ''}>По наличност</option>
+                        <option value="value" ${this.sortByValue === 'value' ? 'selected' : ''}>По стойност</option>
+                        <option value="type" ${this.sortByValue === 'type' ? 'selected' : ''}>По тип</option>
                     </select>
                 </div>
             </div>
@@ -131,8 +134,6 @@ export default class InventoryView {
                             <th>Продажна цена</th>
                             <th>Наличност</th>
                             <th>Поръчани</th>
-                            <th>Общо</th>
-                            <th>Стойност</th>
                             <th>Статус</th>
                             <th>Действия</th>
                         </tr>
@@ -146,8 +147,6 @@ export default class InventoryView {
                                 <td colspan="4"><strong>ОБЩО</strong></td>
                                 <td><strong>${items.reduce((sum, item) => sum + item.stock, 0)}</strong></td>
                                 <td><strong>${items.reduce((sum, item) => sum + item.ordered, 0)}</strong></td>
-                                <td><strong>${items.reduce((sum, item) => sum + item.stock + item.ordered, 0)}</strong></td>
-                                <td><strong>${items.reduce((sum, item) => sum + (item.stock * item.purchasePrice), 0).toFixed(2)} €</strong></td>
                                 <td colspan="2"></td>
                             </tr>
                         </tfoot>
@@ -190,10 +189,8 @@ export default class InventoryView {
     }
 
     renderItemRow(item) {
-        const total = item.stock + item.ordered;
         const statusClass = item.stock === 0 ? 'out-of-stock' : item.stock <= 2 ? 'low-stock' : 'in-stock';
         const statusText = item.stock === 0 ? 'Изчерпан' : item.stock <= 2 ? 'Ниска наличност' : 'Наличен';
-        const itemValue = item.stock * item.purchasePrice;
 
         return `
             <tr data-item-id="${item.id}" class="${statusClass}">
@@ -218,8 +215,6 @@ export default class InventoryView {
                         <input type="number" class="ordered-input" data-id="${item.id}" value="${item.ordered}" min="0" max="999">
                     </div>
                 </td>
-                <td><strong>${total}</strong></td>
-                <td><strong>${itemValue.toFixed(2)} €</strong></td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
                     <div class="action-buttons">
@@ -251,15 +246,13 @@ export default class InventoryView {
         }
 
         // Apply type filter
-        const typeFilter = document.getElementById('typeFilter')?.value;
-        if (typeFilter) {
-            items = items.filter(item => item.type === typeFilter);
+        if (this.typeFilterValue) {
+            items = items.filter(item => item.type === this.typeFilterValue);
         }
 
         // Apply sorting
-        const sortBy = document.getElementById('sortInventory')?.value || 'brand';
         items.sort((a, b) => {
-            switch (sortBy) {
+            switch (this.sortByValue) {
                 case 'stock':
                     return b.stock - a.stock;
                 case 'value':
@@ -293,18 +286,29 @@ export default class InventoryView {
             });
         });
 
-        // Search input
-        document.getElementById('searchInventory')?.addEventListener('input', async (e) => { // MAKE ASYNC
+        // Search input with debouncing
+        document.getElementById('searchInventory')?.addEventListener('input', (e) => {
             this.searchTerm = e.target.value;
-            await this.refresh(); // ADD AWAIT
+
+            // Clear existing timer
+            if (this.searchDebounceTimer) {
+                clearTimeout(this.searchDebounceTimer);
+            }
+
+            // Set new timer to refresh after 300ms of inactivity
+            this.searchDebounceTimer = setTimeout(async () => {
+                await this.refresh();
+            }, 300);
         });
 
         // Type and sort filters
-        document.getElementById('typeFilter')?.addEventListener('change', async () => {
+        document.getElementById('typeFilter')?.addEventListener('change', async (e) => {
+            this.typeFilterValue = e.target.value;
             await this.refresh();
         });
 
-        document.getElementById('sortInventory')?.addEventListener('change', async () => {
+        document.getElementById('sortInventory')?.addEventListener('change', async (e) => {
+            this.sortByValue = e.target.value;
             await this.refresh();
         });
 
