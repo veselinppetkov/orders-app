@@ -550,24 +550,15 @@ export default class OrdersView {
         return `
             <div class="month-stats">
                 <div class="stat-item">
-                    <div class="stat-label">Продадени поръчки</div>
+                    <div class="stat-label">Поръчки този месец</div>
                     <div class="stat-value">${stats.orderCount}</div>
-                    ${stats.freeWatchCount > 0 ? `<div class="stat-sublabel">(+${stats.freeWatchCount} свободни)</div>` : ''}
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Приходи</div>
                     <div class="stat-value">${stats.revenue.toFixed(2)} €</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-label">Разходи часовници</div>
-                    <div class="stat-value">${stats.watchCosts.toFixed(2)} €</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Оперативни разходи</div>
-                    <div class="stat-value">${stats.operatingExpenses.toFixed(2)} €</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Общо разходи</div>
+                    <div class="stat-label">Разходи</div>
                     <div class="stat-value">${stats.expenses.toFixed(2)} €</div>
                 </div>
                 <div class="stat-item">
