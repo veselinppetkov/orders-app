@@ -412,11 +412,6 @@ export class OrdersModule {
                 );
             }
 
-            if (filters.model) {
-                const modelTerm = filters.model.toLowerCase();
-                orders = orders.filter(o => o.model.toLowerCase().includes(modelTerm));
-            }
-
             if (filters.origin) {
                 orders = orders.filter(o => o.origin === filters.origin);
             }

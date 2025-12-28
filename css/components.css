@@ -170,6 +170,129 @@ textarea {
     gap: 4px;
 }
 
+/* Clickable status badges */
+.status-badge.clickable {
+    cursor: pointer;
+    transition: all 150ms ease-out;
+    user-select: none;
+}
+
+.status-badge.clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    filter: brightness(1.05);
+}
+
+.status-badge.clickable:active {
+    transform: translateY(0);
+}
+
+/* Status update states */
+.status-badge.updating {
+    opacity: 0.7;
+    animation: pulse-badge 1s ease-in-out infinite;
+}
+
+.status-badge.update-success {
+    animation: success-flash 0.6s ease-out;
+}
+
+.status-badge.update-error {
+    animation: error-shake 0.4s ease-out;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+@keyframes success-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; box-shadow: 0 0 10px rgba(40, 167, 69, 0.5); }
+}
+
+@keyframes error-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+/* ============================================
+   STATUS POPOVER - INLINE STATUS CHANGE
+   ============================================ */
+
+.status-popover {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md), 0 8px 24px rgba(0, 0, 0, 0.12);
+    min-width: 180px;
+    animation: popover-appear 150ms ease-out;
+    z-index: 1000;
+}
+
+.status-popover-header {
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--border-default);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.status-popover-options {
+    padding: var(--space-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.status-option {
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 120ms ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+}
+
+.status-option:not([disabled]):hover {
+    transform: translateX(2px);
+    box-shadow: var(--shadow-sm);
+    filter: brightness(1.05);
+}
+
+.status-option[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.status-option.current {
+    border: 2px solid var(--accent-strong);
+}
+
+.current-indicator {
+    font-size: 14px;
+    margin-left: auto;
+}
+
+@keyframes popover-appear {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .status-badge.in-stock {
     background: rgba(155, 191, 154, 0.12);
     color: var(--success-sage);
@@ -683,6 +806,470 @@ textarea {
 .active-filter-badge .btn {
     padding: 4px 10px;
     font-size: 12px;
+}
+
+/* ============================================
+   FEATURE E: SKELETON LOADING (SHIMMER EFFECTS)
+   ============================================ */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-surface) 0%,
+        rgba(216, 199, 163, 0.1) 50%,
+        var(--bg-surface) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        transparent 100%
+    );
+    animation: skeleton-wave 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes skeleton-wave {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+/* Skeleton variants */
+.skeleton-text {
+    height: 14px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-text.medium {
+    width: 80%;
+}
+
+.skeleton-title {
+    height: 24px;
+    margin-bottom: 12px;
+    width: 40%;
+}
+
+.skeleton-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+}
+
+.skeleton-button {
+    height: 36px;
+    width: 100px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-card {
+    padding: var(--space-lg);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+}
+
+.skeleton-table-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--border-default);
+}
+
+/* ============================================
+   FEATURE F: TOAST NOTIFICATION STACKING
+   ============================================ */
+
+#notification-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    max-width: 420px;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    box-shadow: var(--shadow-md), 0 8px 24px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    min-width: 320px;
+    max-width: 420px;
+    pointer-events: auto;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toast.toast-enter {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+}
+
+.toast.toast-exit {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+}
+
+.toast-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex: 1;
+}
+
+.toast-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.toast-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.toast-action-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 120ms ease-out;
+}
+
+.toast-action-btn:hover {
+    background: var(--accent-beige);
+    border-color: var(--accent-strong);
+}
+
+.toast-close {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 120ms ease-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
+}
+
+/* Toast type variants */
+.toast-success {
+    border-left: 4px solid #9bbf9a;
+}
+
+.toast-error {
+    border-left: 4px solid #c98b8b;
+}
+
+.toast-warning {
+    border-left: 4px solid #d2b48c;
+}
+
+.toast-info {
+    border-left: 4px solid #8b9dc3;
+}
+
+/* Responsive toast */
+@media (max-width: 768px) {
+    #notification-container {
+        right: 10px;
+        bottom: 10px;
+        max-width: calc(100vw - 20px);
+    }
+
+    .toast {
+        min-width: unset;
+        max-width: 100%;
+    }
+}
+
+/* ============================================
+   FEATURE D: SMART EMPTY STATES
+   ============================================ */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+    min-height: 400px;
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    margin-bottom: var(--space-lg);
+    opacity: 0.8;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.empty-state-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.empty-state-message {
+    font-size: 16px;
+    color: var(--text-secondary);
+    max-width: 480px;
+    line-height: 1.6;
+    margin-bottom: var(--space-lg);
+}
+
+.empty-state-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.empty-state .btn-primary {
+    background: var(--accent-strong);
+    color: var(--text-primary);
+    border: none;
+    padding: 12px 24px;
+    font-weight: 600;
+}
+
+.empty-state .btn-primary:hover {
+    background: var(--accent-beige);
+    transform: translateY(-2px);
+}
+
+.empty-state .btn-secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+    padding: 12px 24px;
+}
+
+.empty-state .btn-secondary:hover {
+    background: var(--bg-surface);
+    border-color: var(--accent-beige);
+}
+
+/* Loading state (to differentiate from empty state) */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+    min-height: 400px;
+}
+
+.loading-state h3 {
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+    animation: pulse-text 1.5s ease-in-out infinite;
+}
+
+.loading-state p {
+    color: var(--text-secondary);
+}
+
+@keyframes pulse-text {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ============================================
+   QUICK WIN A: STICKY TABLE HEADERS
+   ============================================ */
+
+.orders-table thead th,
+.inventory-table thead th,
+.clients-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    z-index: 15;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Ensure header text remains readable with solid background */
+.orders-table thead th::before,
+.inventory-table thead th::before,
+.clients-table thead th::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-elevated);
+    z-index: -1;
+}
+
+/* ============================================
+   QUICK WIN B: ROW HOVER ACTIONS (PROGRESSIVE DISCLOSURE)
+   ============================================ */
+
+/* Hide action buttons by default */
+.orders-table tbody tr .action-buttons,
+.inventory-table tbody tr .action-buttons,
+.clients-table tbody tr .action-buttons {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
+}
+
+/* Show action buttons on row hover */
+.orders-table tbody tr:hover .action-buttons,
+.inventory-table tbody tr:hover .action-buttons,
+.clients-table tbody tr:hover .action-buttons {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Always show on touch devices (no hover support) */
+@media (hover: none) {
+    .orders-table tbody tr .action-buttons,
+    .inventory-table tbody tr .action-buttons,
+    .clients-table tbody tr .action-buttons {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Add subtle row highlight on hover for better UX */
+.orders-table tbody tr:hover,
+.inventory-table tbody tr:hover,
+.clients-table tbody tr:hover {
+    background: rgba(216, 199, 163, 0.04);
+    transition: background 150ms ease-out;
+}
+
+/* Exception: Keep checkboxes and status badges always visible */
+.order-checkbox,
+.status-badge {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* ============================================
+   QUICK WIN C: INPUT CLEAR BUTTONS
+   ============================================ */
+
+/* Wrapper for input + clear button */
+.input-with-clear {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.input-with-clear input {
+    width: 100%;
+    padding-right: 32px; /* Space for clear button */
+}
+
+/* Clear button styling */
+.input-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    color: var(--bg-elevated);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    transition: all 120ms ease-out;
+    opacity: 0.6;
+}
+
+.input-clear-btn:hover {
+    opacity: 1;
+    background: var(--text-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.input-clear-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+/* Show clear button when input has value */
+.input-with-clear.has-value .input-clear-btn {
+    display: flex;
+}
+
+/* Ensure clear button works with filter inputs */
+.filter-group {
+    position: relative;
+}
+
+.filter-group .input-with-clear {
+    width: 100%;
 }
 
 /* ============================================

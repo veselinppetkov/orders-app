@@ -9,6 +9,11 @@ export class UIManager {
         this.undoRedo = undoRedo;
         this.currentView = null;
 
+        // Toast notification system
+        this.toastQueue = [];
+        this.maxToasts = 5;
+        this.toastIdCounter = 0;
+
         // Initialize months without touching data
         this.initializeMonths();
 
@@ -308,7 +313,7 @@ export class UIManager {
         return `${months[date.getMonth()]} ${date.getFullYear()}`;
     }
 
-    // UPDATED: Make view switching completely async
+    // UPDATED: Make view switching completely async with skeleton loading
     async switchView(viewName) {
         document.querySelectorAll('.tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === viewName);
@@ -318,13 +323,8 @@ export class UIManager {
         if (!container) return;
 
         try {
-            // Show loading state
-            container.innerHTML = `
-                <div class="loading-state">
-                    <h3>📦 Loading ${viewName}...</h3>
-                    <p>Fetching data from database...</p>
-                </div>
-            `;
+            // FEATURE E: Show skeleton loading state
+            container.innerHTML = this.renderSkeletonForView(viewName);
 
             const moduleName = viewName === 'inventory' ? 'InventoryView' :
                 viewName.charAt(0).toUpperCase() + viewName.slice(1) + 'View';
@@ -353,26 +353,258 @@ export class UIManager {
 
         } catch (error) {
             console.error(`❌ Error loading view ${viewName}:`, error);
-            container.innerHTML = `
-                <div class="error-state">
-                    <h3>❌ Failed to load ${viewName}</h3>
-                    <p>Error: ${error.message}</p>
-                    <button onclick="window.app.ui.switchView('${viewName}')" class="btn">🔄 Retry</button>
-                </div>
-            `;
+            // FEATURE D: Smart empty state for errors
+            container.innerHTML = this.renderEmptyState('error', {
+                message: `Неуспешно зареждане на ${viewName}: ${error.message}`
+            });
+
+            // Attach retry action
+            container.querySelector('[data-empty-action="retry"]')?.addEventListener('click', () => {
+                this.switchView(viewName);
+            });
         }
     }
 
-    showNotification(message, type = 'info') {
+    // FEATURE E: Skeleton loading templates
+    renderSkeletonForView(viewName) {
+        const skeletonTemplates = {
+            orders: `
+                <div class="skeleton-container">
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-text medium"></div>
+                    ${Array(5).fill(0).map(() => `
+                        <div class="skeleton-table-row">
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text medium"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text"></div>
+                        </div>
+                    `).join('')}
+                </div>
+            `,
+            clients: `
+                <div class="skeleton-container" style="padding: var(--space-lg);">
+                    <div class="skeleton-title"></div>
+                    ${Array(6).fill(0).map(() => `
+                        <div class="skeleton-card" style="margin-bottom: var(--space-md);">
+                            <div class="skeleton skeleton-text medium"></div>
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                        </div>
+                    `).join('')}
+                </div>
+            `,
+            inventory: `
+                <div class="skeleton-container">
+                    <div class="skeleton-title"></div>
+                    ${Array(5).fill(0).map(() => `
+                        <div class="skeleton-table-row">
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-button"></div>
+                        </div>
+                    `).join('')}
+                </div>
+            `,
+            default: `
+                <div class="loading-state">
+                    <h3>📦 Loading ${viewName}...</h3>
+                    <p>Fetching data from database...</p>
+                </div>
+            `
+        };
+
+        return skeletonTemplates[viewName] || skeletonTemplates.default;
+    }
+
+    // FEATURE F: Toast Notification Stacking
+    showNotification(message, type = 'info', options = {}) {
         const container = document.getElementById('notification-container');
         if (!container) return;
 
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        container.appendChild(notification);
+        // Create toast object
+        const toast = {
+            id: ++this.toastIdCounter,
+            message,
+            type,
+            undoAction: options.undoAction || null,
+            duration: options.duration || 4000,
+            timestamp: Date.now()
+        };
 
-        setTimeout(() => notification.remove(), 3000);
+        // Add to queue
+        this.toastQueue.push(toast);
+
+        // Limit queue size
+        if (this.toastQueue.length > this.maxToasts) {
+            const removed = this.toastQueue.shift();
+            this.removeToastElement(removed.id);
+        }
+
+        // Render toast
+        this.renderToast(toast, container);
+
+        // Auto-dismiss
+        if (toast.duration > 0) {
+            setTimeout(() => this.dismissToast(toast.id), toast.duration);
+        }
+
+        return toast.id;
+    }
+
+    renderToast(toast, container) {
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast toast-${toast.type}`;
+        toastEl.id = `toast-${toast.id}`;
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'polite');
+
+        toastEl.innerHTML = `
+            <div class="toast-content">
+                <div class="toast-icon">${this.getToastIcon(toast.type)}</div>
+                <div class="toast-message">${toast.message}</div>
+            </div>
+            <div class="toast-actions">
+                ${toast.undoAction ? `
+                    <button class="toast-action-btn" data-toast-id="${toast.id}" data-action="undo">
+                        Undo
+                    </button>
+                ` : ''}
+                <button class="toast-close" data-toast-id="${toast.id}" title="Затвори">
+                    ×
+                </button>
+            </div>
+        `;
+
+        // Event listeners
+        toastEl.querySelector('.toast-close')?.addEventListener('click', () => {
+            this.dismissToast(toast.id);
+        });
+
+        if (toast.undoAction) {
+            toastEl.querySelector('[data-action="undo"]')?.addEventListener('click', () => {
+                toast.undoAction();
+                this.dismissToast(toast.id);
+            });
+        }
+
+        container.appendChild(toastEl);
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            toastEl.classList.add('toast-enter');
+        });
+    }
+
+    dismissToast(toastId) {
+        const toast = this.toastQueue.find(t => t.id === toastId);
+        if (!toast) return;
+
+        // Remove from queue
+        this.toastQueue = this.toastQueue.filter(t => t.id !== toastId);
+
+        // Animate out
+        this.removeToastElement(toastId);
+    }
+
+    removeToastElement(toastId) {
+        const toastEl = document.getElementById(`toast-${toastId}`);
+        if (!toastEl) return;
+
+        toastEl.classList.add('toast-exit');
+        setTimeout(() => toastEl.remove(), 300);
+    }
+
+    getToastIcon(type) {
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+        return icons[type] || icons.info;
+    }
+
+    // FEATURE D: Smart Empty States
+    renderEmptyState(context = 'default', customOptions = {}) {
+        const states = {
+            search: {
+                icon: '🔍',
+                title: 'Няма резултати',
+                message: `Не намерихме резултати за "${customOptions.searchTerm || 'вашето търсене'}"`,
+                primaryAction: {
+                    text: 'Изчисти филтрите',
+                    action: 'clearFilters',
+                    variant: 'primary'
+                },
+                secondaryAction: {
+                    text: 'Опитай отново',
+                    action: 'retry',
+                    variant: 'secondary'
+                }
+            },
+            fresh: {
+                icon: customOptions.icon || '📦',
+                title: customOptions.title || 'Все още няма данни',
+                message: customOptions.message || 'Започнете, като създадете първия запис',
+                primaryAction: {
+                    text: customOptions.actionText || 'Създай',
+                    action: customOptions.action || 'create',
+                    variant: 'primary'
+                }
+            },
+            error: {
+                icon: '⚠️',
+                title: 'Възникна грешка',
+                message: customOptions.message || 'Неуспешно зареждане на данните',
+                primaryAction: {
+                    text: 'Опитай отново',
+                    action: 'retry',
+                    variant: 'primary'
+                },
+                secondaryAction: {
+                    text: 'Свържи се с поддръжката',
+                    action: 'support',
+                    variant: 'secondary'
+                }
+            },
+            filter: {
+                icon: '🔍',
+                title: 'Няма съвпадения',
+                message: 'Опитайте да промените филтрите',
+                primaryAction: {
+                    text: 'Изчисти филтрите',
+                    action: 'clearFilters',
+                    variant: 'primary'
+                }
+            }
+        };
+
+        const state = states[context] || states.fresh;
+
+        return `
+            <div class="empty-state">
+                <div class="empty-state-icon">${state.icon}</div>
+                <h3 class="empty-state-title">${state.title}</h3>
+                <p class="empty-state-message">${state.message}</p>
+                <div class="empty-state-actions">
+                    ${state.primaryAction ? `
+                        <button class="btn btn-${state.primaryAction.variant}"
+                                data-empty-action="${state.primaryAction.action}">
+                            ${state.primaryAction.text}
+                        </button>
+                    ` : ''}
+                    ${state.secondaryAction ? `
+                        <button class="btn btn-${state.secondaryAction.variant}"
+                                data-empty-action="${state.secondaryAction.action}">
+                            ${state.secondaryAction.text}
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
     }
 
     async openModal(data) {

@@ -17,7 +17,6 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            model: '',
             showAllMonths: false
         };
         this.selectedOrders = new Set(); // For bulk operations
@@ -172,8 +171,11 @@ export default class OrdersView {
             <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
             <td>${order.fullSet ? '✅' : '❌'}</td>
             <td>
-                <span class="status-badge" 
-                      style="background: ${FormatUtils.getStatusColor(order.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(order.status))}">
+                <span class="status-badge clickable"
+                      data-order-id="${order.id}"
+                      data-current-status="${order.status}"
+                      style="background: ${FormatUtils.getStatusColor(order.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(order.status))}"
+                      title="Кликнете за промяна на статуса">
                     ${order.status}
                 </span>
             </td>
@@ -368,6 +370,21 @@ export default class OrdersView {
 
     // All existing listeners made async
     attachExistingListeners() {
+        // Status badge click handlers
+        document.querySelectorAll('.status-badge.clickable').forEach(badge => {
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showStatusPopover(e.target);
+            });
+        });
+
+        // Close popover when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
+                this.closeStatusPopover();
+            }
+        });
+
         // New order button
         document.getElementById('new-order-btn')?.addEventListener('click', () => {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
@@ -391,18 +408,30 @@ export default class OrdersView {
             });
         });
 
-        // Search input - DEBOUNCED ASYNC
-        document.getElementById('searchInput')?.addEventListener('input', (e) => {
-            this.filters.search = e.target.value;
-            this.debouncedRefresh(); // This calls refresh() which is now async
-        });
+        // Search input with clear button - DEBOUNCED ASYNC
+        const searchInputWrapper = document.querySelector('.input-with-clear');
+        const searchInput = document.getElementById('searchInput');
+        const clearBtn = searchInputWrapper?.querySelector('.input-clear-btn');
 
-        // Model filter input
-        document.getElementById('modelFilter')?.addEventListener('input', (e) => {
-            this.filters.model = e.target.value;
-            this.pagination.currentPage = 1; // Reset to first page
-            this.debouncedRefresh();
-        });
+        if (searchInput && searchInputWrapper) {
+            // Toggle has-value class based on input value
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                searchInputWrapper.classList.toggle('has-value', e.target.value.length > 0);
+                this.debouncedRefresh(); // This calls refresh() which is now async
+            });
+
+            // Clear button click handler
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    this.filters.search = '';
+                    searchInput.value = '';
+                    searchInputWrapper.classList.remove('has-value');
+                    searchInput.focus();
+                    this.debouncedRefresh();
+                });
+            }
+        }
 
         // Origin filter
         document.getElementById('filterOrigin')?.addEventListener('change', async (e) => { // MAKE ASYNC
@@ -562,11 +591,10 @@ export default class OrdersView {
                 <div class="filter-section">
                     <div class="filter-group">
                         <label>Търсене:</label>
-                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
-                    </div>
-                    <div class="filter-group">
-                        <label>Марка:</label>
-                        <input type="text" id="modelFilter" placeholder="Rolex, OMEGA..." value="${this.filters.model}">
+                        <div class="input-with-clear ${this.filters.search ? 'has-value' : ''}">
+                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                            <button class="input-clear-btn" type="button" aria-label="Clear search">×</button>
+                        </div>
                     </div>
                     <div class="filter-group">
                         <label>Източник:</label>
@@ -616,11 +644,137 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            model: '',
             showAllMonths: false
         };
         this.pagination.currentPage = 1;
         this.refresh();
+    }
+
+    // INLINE STATUS TOGGLE METHODS
+    showStatusPopover(badgeElement) {
+        // Close any existing popover
+        this.closeStatusPopover();
+
+        const orderId = parseInt(badgeElement.dataset.orderId);
+        const currentStatus = badgeElement.dataset.currentStatus;
+
+        // Available statuses
+        const statuses = ['Очакван', 'Доставен', 'Свободен', 'Други'];
+
+        // Create popover
+        const popover = document.createElement('div');
+        popover.className = 'status-popover';
+        popover.innerHTML = `
+            <div class="status-popover-header">Промяна на статус</div>
+            <div class="status-popover-options">
+                ${statuses.map(status => `
+                    <button class="status-option ${status === currentStatus ? 'current' : ''}"
+                            data-status="${status}"
+                            data-order-id="${orderId}"
+                            style="background: ${FormatUtils.getStatusColor(status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(status))}"
+                            ${status === currentStatus ? 'disabled' : ''}>
+                        ${status}
+                        ${status === currentStatus ? '<span class="current-indicator">✓</span>' : ''}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+
+        // Position popover
+        const rect = badgeElement.getBoundingClientRect();
+        popover.style.position = 'absolute';
+        popover.style.top = `${rect.bottom + window.scrollY + 5}px`;
+        popover.style.left = `${rect.left + window.scrollX}px`;
+        popover.style.zIndex = '1000';
+
+        // Add to DOM
+        document.body.appendChild(popover);
+
+        // Attach option click handlers
+        popover.querySelectorAll('.status-option:not([disabled])').forEach(option => {
+            option.addEventListener('click', async (e) => {
+                const newStatus = e.currentTarget.dataset.status;
+                const orderId = parseInt(e.currentTarget.dataset.orderId);
+                await this.updateOrderStatus(orderId, newStatus, badgeElement);
+            });
+        });
+
+        // Store reference for cleanup
+        this.activePopover = popover;
+    }
+
+    closeStatusPopover() {
+        if (this.activePopover) {
+            this.activePopover.remove();
+            this.activePopover = null;
+        }
+    }
+
+    async updateOrderStatus(orderId, newStatus, badgeElement) {
+        const oldStatus = badgeElement.dataset.currentStatus;
+
+        // Store original state for rollback
+        const originalBadge = {
+            text: badgeElement.textContent.trim(),
+            background: badgeElement.style.background,
+            color: badgeElement.style.color,
+            status: oldStatus
+        };
+
+        try {
+            // OPTIMISTIC UI UPDATE
+            badgeElement.textContent = newStatus;
+            badgeElement.style.background = FormatUtils.getStatusColor(newStatus);
+            badgeElement.style.color = FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(newStatus));
+            badgeElement.dataset.currentStatus = newStatus;
+            badgeElement.classList.add('updating');
+
+            // Close popover
+            this.closeStatusPopover();
+
+            // Show loading state
+            this.eventBus.emit('notification:show', {
+                message: '🔄 Обновяване на статус...',
+                type: 'info'
+            });
+
+            // Find and update the order
+            const result = await this.ordersModule.findOrderById(orderId);
+            if (!result || !result.order) {
+                throw new Error('Поръчката не е намерена');
+            }
+
+            // Update order with new status
+            const updatedOrderData = { ...result.order, status: newStatus };
+            await this.ordersModule.update(orderId, updatedOrderData);
+
+            // Success feedback
+            badgeElement.classList.remove('updating');
+            badgeElement.classList.add('update-success');
+            setTimeout(() => badgeElement.classList.remove('update-success'), 1000);
+
+            this.eventBus.emit('notification:show', {
+                message: `✅ Статусът е променен на "${newStatus}"`,
+                type: 'success'
+            });
+
+        } catch (error) {
+            console.error('❌ Status update failed:', error);
+
+            // ROLLBACK UI
+            badgeElement.textContent = originalBadge.text;
+            badgeElement.style.background = originalBadge.background;
+            badgeElement.style.color = originalBadge.color;
+            badgeElement.dataset.currentStatus = originalBadge.status;
+            badgeElement.classList.remove('updating');
+            badgeElement.classList.add('update-error');
+            setTimeout(() => badgeElement.classList.remove('update-error'), 1000);
+
+            this.eventBus.emit('notification:show', {
+                message: '❌ Грешка при промяна на статус: ' + error.message,
+                type: 'error'
+            });
+        }
     }
 
     formatDate(dateStr) {
