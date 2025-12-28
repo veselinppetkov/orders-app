@@ -9,7 +9,29 @@ export class ExpensesModule {
         this.eventBus = eventBus;
         this.supabase = supabase;
         
+        // Version-based default expenses with automatic date-based selection
+        // The system will automatically apply the correct version based on the month
         this.defaultExpensesHistory = [
+            // Version 1: Values for months up to December 31, 2025
+            {
+                effectiveFrom: '2025-01',
+                expenses: [
+                    { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
+                    { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
+                    { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
+                    { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
+                    { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
+                    { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
+                    { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
+                    { name: 'ChatGPT', amount: 17.90, note: 'AI асистент', isDefault: true, currency: 'EUR' },
+                    { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
+                    { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
+                    { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
+                    { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
+                    { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
+                ]
+            },
+            // Version 2: Values for months from January 1, 2026 onwards
             {
                 effectiveFrom: '2026-01',
                 expenses: [
@@ -29,44 +51,6 @@ export class ExpensesModule {
                 ]
             }
         ];
-
-            // Version 2: Add future price changes here
-            // Uncomment and edit when prices change:
-            // {
-            //     effectiveFrom: '2026-01',  // Effective from January 2026
-            //     expenses: [
-            //         { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
-            //         { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
-            //         { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
-            //         { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
-            //         { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
-            //         { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
-            //         { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
-            //         { name: 'ChatGPT', amount: 20.00, note: 'AI асистент', isDefault: true, currency: 'EUR' },  // PRICE INCREASED
-            //         { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
-            //         { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
-            //         { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
-            //         { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
-            //         { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
-            //     ]
-            // },
-
-        // Default expense templates (EUR only)
-        this.defaultExpenses = [
-            { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
-            { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
-            { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
-            { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
-            { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
-            { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
-            { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
-            { name: 'ChatGPT', amount: 17.90, note: 'AI асистент', isDefault: true, currency: 'EUR' },
-            { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
-            { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
-            { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
-            { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
-            { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
-        ],
 
 
         // Operation tracking
@@ -744,7 +728,7 @@ async update(expenseId, expenseData) {
         return {
             ...this.stats,
             pendingOperations: this.pendingOperations.size,
-            defaultExpenseCount: this.defaultExpenses.length,
+            defaultExpenseVersions: this.defaultExpensesHistory.length,
             nextCustomId: this.nextCustomId
         };
     }
@@ -780,7 +764,7 @@ async update(expenseId, expenseData) {
             console.group('🔍 EXPENSES MODULE DEBUG');
             console.log('Module Statistics:', stats.module);
             console.log('Current Month:', stats.currentMonth);
-            console.log('Default Expenses Template:', this.defaultExpenses.length, 'items');
+            console.log('Default Expenses Versions:', this.defaultExpensesHistory.length, 'versions');
             console.log('Pending Operations:', Array.from(this.pendingOperations));
             console.log('Supabase Connected:', !!this.supabase);
             console.groupEnd();
