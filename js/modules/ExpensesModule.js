@@ -69,6 +69,21 @@ export class ExpensesModule {
             //         { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
             //     ]
             // },
+        // Default expense templates (EUR only)
+        this.defaultExpenses = [
+            { name: 'IG Campaign', amount: 1535, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
+            { name: 'Assurance', amount: 300, note: 'Застраховка', isDefault: true, currency: 'EUR' },
+            { name: 'Fiverr', amount: 270, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
+            { name: 'Ltd.', amount: 235, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
+            { name: 'OLX BG', amount: 100, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
+            { name: 'OLX RO', amount: 100, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
+            { name: 'SmugMug', amount: 25, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
+            { name: 'ChatGPT', amount: 20, note: 'AI асистент', isDefault: true, currency: 'EUR' },
+            { name: 'Revolut', amount: 10, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
+            { name: 'A1', amount: 10, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
+            { name: 'Buffer', amount: 5, note: 'Social media management', isDefault: true, currency: 'EUR' },
+            { name: 'Bazar', amount: 15, note: 'Обяви', isDefault: true, currency: 'EUR' },
+            { name: 'Claude', amount: 15, note: 'Обяви', isDefault: true, currency: 'EUR' },
         ];
 
         // Operation tracking
