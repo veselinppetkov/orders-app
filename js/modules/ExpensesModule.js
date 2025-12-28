@@ -24,7 +24,6 @@ export class ExpensesModule {
             { name: 'Buffer', amount: 5, note: 'Social media management', isDefault: true, currency: 'EUR' },
             { name: 'Bazar', amount: 15, note: 'Обяви', isDefault: true, currency: 'EUR' },
             { name: 'Claude', amount: 15, note: 'Обяви', isDefault: true, currency: 'EUR' },
-            { name: 'TEST DEFAULT', amount: 15, note: 'Обяви', isDefault: true, currency: 'EUR' },
         ];
 
         // Operation tracking
