@@ -401,6 +401,14 @@ export class OrdersModule {
 
         const rate = parseFloat(settings.eurRate);
 
+        // Validate exchange rate
+        if (!rate || isNaN(rate) || rate <= 0) {
+            console.error('❌ Invalid exchange rate:', { eurRate: settings.eurRate, parsed: rate, settings });
+            throw new Error(`Invalid USD→EUR exchange rate: ${settings.eurRate}. Please check Settings page.`);
+        }
+
+        console.log(`💱 Using exchange rate: 1 USD = ${rate} EUR (from settings)`);
+
         // Use EUR values directly (no BGN conversion)
         const extrasEUR = parseFloat(data.extrasEUR) || 0;
         const sellEUR = parseFloat(data.sellEUR) || 0;
@@ -434,6 +442,18 @@ export class OrdersModule {
         // Calculate derived fields (EUR only)
         order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         order.balanceEUR = sellEUR - order.totalEUR;
+
+        // Log calculation for debugging
+        console.log(`📊 Order cost calculation:
+  - Cost: $${costUSD} USD
+  - Shipping: $${shippingUSD} USD
+  - Subtotal: $${costUSD + shippingUSD} USD
+  - Exchange rate: ${rate}
+  - USD→EUR: $${costUSD + shippingUSD} × ${rate} = €${((costUSD + shippingUSD) * rate).toFixed(2)}
+  - Extras: €${extrasEUR}
+  - Total: €${order.totalEUR.toFixed(2)}
+  - Sell price: €${sellEUR}
+  - Profit: €${order.balanceEUR.toFixed(2)}`);
 
         // BGN fields kept for database audit (not calculated)
         order.totalBGN = 0;
