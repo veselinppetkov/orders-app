@@ -9,22 +9,66 @@ export class ExpensesModule {
         this.eventBus = eventBus;
         this.supabase = supabase;
 
-        // Default expense templates (EUR only)
-        // EDIT THIS ARRAY TO CUSTOMIZE YOUR DEFAULT MONTHLY EXPENSES
-        this.defaultExpenses = [
-            { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
-            { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
-            { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
-            { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
-            { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
-            { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
-            { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
-            { name: 'ChatGPT', amount: 17.90, note: 'AI асистент', isDefault: true, currency: 'EUR' },
-            { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
-            { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
-            { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
-            { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
-            { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
+        // ============================================
+        // VERSIONED DEFAULT EXPENSE TEMPLATES (EUR only)
+        // ============================================
+        // Each version represents default expenses effective from a specific month
+        // When creating a month, the system uses the version that was active at that time
+        // This prevents retroactive changes to historical data
+        //
+        // To add a new version:
+        // 1. Copy the most recent version
+        // 2. Update the effectiveFrom date to the month when changes take effect
+        // 3. Modify the amounts/expenses as needed
+        // 4. Historical months will keep their original prices
+        //
+        // Example: If ChatGPT increases from €17.90 to €20.00 in January 2026:
+        // - Add a new version with effectiveFrom: '2026-01' and amount: 20.00
+        // - September 2025 will still use €17.90 (from the 2025-09 version)
+        // - January 2026 onwards will use €20.00
+        // ============================================
+
+        this.defaultExpensesHistory = [
+            // Version 1: Effective from September 2025
+            {
+                effectiveFrom: '2025-09',
+                expenses: [
+                    { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
+                    { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
+                    { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
+                    { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
+                    { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
+                    { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
+                    { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
+                    { name: 'ChatGPT', amount: 17.90, note: 'AI асистент', isDefault: true, currency: 'EUR' },
+                    { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
+                    { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
+                    { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
+                    { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
+                    { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
+                ]
+            },
+
+            // Version 2: Add future price changes here
+            // Uncomment and edit when prices change:
+            // {
+            //     effectiveFrom: '2026-01',  // Effective from January 2026
+            //     expenses: [
+            //         { name: 'IG Campaign', amount: 1534.29, note: 'Instagram реклама кампания', isDefault: true, currency: 'EUR' },
+            //         { name: 'Assurance', amount: 301.65, note: 'Застраховка', isDefault: true, currency: 'EUR' },
+            //         { name: 'Fiverr', amount: 270.98, note: 'Freelance услуги', isDefault: true, currency: 'EUR' },
+            //         { name: 'Ltd.', amount: 235.23, note: 'Фирмени разходи', isDefault: true, currency: 'EUR' },
+            //         { name: 'OLX BG', amount: 46.02, note: 'OLX България такси', isDefault: true, currency: 'EUR' },
+            //         { name: 'OLX RO', amount: 102.27, note: 'OLX Румъния такси', isDefault: true, currency: 'EUR' },
+            //         { name: 'SmugMug', amount: 23.01, note: 'Хостинг за снимки', isDefault: true, currency: 'EUR' },
+            //         { name: 'ChatGPT', amount: 20.00, note: 'AI асистент', isDefault: true, currency: 'EUR' },  // PRICE INCREASED
+            //         { name: 'Revolut', amount: 7.67, note: 'Банкови такси', isDefault: true, currency: 'EUR' },
+            //         { name: 'A1', amount: 5.11, note: 'Мобилен оператор', isDefault: true, currency: 'EUR' },
+            //         { name: 'Buffer', amount: 5.11, note: 'Social media management', isDefault: true, currency: 'EUR' },
+            //         { name: 'Bazar', amount: 12.78, note: 'Обяви', isDefault: true, currency: 'EUR' },
+            //         { name: 'Claude', amount: 15.34, note: 'Обяви', isDefault: true, currency: 'EUR' },
+            //     ]
+            // },
         ];
 
         // Operation tracking
@@ -416,7 +460,7 @@ async update(expenseId, expenseData) {
             if (!monthlyData[month]) {
                 monthlyData[month] = {
                     orders: [],
-                    expenses: this.createDefaultExpenses()
+                    expenses: this.createDefaultExpenses(month)  // Use version appropriate for this month
                 };
 
                 this.stats.monthsInitialized++;
@@ -450,7 +494,7 @@ async update(expenseId, expenseData) {
             const monthlyData = this.state.get('monthlyData') || {};
 
             if (monthlyData[month] && (!monthlyData[month].expenses || monthlyData[month].expenses.length === 0)) {
-                monthlyData[month].expenses = this.createDefaultExpenses();
+                monthlyData[month].expenses = this.createDefaultExpenses(month);  // Use version appropriate for this month
 
                 this.stats.defaultExpensesAdded++;
 
@@ -572,8 +616,8 @@ async update(expenseId, expenseData) {
                 monthlyData[targetMonth] = { orders: [], expenses: [] };
             }
 
-            // Reset to defaults (local only)
-            monthlyData[targetMonth].expenses = this.createDefaultExpenses();
+            // Reset to defaults (local only) - uses version appropriate for this month
+            monthlyData[targetMonth].expenses = this.createDefaultExpenses(targetMonth);
 
             this.stats.totalOperations++;
             this.stats.defaultExpensesAdded++;
@@ -599,10 +643,50 @@ async update(expenseId, expenseData) {
         }
     }
 
-    createDefaultExpenses() {
+    // ============================================
+    // VERSIONED DEFAULTS HELPERS
+    // ============================================
+
+    /**
+     * Find the applicable default expenses version for a given month
+     * Returns the most recent version that is <= the target month
+     * This ensures historical months use historical prices
+     *
+     * @param {string} targetMonth - Month in YYYY-MM format (e.g., '2025-09', '2026-01')
+     * @returns {object} The applicable version object with effectiveFrom and expenses
+     */
+    getApplicableDefaultsVersion(targetMonth) {
+        // Sort versions by effectiveFrom date (newest first)
+        const sortedVersions = [...this.defaultExpensesHistory].sort((a, b) =>
+            b.effectiveFrom.localeCompare(a.effectiveFrom)
+        );
+
+        // Find the most recent version that's <= targetMonth
+        const applicableVersion = sortedVersions.find(version =>
+            version.effectiveFrom <= targetMonth
+        );
+
+        // Fallback to the oldest version if targetMonth is before all versions
+        const version = applicableVersion || sortedVersions[sortedVersions.length - 1];
+
+        console.log(`📅 Using default expenses version from ${version.effectiveFrom} for month ${targetMonth}`);
+        return version;
+    }
+
+    /**
+     * Create default expenses for a specific month using the appropriate version
+     * This ensures non-retroactive changes - historical months keep historical prices
+     *
+     * @param {string} month - Month in YYYY-MM format (e.g., '2025-09', '2026-01')
+     * @returns {array} Array of default expense objects with temporary IDs
+     */
+    createDefaultExpenses(month) {
+        // Get the version that was active for this month
+        const version = this.getApplicableDefaultsVersion(month);
+
         // Create deep copy of default expenses with temporary local IDs
-        return this.defaultExpenses.map((expense, index) => ({
-            id: index + 1, // Temporary IDs for defaults (1-11)
+        return version.expenses.map((expense, index) => ({
+            id: index + 1, // Temporary IDs for defaults (1-13)
             name: expense.name,
             amount: expense.amount,
             note: expense.note,
