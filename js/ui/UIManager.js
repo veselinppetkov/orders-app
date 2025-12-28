@@ -98,11 +98,11 @@ export class UIManager {
             monthlyData[currentMonth] = { orders: [], expenses: [] };
             this.state.set('monthlyData', monthlyData);
 
-            // Initialize expenses ONLY for new month
+            // Initialize expenses ONLY for new month (seeds to Supabase)
             await this.modules.expenses.initializeMonth(currentMonth);
-        } else if (!monthlyData[currentMonth].expenses || monthlyData[currentMonth].expenses.length === 0) {
-            // Add expenses ONLY if missing, WITHOUT touching orders
-            await this.modules.expenses.addDefaultExpenses(currentMonth);
+        } else {
+            // Ensure expenses exist in Supabase (will seed if missing)
+            await this.modules.expenses.ensureMonthExpenses(currentMonth);
         }
     }
 
