@@ -26,8 +26,7 @@ export class OrdersModule {
             totalLoads: 0,
             cacheHits: 0,
             cacheMisses: 0,
-            supabaseOperations: 0,
-            fallbackOperations: 0
+            supabaseOperations: 0
         };
 
         console.log('📦 OrdersModule initialized with enhanced caching');
@@ -46,174 +45,6 @@ export class OrdersModule {
         });
     }
 
-    // CREATE ORDER with optimistic updates
-    async create(orderData) {
-        const operationId = `create_${Date.now()}`;
-        this.pendingOperations.add(operationId);
-
-        try {
-            // Validate input data
-            this.validateOrderData(orderData);
-
-            // Emit before-create event for undo/redo
-            this.eventBus.emit('order:before-created', orderData);
-
-            // Create optimistic order for immediate UI feedback
-            const optimisticOrder = this.createOptimisticOrder(orderData);
-            this.addOptimisticUpdate(optimisticOrder);
-
-            // Emit optimistic creation
-            this.eventBus.emit('order:created', {
-                order: optimisticOrder,
-                isOptimistic: true,
-                operationId
-            });
-
-            // Attempt Supabase save
-            try {
-                const savedOrder = await this.supabase.createOrder(orderData);
-                this.stats.supabaseOperations++;
-
-                // Replace optimistic with real order
-                this.replaceOptimisticOrder(optimisticOrder.id, savedOrder);
-
-                // Update cache
-                this.addOrderToCache(savedOrder);
-
-                // Backup to localStorage
-                this.backupToLocalStorage(savedOrder);
-
-                // Emit successful creation
-                this.eventBus.emit('order:created', {
-                    order: savedOrder,
-                    isOptimistic: false,
-                    operationId,
-                    createdInMonth: this.getOrderMonth(savedOrder.date)
-                });
-
-                console.log('✅ Order created successfully in Supabase:', savedOrder.id);
-                return savedOrder;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localOrder = await this.createInLocalStorage(orderData);
-                this.stats.fallbackOperations++;
-
-                // Replace optimistic with local order
-                this.replaceOptimisticOrder(optimisticOrder.id, localOrder);
-
-                // Update cache
-                this.addOrderToCache(localOrder);
-
-                // Emit fallback creation
-                this.eventBus.emit('order:created', {
-                    order: localOrder,
-                    isOptimistic: false,
-                    operationId,
-                    createdInMonth: this.getOrderMonth(localOrder.date),
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Order created in localStorage fallback:', localOrder.id);
-                return localOrder;
-            }
-
-        } catch (error) {
-            // Remove failed optimistic update
-            if (this.optimisticUpdates.has(operationId)) {
-                this.optimisticUpdates.delete(operationId);
-            }
-
-            this.eventBus.emit('order:create-failed', { error, orderData, operationId });
-            throw error;
-
-        } finally {
-            this.pendingOperations.delete(operationId);
-        }
-    }
-
-    // UPDATE ORDER with proper cache management
-    async update(orderId, orderData) {
-        const operationId = `update_${orderId}_${Date.now()}`;
-        this.pendingOperations.add(operationId);
-
-        try {
-            // Validate input data
-            this.validateOrderData(orderData);
-
-            // Find current order for comparison
-            const currentOrder = await this.findOrderById(orderId);
-            if (!currentOrder) {
-                throw new Error(`Order not found: ${orderId}`);
-            }
-
-            // Emit before-update event for undo/redo
-            this.eventBus.emit('order:before-updated', {
-                id: orderId,
-                currentOrder: currentOrder.order,
-                newData: orderData
-            });
-
-            // Prepare updated order
-            const updatedOrder = this.prepareOrder({ ...orderData, id: orderId });
-            const newMonth = this.getOrderMonth(updatedOrder.date);
-            const oldMonth = currentOrder.month;
-
-            try {
-                // Update in Supabase
-                const savedOrder = await this.supabase.updateOrder(orderId, updatedOrder);
-                this.stats.supabaseOperations++;
-
-                // Update cache
-                this.updateOrderInCache(savedOrder, oldMonth, newMonth);
-
-                // Backup to localStorage
-                this.backupToLocalStorage(savedOrder);
-
-                // Emit successful update
-                this.eventBus.emit('order:updated', {
-                    order: savedOrder,
-                    operationId,
-                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Order updated successfully in Supabase:', orderId);
-                return savedOrder;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localOrder = await this.updateInLocalStorage(orderId, orderData);
-                this.stats.fallbackOperations++;
-
-                // Update cache
-                this.updateOrderInCache(localOrder, oldMonth, newMonth);
-
-                // Emit fallback update
-                this.eventBus.emit('order:updated', {
-                    order: localOrder,
-                    operationId,
-                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Order updated in localStorage fallback:', orderId);
-                return localOrder;
-            }
-
-        } catch (error) {
-            this.eventBus.emit('order:update-failed', { error, orderId, orderData, operationId });
-            throw error;
-
-        } finally {
-            this.pendingOperations.delete(operationId);
-        }
-    }
-
     // DELETE ORDER with proper cleanup
     async delete(orderId) {
         const operationId = `delete_${orderId}_${Date.now()}`;
@@ -229,44 +60,22 @@ export class OrdersModule {
             // Emit before-delete event for undo/redo
             this.eventBus.emit('order:before-deleted', orderToDelete.order);
 
-            try {
-                // Delete from Supabase (includes image cleanup)
-                await this.supabase.deleteOrder(orderId);
-                this.stats.supabaseOperations++;
+            // Delete from Supabase (includes image cleanup)
+            await this.supabase.deleteOrder(orderId);
+            this.stats.supabaseOperations++;
 
-                // Remove from cache
-                this.removeOrderFromCache(orderId, orderToDelete.month);
+            // Remove from cache
+            this.removeOrderFromCache(orderId, orderToDelete.month);
 
-                // Emit successful deletion
-                this.eventBus.emit('order:deleted', {
-                    orderId,
-                    order: orderToDelete.order,
-                    operationId,
-                    source: 'supabase'
-                });
+            // Emit successful deletion
+            this.eventBus.emit('order:deleted', {
+                orderId,
+                order: orderToDelete.order,
+                operationId,
+                source: 'supabase'
+            });
 
-                console.log('✅ Order deleted successfully from Supabase:', orderId);
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase delete failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                await this.deleteFromLocalStorage(orderId);
-                this.stats.fallbackOperations++;
-
-                // Remove from cache
-                this.removeOrderFromCache(orderId, orderToDelete.month);
-
-                // Emit fallback deletion
-                this.eventBus.emit('order:deleted', {
-                    orderId,
-                    order: orderToDelete.order,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Order deleted in localStorage fallback:', orderId);
-            }
+            console.log('✅ Order deleted:', orderId);
 
         } catch (error) {
             this.eventBus.emit('order:delete-failed', { error, orderId, operationId });
@@ -292,32 +101,17 @@ export class OrdersModule {
             }
 
             this.stats.cacheMisses++;
-            console.log(`📂 Loading orders from source for month: ${targetMonth}`);
+            console.log(`📂 Loading orders from Supabase for month: ${targetMonth}`);
 
-            try {
-                // Try Supabase first
-                const orders = await this.supabase.getOrders(targetMonth);
-                this.stats.supabaseOperations++;
+            // Load from Supabase
+            const orders = await this.supabase.getOrders(targetMonth);
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.updateCache(targetMonth, orders);
+            // Update cache
+            this.updateCache(targetMonth, orders);
 
-                console.log(`✅ Loaded ${orders.length} orders from Supabase for ${targetMonth}`);
-                return this.mergeWithOptimisticUpdates(orders, targetMonth);
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localOrders = this.getOrdersFromLocalStorage(targetMonth);
-                this.stats.fallbackOperations++;
-
-                // Update cache with local data
-                this.updateCache(targetMonth, localOrders);
-
-                console.log(`✅ Loaded ${localOrders.length} orders from localStorage for ${targetMonth}`);
-                return this.mergeWithOptimisticUpdates(localOrders, targetMonth);
-            }
+            console.log(`✅ Loaded ${orders.length} orders for ${targetMonth}`);
+            return this.mergeWithOptimisticUpdates(orders, targetMonth);
 
         } catch (error) {
             console.error('❌ Failed to load orders:', error);
@@ -328,30 +122,17 @@ export class OrdersModule {
     // GET ALL ORDERS across months
     async getAllOrders() {
         try {
-            console.log('📂 Loading all orders...');
+            console.log('📂 Loading all orders from Supabase...');
 
-            try {
-                // Try Supabase first
-                const orders = await this.supabase.getOrders(); // No month filter
-                this.stats.supabaseOperations++;
+            const orders = await this.supabase.getOrders(); // No month filter
+            this.stats.supabaseOperations++;
 
-                console.log(`✅ Loaded ${orders.length} total orders from Supabase`);
-                return orders;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localOrders = this.getAllOrdersFromLocalStorage();
-                this.stats.fallbackOperations++;
-
-                console.log(`✅ Loaded ${localOrders.length} total orders from localStorage`);
-                return localOrders;
-            }
+            console.log(`✅ Loaded ${orders.length} total orders`);
+            return orders;
 
         } catch (error) {
             console.error('❌ Failed to load all orders:', error);
-            return [];
+            throw error;
         }
     }
 
@@ -555,78 +336,6 @@ export class OrdersModule {
             .sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
-    // LOCALSTORAGE OPERATIONS (simplified)
-    async createInLocalStorage(orderData) {
-        const order = this.prepareOrder(orderData);
-        const month = this.getOrderMonth(order.date);
-
-        const monthlyData = this.state.get('monthlyData');
-        this.ensureMonthExists(month, monthlyData);
-
-        monthlyData[month].orders.push(order);
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        return order;
-    }
-
-    async updateInLocalStorage(orderId, orderData) {
-        const order = this.prepareOrder({ ...orderData, id: orderId });
-        const newMonth = this.getOrderMonth(order.date);
-        const monthlyData = this.state.get('monthlyData');
-
-        // Find and update/move order
-        for (const [month, data] of Object.entries(monthlyData)) {
-            if (data.orders) {
-                const index = data.orders.findIndex(o => o.id === orderId);
-                if (index !== -1) {
-                    if (month === newMonth) {
-                        data.orders[index] = order;
-                    } else {
-                        data.orders.splice(index, 1);
-                        this.ensureMonthExists(newMonth, monthlyData);
-                        monthlyData[newMonth].orders.push(order);
-                    }
-                    break;
-                }
-            }
-        }
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        return order;
-    }
-
-    async deleteFromLocalStorage(orderId) {
-        const monthlyData = this.state.get('monthlyData');
-
-        for (const [month, data] of Object.entries(monthlyData)) {
-            if (data.orders) {
-                const initialLength = data.orders.length;
-                data.orders = data.orders.filter(o => o.id !== orderId);
-
-                if (data.orders.length < initialLength) {
-                    this.storage.save('monthlyData', monthlyData);
-                    this.state.set('monthlyData', monthlyData);
-                    break;
-                }
-            }
-        }
-    }
-
-    getOrdersFromLocalStorage(month) {
-        const monthlyData = this.state.get('monthlyData');
-        this.ensureMonthExists(month, monthlyData);
-        return monthlyData[month]?.orders || [];
-    }
-
-    getAllOrdersFromLocalStorage() {
-        const monthlyData = this.state.get('monthlyData');
-        return Object.values(monthlyData).flatMap(m => m.orders || []);
-    }
-
     // UTILITY METHODS
     validateOrderData(orderData) {
         const required = ['date', 'client', 'origin', 'vendor', 'model'];
@@ -701,13 +410,9 @@ export class OrdersModule {
 
         const rate = parseFloat(settings.eurRate) || 0.92;
 
-        // Normalize amounts: accept legacy BGN input but convert to EUR immediately
-        const extrasEUR = parseFloat(data.extrasEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.extrasBGN) || 0);
-        const sellEUR = parseFloat(data.sellEUR) || CurrencyUtils.convertBGNtoEUR(parseFloat(data.sellBGN) || 0);
-
-        // BGN values for backward compatibility (calculated from EUR)
-        const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
-        const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
+        // Use EUR values directly (no BGN conversion)
+        const extrasEUR = parseFloat(data.extrasEUR) || 0;
+        const sellEUR = parseFloat(data.sellEUR) || 0;
 
         // Prepare order with guaranteed settings
         const order = {
@@ -721,9 +426,9 @@ export class OrdersModule {
             costUSD: costUSD,
             shippingUSD: shippingUSD,
             rate: rate,
-            // BGN fields (legacy/historical)
-            extrasBGN: extrasBGN,
-            sellBGN: sellBGN,
+            // BGN fields (kept for database audit, not used in calculations)
+            extrasBGN: 0,
+            sellBGN: 0,
             // EUR fields (primary)
             extrasEUR: extrasEUR,
             sellEUR: sellEUR,
@@ -735,13 +440,13 @@ export class OrdersModule {
             imageData: data.imageData || null
         };
 
-        // Calculate derived fields (EUR primary)
+        // Calculate derived fields (EUR only)
         order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         order.balanceEUR = sellEUR - order.totalEUR;
 
-        // Backward-compatible BGN values derived from EUR
-        order.totalBGN = CurrencyUtils.convertEURtoBGN(order.totalEUR);
-        order.balanceBGN = CurrencyUtils.convertEURtoBGN(order.balanceEUR);
+        // BGN fields kept for database audit (not calculated)
+        order.totalBGN = 0;
+        order.balanceBGN = 0;
 
         return order;
     }
@@ -761,46 +466,23 @@ export class OrdersModule {
             // FIXED: Use async order preparation (same as update logic)
             const preparedOrder = await this.prepareOrder(orderData);
 
-            try {
-                // Create in Supabase first
-                const savedOrder = await this.supabase.createOrder(preparedOrder);
-                this.stats.supabaseOperations++;
+            // Create in Supabase
+            const savedOrder = await this.supabase.createOrder(preparedOrder);
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.addOrderToCache(savedOrder);
+            // Update cache
+            this.addOrderToCache(savedOrder);
 
-                // Emit successful creation
-                this.eventBus.emit('order:created', {
-                    order: savedOrder,
-                    operationId,
-                    createdInMonth: this.getOrderMonth(savedOrder.date),
-                    source: 'supabase'
-                });
+            // Emit successful creation
+            this.eventBus.emit('order:created', {
+                order: savedOrder,
+                operationId,
+                createdInMonth: this.getOrderMonth(savedOrder.date),
+                source: 'supabase'
+            });
 
-                console.log('✅ Order created successfully in Supabase:', savedOrder.id);
-                return savedOrder;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage with same prepared order
-                const localOrder = await this.createInLocalStorage(preparedOrder);
-                this.stats.fallbackOperations++;
-
-                // Update cache
-                this.addOrderToCache(localOrder);
-
-                // Emit fallback creation
-                this.eventBus.emit('order:created', {
-                    order: localOrder,
-                    operationId,
-                    createdInMonth: this.getOrderMonth(localOrder.date),
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Order created in localStorage fallback:', localOrder.id);
-                return localOrder;
-            }
+            console.log('✅ Order created:', savedOrder.id);
+            return savedOrder;
 
         } catch (error) {
             this.eventBus.emit('order:create-failed', { error, orderData, operationId });
@@ -838,46 +520,23 @@ export class OrdersModule {
             const newMonth = this.getOrderMonth(updatedOrder.date);
             const oldMonth = currentOrder.month;
 
-            try {
-                // Update in Supabase
-                const savedOrder = await this.supabase.updateOrder(orderId, updatedOrder);
-                this.stats.supabaseOperations++;
+            // Update in Supabase
+            const savedOrder = await this.supabase.updateOrder(orderId, updatedOrder);
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.updateOrderInCache(savedOrder, oldMonth, newMonth);
+            // Update cache
+            this.updateOrderInCache(savedOrder, oldMonth, newMonth);
 
-                // Emit successful update
-                this.eventBus.emit('order:updated', {
-                    order: savedOrder,
-                    operationId,
-                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
-                    source: 'supabase'
-                });
+            // Emit successful update
+            this.eventBus.emit('order:updated', {
+                order: savedOrder,
+                operationId,
+                movedToMonth: newMonth !== oldMonth ? newMonth : null,
+                source: 'supabase'
+            });
 
-                console.log('✅ Order updated successfully in Supabase:', orderId);
-                return savedOrder;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback with same prepared order
-                const localOrder = await this.updateInLocalStorage(orderId, updatedOrder);
-                this.stats.fallbackOperations++;
-
-                // Update cache
-                this.updateOrderInCache(localOrder, oldMonth, newMonth);
-
-                // Emit fallback update
-                this.eventBus.emit('order:updated', {
-                    order: localOrder,
-                    operationId,
-                    movedToMonth: newMonth !== oldMonth ? newMonth : null,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Order updated in localStorage fallback:', orderId);
-                return localOrder;
-            }
+            console.log('✅ Order updated:', orderId);
+            return savedOrder;
 
         } catch (error) {
             this.eventBus.emit('order:update-failed', { error, orderId, orderData, operationId });
@@ -888,61 +547,19 @@ export class OrdersModule {
         }
     }
 
-// UPDATED LOCAL STORAGE METHODS - now work with pre-prepared orders
-    async createInLocalStorage(preparedOrder) {
-        const month = this.getOrderMonth(preparedOrder.date);
-
-        const monthlyData = this.state.get('monthlyData');
-        this.ensureMonthExists(month, monthlyData);
-
-        monthlyData[month].orders.push(preparedOrder);
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        return preparedOrder;
-    }
-
-    async updateInLocalStorage(orderId, preparedOrder) {
-        const newMonth = this.getOrderMonth(preparedOrder.date);
-        const monthlyData = this.state.get('monthlyData');
-
-        // Find and update/move order
-        for (const [month, data] of Object.entries(monthlyData)) {
-            if (data.orders) {
-                const index = data.orders.findIndex(o => o.id === orderId);
-                if (index !== -1) {
-                    if (month === newMonth) {
-                        data.orders[index] = preparedOrder;
-                    } else {
-                        data.orders.splice(index, 1);
-                        this.ensureMonthExists(newMonth, monthlyData);
-                        monthlyData[newMonth].orders.push(preparedOrder);
-                    }
-                    break;
-                }
-            }
-        }
-
-        this.storage.save('monthlyData', monthlyData);
-        this.state.set('monthlyData', monthlyData);
-
-        return preparedOrder;
-    }
-
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
         const rate = parseFloat(settings.eurRate) || order.rate || 0.92;
 
         const updatedOrder = { ...order, rate };
-        const extrasEUR = order.extrasEUR ?? CurrencyUtils.convertBGNtoEUR(order.extrasBGN || 0);
-        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
+        const extrasEUR = order.extrasEUR || 0;
+        const sellEUR = order.sellEUR || 0;
 
         updatedOrder.totalEUR = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR;
         updatedOrder.balanceEUR = sellEUR - updatedOrder.totalEUR;
-        updatedOrder.totalBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.totalEUR);
-        updatedOrder.balanceBGN = CurrencyUtils.convertEURtoBGN(updatedOrder.balanceEUR);
+        updatedOrder.totalBGN = 0;
+        updatedOrder.balanceBGN = 0;
 
         return updatedOrder;
     }

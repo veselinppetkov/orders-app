@@ -28,7 +28,6 @@ export class ClientsModule {
             cacheHits: 0,
             cacheMisses: 0,
             supabaseOperations: 0,
-            fallbackOperations: 0,
             statsCalculations: 0
         };
 
@@ -87,55 +86,26 @@ export class ClientsModule {
                 operationId
             });
 
-            try {
-                // Attempt Supabase save
-                const savedClient = await this.supabase.createClient(clientData);
-                this.stats.supabaseOperations++;
+            // Attempt Supabase save
+            const savedClient = await this.supabase.createClient(clientData);
+            this.stats.supabaseOperations++;
 
-                // Replace optimistic with real client
-                this.replaceOptimisticClient(optimisticClient.id, savedClient);
+            // Replace optimistic with real client
+            this.replaceOptimisticClient(optimisticClient.id, savedClient);
 
-                // Update cache
-                this.addClientToCache(savedClient);
+            // Update cache
+            this.addClientToCache(savedClient);
 
-                // Backup to localStorage
-                this.backupToLocalStorage(savedClient);
+            // Emit successful creation
+            this.eventBus.emit('client:created', {
+                client: savedClient,
+                isOptimistic: false,
+                operationId,
+                source: 'supabase'
+            });
 
-                // Emit successful creation
-                this.eventBus.emit('client:created', {
-                    client: savedClient,
-                    isOptimistic: false,
-                    operationId,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Client created successfully in Supabase:', savedClient.id);
-                return savedClient;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase create failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localClient = await this.createInLocalStorage(clientData);
-                this.stats.fallbackOperations++;
-
-                // Replace optimistic with local client
-                this.replaceOptimisticClient(optimisticClient.id, localClient);
-
-                // Update cache
-                this.addClientToCache(localClient);
-
-                // Emit fallback creation
-                this.eventBus.emit('client:created', {
-                    client: localClient,
-                    isOptimistic: false,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Client created in localStorage fallback:', localClient.id);
-                return localClient;
-            }
+            console.log('✅ Client created:', savedClient.id);
+            return savedClient;
 
         } catch (error) {
             // Remove failed optimistic update
@@ -176,55 +146,26 @@ export class ClientsModule {
                 newData: clientData
             });
 
-            try {
-                // Update in Supabase
-                const savedClient = await this.supabase.updateClient(clientId, clientData);
-                this.stats.supabaseOperations++;
+            // Update in Supabase
+            const savedClient = await this.supabase.updateClient(clientId, clientData);
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.updateClientInCache(savedClient);
+            // Update cache
+            this.updateClientInCache(savedClient);
 
-                // Clear stats cache for this client
-                this.clearStatsForClient(currentClient.name);
-                this.clearStatsForClient(savedClient.name); // In case name changed
+            // Clear stats cache for this client
+            this.clearStatsForClient(currentClient.name);
+            this.clearStatsForClient(savedClient.name); // In case name changed
 
-                // Backup to localStorage
-                this.backupToLocalStorage(savedClient);
+            // Emit successful update
+            this.eventBus.emit('client:updated', {
+                client: savedClient,
+                operationId,
+                source: 'supabase'
+            });
 
-                // Emit successful update
-                this.eventBus.emit('client:updated', {
-                    client: savedClient,
-                    operationId,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Client updated successfully in Supabase:', clientId);
-                return savedClient;
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase update failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localClient = await this.updateInLocalStorage(clientId, clientData);
-                this.stats.fallbackOperations++;
-
-                // Update cache
-                this.updateClientInCache(localClient);
-
-                // Clear stats cache
-                this.clearStatsForClient(currentClient.name);
-                this.clearStatsForClient(localClient.name);
-
-                // Emit fallback update
-                this.eventBus.emit('client:updated', {
-                    client: localClient,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Client updated in localStorage fallback:', clientId);
-                return localClient;
-            }
+            console.log('✅ Client updated:', clientId);
+            return savedClient;
 
         } catch (error) {
             this.eventBus.emit('client:update-failed', { error, clientId, clientData, operationId });
@@ -256,53 +197,25 @@ export class ClientsModule {
             // Emit before-delete event for undo/redo
             this.eventBus.emit('client:before-deleted', clientToDelete);
 
-            try {
-                // Delete from Supabase
-                await this.supabase.deleteClient(clientId);
-                this.stats.supabaseOperations++;
+            // Delete from Supabase
+            await this.supabase.deleteClient(clientId);
+            this.stats.supabaseOperations++;
 
-                // Remove from cache
-                this.removeClientFromCache(clientId);
+            // Remove from cache
+            this.removeClientFromCache(clientId);
 
-                // Clear stats cache
-                this.clearStatsForClient(clientToDelete.name);
+            // Clear stats cache
+            this.clearStatsForClient(clientToDelete.name);
 
-                // Remove from localStorage backup
-                this.removeFromLocalStorageBackup(clientId);
+            // Emit successful deletion
+            this.eventBus.emit('client:deleted', {
+                clientId,
+                client: clientToDelete,
+                operationId,
+                source: 'supabase'
+            });
 
-                // Emit successful deletion
-                this.eventBus.emit('client:deleted', {
-                    clientId,
-                    client: clientToDelete,
-                    operationId,
-                    source: 'supabase'
-                });
-
-                console.log('✅ Client deleted successfully from Supabase:', clientId);
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase delete failed, falling back to localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                await this.deleteFromLocalStorage(clientId);
-                this.stats.fallbackOperations++;
-
-                // Remove from cache
-                this.removeClientFromCache(clientId);
-
-                // Clear stats cache
-                this.clearStatsForClient(clientToDelete.name);
-
-                // Emit fallback deletion
-                this.eventBus.emit('client:deleted', {
-                    clientId,
-                    client: clientToDelete,
-                    operationId,
-                    source: 'localStorage'
-                });
-
-                console.log('✅ Client deleted in localStorage fallback:', clientId);
-            }
+            console.log('✅ Client deleted:', clientId);
 
         } catch (error) {
             this.eventBus.emit('client:delete-failed', { error, clientId, operationId });
@@ -327,35 +240,17 @@ export class ClientsModule {
             }
 
             this.stats.cacheMisses++;
-            console.log('📂 Loading clients from source...');
+            console.log('📂 Loading clients from Supabase...');
 
-            try {
-                // Try Supabase first
-                const clients = await this.supabase.getClients();
-                this.stats.supabaseOperations++;
+            // Load from Supabase
+            const clients = await this.supabase.getClients();
+            this.stats.supabaseOperations++;
 
-                // Update cache
-                this.updateCache(clients);
+            // Update cache
+            this.updateCache(clients);
 
-                // Backup to localStorage
-                this.backupClientsToLocalStorage(clients);
-
-                console.log(`✅ Loaded ${clients.length} clients from Supabase`);
-                return this.mergeWithOptimisticUpdates(clients);
-
-            } catch (supabaseError) {
-                console.warn('⚠️ Supabase load failed, using localStorage:', supabaseError.message);
-
-                // Fallback to localStorage
-                const localClients = this.getClientsFromLocalStorage();
-                this.stats.fallbackOperations++;
-
-                // Update cache with local data
-                this.updateCache(localClients);
-
-                console.log(`✅ Loaded ${localClients.length} clients from localStorage`);
-                return this.mergeWithOptimisticUpdates(localClients);
-            }
+            console.log(`✅ Loaded ${clients.length} clients from Supabase`);
+            return this.mergeWithOptimisticUpdates(clients);
 
         } catch (error) {
             console.error('❌ Failed to load clients:', error);
@@ -419,8 +314,8 @@ export class ClientsModule {
     }
 
     getOrderEurMetrics(order) {
-        const sellEUR = order.sellEUR ?? CurrencyUtils.convertBGNtoEUR(order.sellBGN || 0);
-        const balanceEUR = order.balanceEUR ?? CurrencyUtils.convertBGNtoEUR(order.balanceBGN || (order.sellBGN || 0) - Math.ceil(order.totalBGN || 0));
+        const sellEUR = order.sellEUR || 0;
+        const balanceEUR = order.balanceEUR || 0;
 
         return { sellEUR, balanceEUR };
     }
@@ -623,113 +518,6 @@ export class ClientsModule {
             }
             // Ignore other errors during duplicate check
             console.warn('⚠️ Could not check for duplicates:', error.message);
-        }
-    }
-
-    // LOCALSTORAGE OPERATIONS (simplified)
-    async createInLocalStorage(clientData) {
-        const client = {
-            id: 'client_' + Date.now(),
-            name: clientData.name,
-            phone: clientData.phone || '',
-            email: clientData.email || '',
-            address: clientData.address || '',
-            preferredSource: clientData.preferredSource || '',
-            notes: clientData.notes || '',
-            createdDate: new Date().toISOString()
-        };
-
-        const clientsData = this.state.get('clientsData');
-        clientsData[client.id] = client;
-
-        this.storage.save('clientsData', clientsData);
-        this.state.set('clientsData', clientsData);
-
-        return client;
-    }
-
-    async updateInLocalStorage(clientId, clientData) {
-        const clientsData = this.state.get('clientsData');
-
-        if (!clientsData[clientId]) {
-            throw new Error(`Client not found in localStorage: ${clientId}`);
-        }
-
-        const updatedClient = {
-            ...clientsData[clientId],
-            name: clientData.name,
-            phone: clientData.phone || '',
-            email: clientData.email || '',
-            address: clientData.address || '',
-            preferredSource: clientData.preferredSource || '',
-            notes: clientData.notes || ''
-        };
-
-        clientsData[clientId] = updatedClient;
-
-        this.storage.save('clientsData', clientsData);
-        this.state.set('clientsData', clientsData);
-
-        return updatedClient;
-    }
-
-    async deleteFromLocalStorage(clientId) {
-        const clientsData = this.state.get('clientsData');
-
-        if (!clientsData[clientId]) {
-            throw new Error(`Client not found in localStorage: ${clientId}`);
-        }
-
-        delete clientsData[clientId];
-
-        this.storage.save('clientsData', clientsData);
-        this.state.set('clientsData', clientsData);
-    }
-
-    getClientsFromLocalStorage() {
-        const clientsData = this.state.get('clientsData');
-        return Object.values(clientsData);
-    }
-
-    backupToLocalStorage(client) {
-        try {
-            const clientsData = this.state.get('clientsData');
-            clientsData[client.id] = client;
-
-            this.storage.save('clientsData', clientsData);
-            this.state.set('clientsData', clientsData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup failed:', error);
-        }
-    }
-
-    backupClientsToLocalStorage(clients) {
-        try {
-            const clientsData = {};
-
-            for (const client of clients) {
-                clientsData[client.id] = client;
-            }
-
-            this.storage.save('clientsData', clientsData);
-            this.state.set('clientsData', clientsData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup failed:', error);
-        }
-    }
-
-    removeFromLocalStorageBackup(clientId) {
-        try {
-            const clientsData = this.state.get('clientsData');
-            delete clientsData[clientId];
-
-            this.storage.save('clientsData', clientsData);
-            this.state.set('clientsData', clientsData);
-
-        } catch (error) {
-            console.warn('⚠️ localStorage backup removal failed:', error);
         }
     }
 

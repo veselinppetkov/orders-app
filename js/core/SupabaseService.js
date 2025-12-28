@@ -264,11 +264,9 @@ export class SupabaseService {
                 imageUrl = await this.uploadImage(orderData.imageData, `order-${Date.now()}`);
             }
 
-            // System is EUR-only: normalize any legacy BGN input
-            const extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-            const sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
-            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
+            // Use EUR values directly (BGN fields kept in DB for audit only)
+            const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
+            const sellEUR = parseFloat(orderData.sellEUR) || 0;
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -282,8 +280,8 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: extrasBGN,
-                    sell_bgn: sellBGN,
+                    extras_bgn: 0,
+                    sell_bgn: 0,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
                     currency: 'EUR',
@@ -351,11 +349,9 @@ export class SupabaseService {
                 }
             }
 
-            // System is EUR-only: normalize any legacy BGN input
-            const extrasEUR = orderData.extrasEUR ? parseFloat(orderData.extrasEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.extrasBGN) || 0);
-            const sellEUR = orderData.sellEUR ? parseFloat(orderData.sellEUR) : CurrencyUtils.convertBGNtoEUR(parseFloat(orderData.sellBGN) || 0);
-            const extrasBGN = CurrencyUtils.convertEURtoBGN(extrasEUR);
-            const sellBGN = CurrencyUtils.convertEURtoBGN(sellEUR);
+            // Use EUR values directly (BGN fields kept in DB for audit only)
+            const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
+            const sellEUR = parseFloat(orderData.sellEUR) || 0;
 
             const { data, error } = await this.supabase
                 .from('orders')
@@ -369,8 +365,8 @@ export class SupabaseService {
                     cost_usd: parseFloat(orderData.costUSD) || 0,
                     shipping_usd: parseFloat(orderData.shippingUSD) || 0,
                     rate: parseFloat(orderData.rate) || 1,
-                    extras_bgn: extrasBGN,
-                    sell_bgn: sellBGN,
+                    extras_bgn: 0,
+                    sell_bgn: 0,
                     extras_eur: extrasEUR,
                     sell_eur: sellEUR,
                     currency: 'EUR',
@@ -562,16 +558,14 @@ export class SupabaseService {
             // Incoming amount is now in EUR (from UI)
             const amountEUR = parseFloat(expenseData.amount) || 0;
 
-            // Convert to BGN for backward compatibility
-            const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
-
+            // EUR-only operation (BGN field kept for audit)
             const { data, error } = await this.supabase
                 .from('expenses')
                 .insert([{
                     month_key: expenseData.month,
                     name: expenseData.category || expenseData.name,
-                    amount: amountBGN,  // Store BGN for backward compatibility
-                    amount_eur: amountEUR,  // Store EUR as primary
+                    amount: 0,  // BGN field kept for database audit only
+                    amount_eur: amountEUR,  // EUR is primary
                     currency: 'EUR',
                     note: expenseData.description || expenseData.note || ''
                 }])
@@ -602,23 +596,19 @@ async getExpenses(month = null) {
         if (error) throw error;
 
         return data.map(exp => {
-            const amountBGN = parseFloat(exp.amount) || 0;
-            const amountEUR = exp.amount_eur
-                ? parseFloat(exp.amount_eur)
-                : parseFloat((amountBGN / 1.95583).toFixed(2));
+            const amountEUR = parseFloat(exp.amount_eur) || 0;
 
             return {
                 id: exp.id,
                 month: exp.month_key,
                 name: exp.name || 'Без име',
                 category: exp.name || 'Без име',
-                amount: amountEUR,              // ✅ EUR!
-                amountBGN: amountBGN,
+                amount: amountEUR,              // EUR only
                 amountEUR: amountEUR,
                 description: exp.note || '',
                 note: exp.note || '',
                 isDefault: false,
-                currency: exp.currency || 'BGN'
+                currency: 'EUR'
             };
         });
     });
@@ -628,16 +618,15 @@ async getExpenses(month = null) {
         return this.executeRequest(async () => {
             console.log('✏️ Updating expense:', expenseId);
 
-            // Convert EUR to BGN for storage (backward compatibility)
+            // EUR-only operation (BGN field kept for audit)
             const amountEUR = parseFloat(expenseData.amount) || 0;
-            const amountBGN = CurrencyUtils.convertEURtoBGN(amountEUR);
 
             const { data, error } = await this.supabase
                 .from('expenses')
                 .update({
                     name: expenseData.category || expenseData.name,
-                    amount: amountBGN,  // Store BGN for backward compatibility
-                    amount_eur: amountEUR,  // Store EUR as primary
+                    amount: 0,  // BGN field kept for database audit only
+                    amount_eur: amountEUR,  // EUR is primary
                     note: expenseData.description || expenseData.note || ''
                 })
                 .eq('id', expenseId)
@@ -706,20 +695,17 @@ async getExpenses(month = null) {
             const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
             const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
 
-            // Convert to BGN for backward compatibility
-            const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
-            const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
-
+            // EUR-only operation (BGN fields kept for audit)
             // Don't send ID - let database auto-generate it
             const { data, error } = await this.supabase
                 .from('inventory')
                 .insert([{
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
-                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
-                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
-                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
+                    purchase_price: 0,  // BGN field kept for database audit only
+                    sell_price: 0,  // BGN field kept for database audit only
+                    purchase_price_eur: purchasePriceEUR,  // EUR is primary
+                    sell_price_eur: sellPriceEUR,  // EUR is primary
                     stock: parseInt(itemData.stock) || 0,
                     ordered: parseInt(itemData.ordered) || 0,
                     currency: 'EUR'
@@ -748,19 +734,16 @@ async getExpenses(month = null) {
             const purchasePriceEUR = parseFloat(itemData.purchasePrice) || 0;
             const sellPriceEUR = parseFloat(itemData.sellPrice) || 0;
 
-            // Convert to BGN for backward compatibility
-            const purchasePriceBGN = CurrencyUtils.convertEURtoBGN(purchasePriceEUR);
-            const sellPriceBGN = CurrencyUtils.convertEURtoBGN(sellPriceEUR);
-
+            // EUR-only operation (BGN fields kept for audit)
             const { data, error } = await this.supabase
                 .from('inventory')
                 .update({
                     brand: itemData.brand,
                     type: itemData.type || 'стандарт',
-                    purchase_price: purchasePriceBGN,  // Store BGN for backward compatibility
-                    sell_price: sellPriceBGN,  // Store BGN for backward compatibility
-                    purchase_price_eur: purchasePriceEUR,  // Store EUR as primary
-                    sell_price_eur: sellPriceEUR,  // Store EUR as primary
+                    purchase_price: 0,  // BGN field kept for database audit only
+                    sell_price: 0,  // BGN field kept for database audit only
+                    purchase_price_eur: purchasePriceEUR,  // EUR is primary
+                    sell_price_eur: sellPriceEUR,  // EUR is primary
                     stock: parseInt(itemData.stock) || 0,
                     ordered: parseInt(itemData.ordered) || 0,
                     currency: 'EUR'
@@ -800,63 +783,36 @@ async getExpenses(month = null) {
 
 // TRANSFORMERS
     transformExpenseFromDB(dbExpense) {
-        // Use EUR field if available, otherwise convert from BGN
-        const amountBGN = parseFloat(dbExpense.amount) || 0;
-        const amountEUR = dbExpense.amount_eur
-            ? parseFloat(dbExpense.amount_eur)
-            : CurrencyUtils.convertBGNtoEUR(amountBGN);
-
-        // Validate: Check if EUR value is suspiciously close to BGN (no conversion)
-        if (amountBGN > 50 && Math.abs(amountEUR - amountBGN) < 1) {
-            console.warn(`⚠️ Expense ${dbExpense.id} has unconverted EUR value: ${amountEUR} EUR ≈ ${amountBGN} BGN`);
-        }
+        // Use EUR field only (BGN field ignored)
+        const amountEUR = parseFloat(dbExpense.amount_eur) || 0;
 
         return {
             id: dbExpense.id,
             month: dbExpense.month,
             category: dbExpense.category,
-            amount: amountEUR,  // Always use EUR
-            amountBGN: amountBGN,  // Keep BGN for reference
+            amount: amountEUR,  // EUR only
             amountEUR: amountEUR,  // Explicit EUR field
             description: dbExpense.description || '',
             isDefault: dbExpense.is_default || false,
-            currency: dbExpense.currency || 'BGN'
+            currency: 'EUR'
         };
     }
 
     transformInventoryFromDB(dbItem) {
-        // Use EUR fields if available, otherwise convert from BGN
-        const purchasePriceBGN = parseFloat(dbItem.purchase_price) || 0;
-        const sellPriceBGN = parseFloat(dbItem.sell_price) || 0;
-
-        const purchasePriceEUR = dbItem.purchase_price_eur
-            ? parseFloat(dbItem.purchase_price_eur)
-            : CurrencyUtils.convertBGNtoEUR(purchasePriceBGN);
-
-        const sellPriceEUR = dbItem.sell_price_eur
-            ? parseFloat(dbItem.sell_price_eur)
-            : CurrencyUtils.convertBGNtoEUR(sellPriceBGN);
-
-        // Validate: Check if EUR values are suspiciously close to BGN (no conversion)
-        if (purchasePriceBGN > 10 && Math.abs(purchasePriceEUR - purchasePriceBGN) < 1) {
-            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted purchase price: ${purchasePriceEUR} EUR ≈ ${purchasePriceBGN} BGN`);
-        }
-        if (sellPriceBGN > 10 && Math.abs(sellPriceEUR - sellPriceBGN) < 1) {
-            console.warn(`⚠️ Inventory ${dbItem.id} (${dbItem.brand}) has unconverted sell price: ${sellPriceEUR} EUR ≈ ${sellPriceBGN} BGN`);
-        }
+        // Use EUR fields only (BGN fields ignored)
+        const purchasePriceEUR = parseFloat(dbItem.purchase_price_eur) || 0;
+        const sellPriceEUR = parseFloat(dbItem.sell_price_eur) || 0;
 
         return {
             brand: dbItem.brand,
             type: dbItem.type,
-            purchasePrice: purchasePriceEUR,  // Always use EUR
-            sellPrice: sellPriceEUR,  // Always use EUR
-            purchasePriceBGN: purchasePriceBGN,  // Keep BGN for reference
-            sellPriceBGN: sellPriceBGN,  // Keep BGN for reference
+            purchasePrice: purchasePriceEUR,  // EUR only
+            sellPrice: sellPriceEUR,  // EUR only
             purchasePriceEUR: purchasePriceEUR,  // Explicit EUR field
             sellPriceEUR: sellPriceEUR,  // Explicit EUR field
             stock: parseInt(dbItem.stock) || 0,
             ordered: parseInt(dbItem.ordered) || 0,
-            currency: dbItem.currency || 'BGN'
+            currency: 'EUR'
         };
     }
 
@@ -940,76 +896,20 @@ async getExpenses(month = null) {
 
     // DATA TRANSFORMATION
 
-    /**
-     * Validate and ensure proper EUR conversion
-     * Always returns a properly converted EUR value
-     * @param {number} eurValue - EUR value from database (may be incorrect/missing)
-     * @param {number} bgnValue - BGN value from database (source of truth)
-     * @returns {number} Validated EUR value
-     */
-    validateAndConvertEUR(eurValue, bgnValue) {
-        const bgnNum = parseFloat(bgnValue) || 0;
-
-        // If no EUR value exists, convert from BGN
-        if (!eurValue || eurValue === 0) {
-            return CurrencyUtils.convertBGNtoEUR(bgnNum);
-        }
-
-        const eurNum = parseFloat(eurValue);
-
-        // Validate: Check if EUR value matches expected conversion
-        const expectedEUR = CurrencyUtils.convertBGNtoEUR(bgnNum);
-        const tolerance = 0.02; // 2% tolerance for rounding differences
-
-        // If EUR value is suspiciously close to BGN value (no conversion applied)
-        if (Math.abs(eurNum - bgnNum) < 1 && bgnNum > 100) {
-            console.warn(`⚠️ Suspicious EUR value detected: EUR=${eurNum}, BGN=${bgnNum}. Converting from BGN.`);
-            return expectedEUR;
-        }
-
-        // If EUR value deviates significantly from expected
-        if (expectedEUR > 0 && Math.abs(eurNum - expectedEUR) / expectedEUR > tolerance) {
-            console.warn(`⚠️ EUR value mismatch: stored=${eurNum}, expected=${expectedEUR.toFixed(2)}. Using stored value.`);
-        }
-
-        // Use the stored EUR value (assumed correct after warnings)
-        return eurNum;
-    }
 
     async transformOrderFromDB(dbOrder) {
-        // Parse all values explicitly
+        // Parse all values explicitly (EUR only)
         const costUSD = parseFloat(dbOrder.cost_usd) || 0;
         const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
         const rate = parseFloat(dbOrder.rate) || 0;
-        const extrasBGN = parseFloat(dbOrder.extras_bgn) || 0;
-        const sellBGN = parseFloat(dbOrder.sell_bgn) || 0;
 
-        // Calculate derived fields in EUR with validation (uses validateAndConvertEUR method)
-        const extrasEUR = this.validateAndConvertEUR(dbOrder.extras_eur, extrasBGN);
-        const sellEUR = this.validateAndConvertEUR(dbOrder.sell_eur, sellBGN);
+        // Use EUR fields only (ignore BGN fields)
+        const extrasEUR = parseFloat(dbOrder.extras_eur) || 0;
+        const sellEUR = parseFloat(dbOrder.sell_eur) || 0;
 
-        // CRITICAL FIX: Handle historical USD→BGN rates vs new USD→EUR rates
-        // Historical orders have rates > 1.5 (USD→BGN, e.g., 1.7-1.8)
-        // New orders have rates < 1.5 (USD→EUR, e.g., 0.85-0.95)
-        let totalEUR, totalBGN;
-
-        if (rate > 1.5) {
-            // Historical order: rate is USD→BGN, need to convert BGN→EUR
-            // Calculate total in BGN using old rate
-            totalBGN = ((costUSD + shippingUSD) * rate) + extrasBGN;
-            // Convert BGN→EUR using official rate
-            totalEUR = CurrencyUtils.convertBGNtoEUR(totalBGN);
-            console.log(`🕰️ Historical order ${dbOrder.id}: USD ${(costUSD + shippingUSD).toFixed(2)} * rate ${rate} (BGN) = ${totalBGN.toFixed(2)} BGN → ${totalEUR.toFixed(2)} EUR`);
-        } else {
-            // New order: rate is USD→EUR, use directly
-            totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-            totalBGN = CurrencyUtils.convertEURtoBGN(totalEUR);
-        }
-
+        // Calculate totals in EUR only
+        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         const balanceEUR = sellEUR - totalEUR;
-
-        // BGN values for backward compatibility
-        const balanceBGN = CurrencyUtils.convertEURtoBGN(balanceEUR);
 
         // System currency is now EUR
         const currency = 'EUR';
@@ -1028,11 +928,11 @@ async getExpenses(month = null) {
             costUSD: costUSD,
             shippingUSD: shippingUSD,
             rate: rate,
-            // BGN fields (legacy/historical - for reference only)
-            extrasBGN: parseFloat(extrasBGN.toFixed(2)),
-            sellBGN: parseFloat(sellBGN.toFixed(2)),
-            totalBGN: parseFloat(totalBGN.toFixed(2)),
-            balanceBGN: parseFloat(balanceBGN.toFixed(2)),
+            // BGN fields (kept for compatibility, not calculated)
+            extrasBGN: 0,
+            sellBGN: 0,
+            totalBGN: 0,
+            balanceBGN: 0,
             // EUR fields (primary)
             extrasEUR: parseFloat(extrasEUR.toFixed(2)),
             sellEUR: parseFloat(sellEUR.toFixed(2)),
@@ -1073,13 +973,9 @@ async getExpenses(month = null) {
 
     getDefaultSettings() {
         return {
-            // EUR is now the primary currency
+            // EUR-only currency settings
             eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
             baseCurrency: 'EUR',
-            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
-
-            // Legacy BGN settings (kept for historical data)
-            usdRate: 1.71, // Legacy USD to BGN rate
 
             // Other settings
             factoryShipping: 1.5,

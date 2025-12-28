@@ -82,28 +82,30 @@ export class App {
         }
     }
 
-    // STEP 2: Data Loading (Async with fallbacks)
+    // STEP 2: Data Loading (Async, Supabase-only for business data)
     async loadApplicationData() {
         console.log('📂 Loading application data...');
 
         try {
-            // Get current month first
-            const currentMonth = this.getCurrentMonth();
+            // Get current month from localStorage (UI preference)
+            const savedMonth = localStorage.getItem('orderSystem_currentMonth');
+            const currentMonth = savedMonth || this.getCurrentMonth();
 
-            // Load settings with Supabase fallback
+            // Load settings with localStorage fallback (settings are not business data)
             const settings = await this.loadSettingsWithFallback();
 
-            // Load local data as primary source during transition
-            const localData = this.loadLocalStorageData();
+            // Load UI preferences from localStorage
+            const availableMonthsStr = localStorage.getItem('orderSystem_availableMonths');
+            const availableMonths = availableMonthsStr ? JSON.parse(availableMonthsStr) : this.generateDefaultMonths(currentMonth);
 
-            // Validate and merge data
+            // Initialize application state (business data will be loaded by modules from Supabase)
             const applicationData = {
                 currentMonth,
                 settings,
-                monthlyData: localData.monthlyData || {},
-                clientsData: localData.clientsData || {},
-                inventory: localData.inventory || {},
-                availableMonths: localData.availableMonths || this.generateDefaultMonths(currentMonth)
+                monthlyData: {},  // Will be loaded by OrdersModule and ExpensesModule from Supabase
+                clientsData: {},  // Will be loaded by ClientsModule from Supabase
+                inventory: {},    // Will be loaded by InventoryModule from Supabase
+                availableMonths
             };
 
             // Update state with clean data
@@ -150,38 +152,6 @@ export class App {
             }
 
             return { ...this.getDefaultSettings(), source: 'default' };
-        }
-    }
-
-    loadLocalStorageData() {
-        console.log('💾 Loading localStorage data...');
-
-        const data = {};
-
-        try {
-            // Load each data type safely
-            const keys = ['monthlyData', 'clientsData', 'inventory', 'availableMonths'];
-
-            for (const key of keys) {
-                const stored = localStorage.getItem(`orderSystem_${key}`);
-                if (stored) {
-                    try {
-                        data[key] = JSON.parse(stored);
-                    } catch (parseError) {
-                        console.warn(`⚠️ Corrupted localStorage data for ${key}, using empty`);
-                        data[key] = key === 'availableMonths' ? [] : {};
-                    }
-                } else {
-                    data[key] = key === 'availableMonths' ? [] : {};
-                }
-            }
-
-            console.log('✅ localStorage data loaded');
-            return data;
-
-        } catch (error) {
-            console.error('❌ localStorage loading failed:', error);
-            return { monthlyData: {}, clientsData: {}, inventory: {}, availableMonths: [] };
         }
     }
 
@@ -261,19 +231,17 @@ console.log('✅ Business modules initialized');
     }
 
     setupDataProtection() {
-        // KEEP: Auto-save on critical events (this is not backup system)
+        // Auto-save settings and UI preferences (not business data)
         const autoSaveEvents = [
-            'order:created', 'order:updated', 'order:deleted',
-            'client:created', 'client:updated', 'client:deleted',
-            'inventory:updated', 'expense:created', 'expense:updated', 'expense:deleted',
-            'settings:updated'
+            'settings:updated',
+            'month:changed'
         ];
 
         autoSaveEvents.forEach(event => {
             this.eventBus.on(event, () => this.performAutoSave());
         });
 
-        // KEEP: Periodic auto-save (this is not backup system)
+        // Periodic auto-save for settings and UI state
         setInterval(() => this.performAutoSave(), 30000);
     }
 
@@ -319,13 +287,9 @@ console.log('✅ Business modules initialized');
 
     getDefaultSettings() {
         return {
-            // EUR is now the primary currency (Bulgaria euro adoption Jan 1, 2026)
+            // EUR-only currency settings
             eurRate: 0.92, // USD to EUR exchange rate (market rate, configurable)
             baseCurrency: 'EUR',
-            conversionRate: 1.95583, // Official BGN to EUR conversion rate (fixed by EU)
-
-            // Legacy BGN settings (kept for historical data)
-            usdRate: 1.71, // Legacy USD to BGN rate
 
             // Other settings
             factoryShipping: 1.5,
@@ -374,16 +338,7 @@ console.log('✅ Business modules initialized');
         try {
             const state = this.state.getState();
 
-            // Save critical data to localStorage
-            if (state.monthlyData) {
-                this.storage.save('monthlyData', state.monthlyData);
-            }
-            if (state.clientsData) {
-                this.storage.save('clientsData', state.clientsData);
-            }
-            if (state.inventory) {
-                this.storage.save('inventory', state.inventory);
-            }
+            // Save only settings and UI preferences to localStorage
             if (state.settings) {
                 this.storage.save('settings', state.settings);
             }
@@ -395,6 +350,7 @@ console.log('✅ Business modules initialized');
             }
 
             this.lastAutoSave = Date.now();
+            localStorage.setItem('orderSystem_lastSave', this.lastAutoSave.toString());
 
         } catch (error) {
             console.error('❌ Auto-save failed:', error);
