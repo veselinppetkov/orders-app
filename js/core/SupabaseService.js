@@ -340,6 +340,27 @@ export class SupabaseService {
         });
     }
 
+    async getRecentlyDelivered(limit = 10) {
+        return this.executeRequest(async () => {
+            console.log(`📂 Loading last ${limit} delivered orders by updated_at`);
+
+            const { data, error } = await this.supabase
+                .from('orders')
+                .select('*')
+                .eq('status', 'Доставен')
+                .order('updated_at', { ascending: false })
+                .limit(limit);
+
+            if (error) throw error;
+
+            const transformedOrders = await Promise.all(
+                data.map(order => this.transformOrderFromDB(order))
+            );
+            console.log(`✅ Loaded ${transformedOrders.length} recently delivered orders`);
+            return transformedOrders;
+        });
+    }
+
     async updateOrder(orderId, orderData) {
         return this.executeRequest(async () => {
             console.log('✏️ Updating order in Supabase:', orderId);

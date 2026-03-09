@@ -136,6 +136,19 @@ export class OrdersModule {
         }
     }
 
+    // GET RECENTLY DELIVERED - bypasses cache, sorts by updated_at
+    async getRecentlyDelivered(limit = 10) {
+        try {
+            console.log(`📦 Getting last ${limit} recently delivered orders`);
+            const orders = await this.supabase.getRecentlyDelivered(limit);
+            this.stats.supabaseOperations++;
+            return orders;
+        } catch (error) {
+            console.error('❌ Failed to get recently delivered orders:', error);
+            throw error;
+        }
+    }
+
     // FIND ORDER BY ID with cache lookup
     async findOrderById(orderId) {
         try {

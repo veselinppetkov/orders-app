@@ -17,7 +17,8 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            showAllMonths: false
+            showAllMonths: false,
+            recentlyDelivered: false
         };
         this.selectedOrders = new Set(); // For bulk operations
 
@@ -32,7 +33,9 @@ export default class OrdersView {
     async render() {
         try {
             const stats = await this.reportsModule.getMonthlyStats();
-            const allOrders = await this.ordersModule.filterOrders(this.filters);
+            const allOrders = this.filters.recentlyDelivered
+                ? await this.ordersModule.getRecentlyDelivered(10)
+                : await this.ordersModule.filterOrders(this.filters);
 
             // Calculate free watches count across all months - use getAllOrders() not getOrders(null)
             const allMonthsOrders = await this.ordersModule.getAllOrders();
@@ -397,12 +400,20 @@ export default class OrdersView {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
         });
 
+        // Recently delivered button
+        document.getElementById('show-recently-delivered-btn')?.addEventListener('click', async () => {
+            this.filters.recentlyDelivered = true;
+            this.pagination.currentPage = 1;
+            await this.refresh();
+        });
+
         // Free watches (month) button - Show free items for current month only
         document.getElementById('show-free-month-btn')?.addEventListener('click', async () => {
             this.filters.status = 'Свободен';
             this.filters.showAllMonths = false;
-            this.filters.search = ''; // Clear search to show all free items
-            this.pagination.currentPage = 1; // Reset to first page
+            this.filters.search = '';
+            this.filters.recentlyDelivered = false;
+            this.pagination.currentPage = 1;
             await this.refresh();
         });
 
@@ -410,17 +421,19 @@ export default class OrdersView {
         document.getElementById('show-free-total-btn')?.addEventListener('click', async () => {
             this.filters.status = 'Свободен';
             this.filters.showAllMonths = true;
-            this.filters.search = ''; // Clear search to show all free items
-            this.pagination.currentPage = 1; // Reset to first page
+            this.filters.search = '';
+            this.filters.recentlyDelivered = false;
+            this.pagination.currentPage = 1;
             await this.refresh();
         });
 
         // Status filters
         document.querySelectorAll('[data-filter-status]').forEach(btn => {
-            btn.addEventListener('click', async (e) => { // MAKE ASYNC
+            btn.addEventListener('click', async (e) => {
                 this.filters.status = e.target.dataset.filterStatus;
-                this.filters.showAllMonths = false; // Reset showAllMonths when using regular status filter
-                await this.refresh(); // ADD AWAIT
+                this.filters.showAllMonths = false;
+                this.filters.recentlyDelivered = false;
+                await this.refresh();
             });
         });
 
@@ -433,8 +446,9 @@ export default class OrdersView {
             // Toggle has-value class based on input value
             searchInput.addEventListener('input', (e) => {
                 this.filters.search = e.target.value;
+                this.filters.recentlyDelivered = false;
                 searchInputWrapper.classList.toggle('has-value', e.target.value.length > 0);
-                this.debouncedRefresh(); // This calls refresh() which is now async
+                this.debouncedRefresh();
             });
 
             // Clear button click handler
@@ -450,15 +464,17 @@ export default class OrdersView {
         }
 
         // Origin filter
-        document.getElementById('filterOrigin')?.addEventListener('change', async (e) => { // MAKE ASYNC
+        document.getElementById('filterOrigin')?.addEventListener('change', async (e) => {
             this.filters.origin = e.target.value;
-            await this.refresh(); // ADD AWAIT
+            this.filters.recentlyDelivered = false;
+            await this.refresh();
         });
 
         // Vendor filter
-        document.getElementById('filterVendor')?.addEventListener('change', async (e) => { // MAKE ASYNC
+        document.getElementById('filterVendor')?.addEventListener('change', async (e) => {
             this.filters.vendor = e.target.value;
-            await this.refresh(); // ADD AWAIT
+            this.filters.recentlyDelivered = false;
+            await this.refresh();
         });
 
         // Order actions - ALL ASYNC
@@ -603,6 +619,7 @@ export default class OrdersView {
             <button class="btn info" data-filter-status="Други">Други</button>
             <button class="btn success" id="show-free-month-btn">🆓 Свободни (месец) <strong>${freeCountMonth}</strong></button>
             <button class="btn success" id="show-free-total-btn">🆓 Свободни (общо) <strong>${freeCountTotal}</strong></button>
+            <button class="btn" style="background: #17a2b8; color: white;" id="show-recently-delivered-btn">🚚 Последни доставени</button>
         </div>
     `;
     }
@@ -652,6 +669,14 @@ export default class OrdersView {
     }
 
     renderActiveFilters() {
+        if (this.filters.recentlyDelivered) {
+            return `
+                <div class="active-filter-badge" style="background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
+                    <span>🚚 Последни 10 доставени часовника (сортирани по дата на промяна)</span>
+                    <button onclick="window.app.ui.currentView.clearFilters()" class="btn btn-sm" style="background: #0c5460; color: white;">✕ Изчисти</button>
+                </div>
+            `;
+        }
         if (this.filters.showAllMonths && this.filters.status === 'Свободен') {
             return `
                 <div class="active-filter-badge" style="background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
@@ -669,7 +694,8 @@ export default class OrdersView {
             search: '',
             origin: '',
             vendor: '',
-            showAllMonths: false
+            showAllMonths: false,
+            recentlyDelivered: false
         };
         this.pagination.currentPage = 1;
         this.refresh();
