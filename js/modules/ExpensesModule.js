@@ -1,8 +1,9 @@
 // js/modules/ExpensesModule.js - COMPLETE REWRITE WITH SUPABASE INTEGRATION
 
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+import { assertValid, expenseSchema } from '../utils/ValidationUtils.js';
 
-export class ExpensesModule {   
+export class ExpensesModule {
     constructor(state, storage, eventBus, supabase) {
         this.state = state;
         this.storage = storage;
@@ -674,38 +675,7 @@ async update(expenseId, expenseData) {
     }
 
     validateExpenseData(expenseData) {
-        if (!expenseData.name || typeof expenseData.name !== 'string') {
-            throw new Error('Expense name is required');
-        }
-
-        if (expenseData.name.trim().length === 0) {
-            throw new Error('Expense name cannot be empty');
-        }
-
-        if (expenseData.name.length > 100) {
-            throw new Error('Expense name is too long (max 100 characters)');
-        }
-
-        if (expenseData.amount === undefined || expenseData.amount === null || expenseData.amount === '') {
-            throw new Error('Expense amount is required');
-        }
-
-        const amount = parseFloat(expenseData.amount);
-        if (isNaN(amount)) {
-            throw new Error('Expense amount must be a valid number');
-        }
-
-        if (amount < 0) {
-            throw new Error('Expense amount cannot be negative');
-        }
-
-        if (amount > 999999) {
-            throw new Error('Expense amount is too large (max 999,999)');
-        }
-
-        if (expenseData.note && expenseData.note.length > 500) {
-            throw new Error('Expense note is too long (max 500 characters)');
-        }
+        assertValid(expenseData, expenseSchema);
     }
 
     formatMonth(monthKey) {

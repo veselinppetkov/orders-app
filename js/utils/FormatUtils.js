@@ -26,6 +26,18 @@ export class FormatUtils {
         return num.toFixed(decimals);
     }
 
+    // HTML-escape user-supplied strings before interpolating into template literals.
+    // Why: prevents XSS when `${value}` lands inside innerHTML-rendered markup.
+    static escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     static truncateText(text, maxLength = 50) {
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';

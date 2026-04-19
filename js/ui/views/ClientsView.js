@@ -1,4 +1,7 @@
 import { DebounceUtils } from '../../utils/DebounceUtils.js';
+import { FormatUtils } from '../../utils/FormatUtils.js';
+
+const esc = FormatUtils.escapeHtml;
 
 export default class ClientsView {
     constructor(modules, state, eventBus) {
@@ -29,7 +32,7 @@ export default class ClientsView {
                     <div class="filter-section">
                         <div class="filter-group">
                             <label>Търсене клиент:</label>
-                            <input type="text" id="searchClient" placeholder="Име на клиент..." value="${this.searchTerm}">
+                            <input type="text" id="searchClient" placeholder="Име на клиент..." value="${esc(this.searchTerm)}">
                         </div>
                         <div class="filter-group">
                             <label>Сортиране:</label>
@@ -69,7 +72,7 @@ export default class ClientsView {
             return `
                 <div class="error-state">
                     <h3>❌ Failed to load clients</h3>
-                    <p>Error: ${error.message}</p>
+                    <p>Error: ${esc(error.message)}</p>
                     <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
                 </div>
             `;
@@ -80,13 +83,13 @@ export default class ClientsView {
         const stats = client.stats;
 
         return `
-            <div class="client-card" data-client-id="${client.id}">
+            <div class="client-card" data-client-id="${esc(client.id)}">
                 <div class="client-header">
-                    <h3>${client.name}</h3>
+                    <h3>${esc(client.name)}</h3>
                     <div class="client-actions">
-                        <button class="btn btn-sm" data-action="view" data-id="${client.id}" title="Виж профил">👁️</button>
-                        <button class="btn btn-sm" data-action="edit" data-id="${client.id}" title="Редактирай">✏️</button>
-                        <button class="btn btn-sm danger" data-action="delete" data-id="${client.id}" title="Изтрий">🗑️</button>
+                        <button class="btn btn-sm" data-action="view" data-id="${esc(client.id)}" title="Виж профил">👁️</button>
+                        <button class="btn btn-sm" data-action="edit" data-id="${esc(client.id)}" title="Редактирай">✏️</button>
+                        <button class="btn btn-sm danger" data-action="delete" data-id="${esc(client.id)}" title="Изтрий">🗑️</button>
                     </div>
                 </div>
                 <div class="client-info">
@@ -94,9 +97,9 @@ export default class ClientsView {
                     <div><strong>Приходи:</strong> ${stats.totalRevenue.toFixed(2)} €</div>
                     <div><strong>Печалба:</strong> ${stats.totalProfit.toFixed(2)} €</div>
                     <div><strong>Последна поръчка:</strong> ${stats.lastOrder ? this.formatDate(stats.lastOrder.date) : 'Няма'}</div>
-                    ${client.phone ? `<div><strong>Телефон:</strong> ${client.phone}</div>` : ''}
-                    ${client.email ? `<div><strong>Email:</strong> ${client.email}</div>` : ''}
-                    ${client.preferredSource ? `<div><strong>Източник:</strong> ${client.preferredSource}</div>` : ''}
+                    ${client.phone ? `<div><strong>Телефон:</strong> ${esc(client.phone)}</div>` : ''}
+                    ${client.email ? `<div><strong>Email:</strong> ${esc(client.email)}</div>` : ''}
+                    ${client.preferredSource ? `<div><strong>Източник:</strong> ${esc(client.preferredSource)}</div>` : ''}
                 </div>
             </div>
         `;
@@ -265,7 +268,7 @@ export default class ClientsView {
                 container.innerHTML = `
                     <div class="error-state">
                         <h3>❌ Failed to load clients</h3>
-                        <p>Error: ${error.message}</p>
+                        <p>Error: ${esc(error.message)}</p>
                         <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
                     </div>
                 `;

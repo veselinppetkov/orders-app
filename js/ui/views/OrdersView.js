@@ -2,6 +2,8 @@ import { DebounceUtils } from '../../utils/DebounceUtils.js';
 import { FormatUtils } from '../../utils/FormatUtils.js';
 import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
 
+const esc = FormatUtils.escapeHtml;
+
 export default class OrdersView {
     constructor(modules, state, eventBus) {
         this.ordersModule = modules.orders;
@@ -70,7 +72,7 @@ export default class OrdersView {
             return `
             <div class="error-state">
                 <h3>❌ Failed to load orders</h3>
-                <p>Error: ${error.message}</p>
+                <p>Error: ${esc(error.message)}</p>
                 <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
             </div>
         `;
@@ -141,39 +143,36 @@ export default class OrdersView {
         const statusClass = this.ordersModule.getStatusClass(order.status);
         const isSelected = this.selectedOrders.has(order.id);
 
+        // Image click is wired up as data-attributes and handled via addEventListener
+        // in attachImageListeners(). Avoid inline onclick — embedding user-controlled
+        // model/client text into a JS string literal is an XSS vector.
+        const imageCell = order.imageData
+            ? `<img src="${esc(order.imageData)}"
+                         class="model-image image-clickable"
+                         data-order-id="${order.id}"
+                         alt="${esc(order.model)}"
+                         title="${esc(order.model)}">`
+            : `<div class="no-image-placeholder">${esc(order.model)}</div>`;
+
         return `
         <tr data-order-id="${order.id}" class="${isSelected ? 'selected-row' : ''}">
             <td>
-                <input type="checkbox" 
-                       class="order-checkbox" 
+                <input type="checkbox"
+                       class="order-checkbox"
                        data-id="${order.id}"
                        ${isSelected ? 'checked' : ''}>
             </td>
             <td>${this.formatDate(order.date)}</td>
-            <td>${order.client}</td>
-            <td>${order.phone || ''}</td>
+            <td>${esc(order.client)}</td>
+            <td>${esc(order.phone || '')}</td>
             <td>
-                <span class="badge origin-badge" 
+                <span class="badge origin-badge"
                       style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
-                    ${order.origin}
+                    ${esc(order.origin)}
                 </span>
             </td>
-            <td>${order.vendor}</td>
-            <td class="image-cell">
-                ${order.imageData ?
-            `<img src="${order.imageData}" 
-                         class="model-image" 
-                         alt="${order.model}" 
-                         title="${order.model}"
-                         onclick="window.app.ui.modals.open({
-                             type: 'image',
-                             imageSrc: '${order.imageData}',
-                             title: '${order.model}',
-                             caption: 'Клиент: ${order.client} | Дата: ${this.formatDate(order.date)}'
-                         })">` :
-            `<div class="no-image-placeholder">${order.model}</div>`
-        }
-            </td>
+            <td>${esc(order.vendor)}</td>
+            <td class="image-cell">${imageCell}</td>
             <td><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></td>
             <td>${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</td>
             <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
@@ -181,13 +180,13 @@ export default class OrdersView {
             <td>
                 <span class="status-badge clickable"
                       data-order-id="${order.id}"
-                      data-current-status="${order.status}"
+                      data-current-status="${esc(order.status)}"
                       style="background: ${FormatUtils.getStatusColor(order.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(order.status))}"
                       title="Кликнете за промяна на статуса">
-                    ${order.status}
+                    ${esc(order.status)}
                 </span>
             </td>
-            <td>${order.notes}</td>
+            <td>${esc(order.notes)}</td>
             <td class="actions-cell">
                 <div class="row-actions">
                     <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
@@ -477,6 +476,22 @@ export default class OrdersView {
             await this.refresh();
         });
 
+        // Image click — opens image modal (replaces former inline onclick to prevent XSS)
+        document.querySelectorAll('.model-image.image-clickable').forEach(img => {
+            img.addEventListener('click', async (e) => {
+                const orderId = parseInt(e.currentTarget.dataset.orderId);
+                const result = await this.ordersModule.findOrderById(orderId);
+                if (!result || !result.order) return;
+                const o = result.order;
+                window.app.ui.modals.open({
+                    type: 'image',
+                    imageSrc: o.imageData,
+                    title: o.model,
+                    caption: `Клиент: ${o.client} | Дата: ${this.formatDate(o.date)}`
+                });
+            });
+        });
+
         // Order actions - ALL ASYNC
         document.querySelectorAll('[data-action="edit"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -538,7 +553,7 @@ export default class OrdersView {
                 container.innerHTML = `
                 <div class="error-state">
                     <h3>❌ Failed to load orders</h3>
-                    <p>Error: ${error.message}</p>
+                    <p>Error: ${esc(error.message)}</p>
                     <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
                 </div>
             `;
@@ -634,7 +649,7 @@ export default class OrdersView {
                     <div class="filter-group">
                         <label>Търсене:</label>
                         <div class="input-with-clear ${this.filters.search ? 'has-value' : ''}">
-                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${esc(this.filters.search)}">
                             <button class="input-clear-btn" type="button" aria-label="Clear search">×</button>
                         </div>
                     </div>
@@ -642,14 +657,14 @@ export default class OrdersView {
                         <label>Източник:</label>
                         <select id="filterOrigin">
                             <option value="">Всички</option>
-                            ${settings.origins.map(o => `<option value="${o}">${o}</option>`).join('')}
+                            ${settings.origins.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
                         </select>
                     </div>
                     <div class="filter-group">
                         <label>Доставчик:</label>
                         <select id="filterVendor">
                             <option value="">Всички</option>
-                            ${settings.vendors.map(v => `<option value="${v}">${v}</option>`).join('')}
+                            ${settings.vendors.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -660,7 +675,7 @@ export default class OrdersView {
                 <div class="filter-section">
                     <div class="filter-group">
                         <label>Търсене:</label>
-                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${this.filters.search}">
+                        <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${esc(this.filters.search)}">
                     </div>
                     <div class="error-message">Failed to load filter options</div>
                 </div>
