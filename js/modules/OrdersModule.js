@@ -1,6 +1,7 @@
 // js/modules/OrdersModule.js - REWRITTEN FOR CLEAN ASYNC MANAGEMENT
 
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+import { assertValid, coerceNumbers, orderSchema, ORDER_NUMERIC_FIELDS } from '../utils/ValidationUtils.js';
 
 export class OrdersModule {
     constructor(state, storage, eventBus, supabase) {
@@ -350,28 +351,12 @@ export class OrdersModule {
     }
 
     // UTILITY METHODS
+    // Validates via the central ValidationUtils schema and coerces empty numeric
+    // fields to 0 in-place (preserves the legacy behaviour expected by prepareOrder).
     validateOrderData(orderData) {
-        const required = ['date', 'client', 'origin', 'vendor', 'model'];
-
-        for (const field of required) {
-            if (!orderData[field]) {
-                throw new Error(`Missing required field: ${field}`);
-            }
-        }
-
-        // Validate date format
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(orderData.date)) {
-            throw new Error('Invalid date format');
-        }
-
-        const numericFields = ['costUSD', 'shippingUSD', 'extrasEUR', 'sellEUR'];
-        for (const field of numericFields) {
-            if (orderData[field] === '' || orderData[field] === null || orderData[field] === undefined) {
-                orderData[field] = 0; // 👉 празно = 0
-            } else if (isNaN(parseFloat(orderData[field]))) {
-                throw new Error(`Invalid numeric value for ${field}`);
-            }
-        }
+        assertValid(orderData, orderSchema);
+        const coerced = coerceNumbers(orderData, ORDER_NUMERIC_FIELDS);
+        for (const f of ORDER_NUMERIC_FIELDS) orderData[f] = coerced[f];
     }
 
     // js/modules/OrdersModule.js - Fix prepareOrder method
@@ -414,9 +399,6 @@ export class OrdersModule {
 
         console.log('💰 Using settings for order:', { eurRate: settings.eurRate, factoryShipping: settings.factoryShipping });
 
-        // Currency is fully migrated to EUR
-        const currency = 'EUR';
-
         // Calculate USD costs
         const costUSD = parseFloat(data.costUSD) || 0;
         const shippingUSD = (data.shippingUSD !== '' && data.shippingUSD !== undefined && data.shippingUSD !== null)
@@ -449,14 +431,8 @@ export class OrdersModule {
             costUSD: costUSD,
             shippingUSD: shippingUSD,
             rate: rate,
-            // BGN fields (kept for database audit, not used in calculations)
-            extrasBGN: 0,
-            sellBGN: 0,
-            // EUR fields (primary)
             extrasEUR: extrasEUR,
             sellEUR: sellEUR,
-            // Metadata
-            currency: currency,
             status: data.status || 'Очакван',
             fullSet: data.fullSet || false,
             notes: data.notes || '',
@@ -478,10 +454,6 @@ export class OrdersModule {
   - Total: €${order.totalEUR.toFixed(2)}
   - Sell price: €${sellEUR}
   - Profit: €${order.balanceEUR.toFixed(2)}`);
-
-        // BGN fields kept for database audit (not calculated)
-        order.totalBGN = 0;
-        order.balanceBGN = 0;
 
         return order;
     }
@@ -597,8 +569,6 @@ export class OrdersModule {
 
         updatedOrder.totalEUR = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR;
         updatedOrder.balanceEUR = sellEUR - updatedOrder.totalEUR;
-        updatedOrder.totalBGN = 0;
-        updatedOrder.balanceBGN = 0;
 
         return updatedOrder;
     }

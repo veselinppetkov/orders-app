@@ -1,4 +1,5 @@
 import { CurrencyUtils } from '../utils/CurrencyUtils.js';
+import { assertValid, clientSchema } from '../utils/ValidationUtils.js';
 
 // js/modules/ClientsModule.js - REWRITTEN FOR CLEAN ASYNC MANAGEMENT
 
@@ -469,34 +470,7 @@ export class ClientsModule {
 
     // VALIDATION AND DUPLICATE CHECKING
     validateClientData(clientData) {
-        if (!clientData.name || typeof clientData.name !== 'string') {
-            throw new Error('Client name is required');
-        }
-
-        if (clientData.name.trim().length === 0) {
-            throw new Error('Client name cannot be empty');
-        }
-
-        if (clientData.name.length > 100) {
-            throw new Error('Client name is too long (max 100 characters)');
-        }
-
-        // Validate email format if provided
-        if (clientData.email && clientData.email.trim()) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(clientData.email)) {
-                throw new Error('Invalid email format');
-            }
-        }
-
-        // Validate phone format if provided
-        if (clientData.phone && clientData.phone.trim()) {
-            // Allow various phone formats but require at least 6 digits
-            const phoneDigits = clientData.phone.replace(/\D/g, '');
-            if (phoneDigits.length < 6) {
-                throw new Error('Phone number must contain at least 6 digits');
-            }
-        }
+        assertValid(clientData, clientSchema);
     }
 
     async checkForDuplicates(clientData, excludeId = null) {
