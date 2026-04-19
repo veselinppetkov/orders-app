@@ -8,21 +8,24 @@ export default class ClientsView {
         this.eventBus = eventBus;
         this.sortBy = 'name';
         this.searchTerm = '';
+        this.page = 1;
+        this.pageSize = 30;
     }
 
     async render() {
         try {
-            const clients = await this.getFilteredClients();
+            const { clients, total } = await this.getFilteredClients();
+            const totalPages = Math.ceil(total / this.pageSize);
 
             return `
                 <div class="clients-view">
                     <h2>👥 Клиентски профили</h2>
                     <p style="margin-bottom: 20px; color: #6c757d;">Управлявайте клиенти и проследявайте тяхната история</p>
-                    
+
                     <div class="controls">
                         <button class="btn" id="new-client-btn">➕ Нов клиент</button>
                     </div>
-                    
+
                     <div class="filter-section">
                         <div class="filter-group">
                             <label>Търсене клиент:</label>
@@ -38,18 +41,26 @@ export default class ClientsView {
                             </select>
                         </div>
                     </div>
-                    
+
                     <div class="clients-grid">
                         ${clients.map(client => this.renderClientCard(client)).join('')}
                     </div>
-                    
-                    ${clients.length === 0 ? `
+
+                    ${total === 0 ? `
                         <div class="empty-state">
                             <h3>Няма намерени клиенти</h3>
                             <p>Започнете като добавите първия си клиент</p>
                             <button class="btn" onclick="document.getElementById('new-client-btn').click()">➕ Добави клиент</button>
                         </div>
                     ` : ''}
+
+                    ${totalPages > 1 ? `
+                        <div class="pagination" style="margin-top: 20px; display: flex; gap: 10px; align-items: center; justify-content: center;">
+                            <button class="btn" id="prev-page-btn" ${this.page <= 1 ? 'disabled' : ''}>← Предишна</button>
+                            <span>Страница ${this.page} от ${totalPages} (${total} клиента)</span>
+                            <button class="btn" id="next-page-btn" ${this.page >= totalPages ? 'disabled' : ''}>Следваща →</button>
+                        </div>
+                    ` : total > 0 ? `<p style="text-align:center;color:#6c757d;margin-top:10px;">${total} клиента</p>` : ''}
                 </div>
             `;
 
@@ -66,7 +77,7 @@ export default class ClientsView {
     }
 
     renderClientCard(client) {
-        const stats = client.stats; // Pre-calculated in getFilteredClients
+        const stats = client.stats;
 
         return `
             <div class="client-card" data-client-id="${client.id}">
@@ -93,10 +104,8 @@ export default class ClientsView {
 
     async getFilteredClients() {
         try {
-            // Load all clients from Supabase
             let clients = await this.clientsModule.getAllClients();
 
-            // Apply search filter
             if (this.searchTerm) {
                 const searchLower = this.searchTerm.toLowerCase();
                 clients = clients.filter(c =>
@@ -106,29 +115,50 @@ export default class ClientsView {
                 );
             }
 
-            // Get stats for all clients (batch operation for performance)
-            const clientsWithStats = await Promise.all(clients.map(async (client) => {
-                const stats = await this.clientsModule.getClientStats(client.name);
-                return { ...client, stats };
-            }));
+            // Load all orders once — uses OrdersModule cache, avoids N separate fetches
+            const allOrders = window.app?.modules?.orders
+                ? await window.app.modules.orders.getAllOrders()
+                : [];
 
-            // Apply sorting
+            // Compute stats for all clients in a single synchronous pass
+            const clientsWithStats = clients.map(client => {
+                const clientOrders = allOrders.filter(o => o.client === client.name);
+                const sorted = clientOrders.length > 0
+                    ? [...clientOrders].sort((a, b) => new Date(b.date) - new Date(a.date))
+                    : [];
+                const totalRevenue = clientOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
+                const stats = {
+                    totalOrders: clientOrders.length,
+                    totalRevenue,
+                    totalProfit: clientOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
+                    lastOrder: sorted[0] || null,
+                    firstOrder: sorted[sorted.length - 1] || null,
+                    avgOrderValue: clientOrders.length > 0 ? totalRevenue / clientOrders.length : 0
+                };
+                return { ...client, stats };
+            });
+
             clientsWithStats.sort((a, b) => {
                 switch (this.sortBy) {
                     case 'orders':
                         return b.stats.totalOrders - a.stats.totalOrders;
                     case 'revenue':
                         return b.stats.totalRevenue - a.stats.totalRevenue;
-                    case 'lastOrder':
+                    case 'lastOrder': {
                         const aLast = a.stats.lastOrder ? new Date(a.stats.lastOrder.date) : new Date(0);
                         const bLast = b.stats.lastOrder ? new Date(b.stats.lastOrder.date) : new Date(0);
                         return bLast - aLast;
-                    default: // name
+                    }
+                    default:
                         return a.name.localeCompare(b.name, 'bg-BG');
                 }
             });
 
-            return clientsWithStats;
+            const total = clientsWithStats.length;
+            const start = (this.page - 1) * this.pageSize;
+            const paged = clientsWithStats.slice(start, start + this.pageSize);
+
+            return { clients: paged, total };
 
         } catch (error) {
             console.error('❌ Failed to get filtered clients:', error);
@@ -137,26 +167,36 @@ export default class ClientsView {
     }
 
     attachListeners() {
-        // New client button
         document.getElementById('new-client-btn')?.addEventListener('click', () => {
             this.eventBus.emit('modal:open', { type: 'client', mode: 'create' });
         });
 
-        // Search input - DEBOUNCED ASYNC
         document.getElementById('searchClient')?.addEventListener('input', (e) => {
             this.searchTerm = e.target.value;
-            this.debouncedRefresh(); // This will call refresh() which is async
+            this.page = 1;
+            this.debouncedRefresh();
         });
 
-        // Sort dropdown - ASYNC
         document.getElementById('sortClients')?.addEventListener('change', async (e) => {
             this.sortBy = e.target.value;
+            this.page = 1;
             await this.refresh();
         });
 
-        // Client action buttons - ASYNC WHERE NEEDED
+        document.getElementById('prev-page-btn')?.addEventListener('click', async () => {
+            if (this.page > 1) {
+                this.page--;
+                await this.refresh();
+            }
+        });
+
+        document.getElementById('next-page-btn')?.addEventListener('click', async () => {
+            this.page++;
+            await this.refresh();
+        });
+
         document.querySelectorAll('[data-action]').forEach(btn => {
-            btn.addEventListener('click', async (e) => { // MAKE ASYNC
+            btn.addEventListener('click', async (e) => {
                 const action = e.target.dataset.action;
                 const clientId = e.target.dataset.id;
 
@@ -170,12 +210,12 @@ export default class ClientsView {
                     case 'delete':
                         if (confirm('Сигурни ли сте, че искате да изтриете този клиент?')) {
                             try {
-                                await this.clientsModule.delete(clientId); // ADD AWAIT
+                                await this.clientsModule.delete(clientId);
                                 this.eventBus.emit('notification:show', {
                                     message: 'Клиентът е изтрит успешно!',
                                     type: 'success'
                                 });
-                                await this.refresh(); // ADD AWAIT
+                                await this.refresh();
                             } catch (error) {
                                 console.error('❌ Delete client failed:', error);
                                 this.eventBus.emit('notification:show', {
@@ -190,21 +230,15 @@ export default class ClientsView {
         });
     }
 
-    // COMPLETE ASYNC REFRESH
     async refresh() {
-        // Store current focus info before DOM destruction
         const focusedElement = document.activeElement;
         const focusId = focusedElement?.id;
         const selectionStart = focusedElement?.selectionStart;
         const selectionEnd = focusedElement?.selectionEnd;
         const isSearchInput = focusId === 'searchClient';
 
-        // Clear cache to force fresh data
-        this.clientsModule.clearCache();
-
         const container = document.getElementById('view-container');
         if (container) {
-            // Show loading state
             container.innerHTML = `
                 <div class="loading-state">
                     <h3>👥 Loading clients...</h3>
@@ -217,12 +251,10 @@ export default class ClientsView {
                 container.innerHTML = content;
                 this.attachListeners();
 
-                // Restore focus if it was on search input
                 if (isSearchInput) {
                     const newSearchInput = document.getElementById('searchClient');
                     if (newSearchInput) {
                         newSearchInput.focus();
-                        // Restore cursor position
                         if (typeof selectionStart === 'number') {
                             newSearchInput.setSelectionRange(selectionStart, selectionEnd);
                         }
