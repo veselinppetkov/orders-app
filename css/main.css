@@ -848,9 +848,7 @@ tr:hover td {
     .orders-table th:nth-child(8),  /* Общо € */
     .orders-table td:nth-child(8),
     .orders-table th:nth-child(11), /* Пълен сет */
-    .orders-table td:nth-child(11),
-    .orders-table th:nth-child(13), /* Бележки */
-    .orders-table td:nth-child(13) {
+    .orders-table td:nth-child(11) {
         display: none;
     }
 
