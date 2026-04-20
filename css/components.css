@@ -807,6 +807,72 @@ textarea {
 }
 
 /* ============================================
+   REPORTS DASHBOARD
+   ============================================ */
+
+.reports-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-xl);
+    gap: var(--space-md);
+}
+
+.reports-header-row h2 {
+    margin: 0;
+}
+
+.reports-header-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+
+/* KPI colour variants */
+.summary-card.kpi-revenue .value { color: #8B6914; }
+.summary-card.kpi-profit  .value { color: var(--text-success-strong); }
+.summary-card.kpi-expense .value { color: var(--text-danger-strong); }
+.summary-card.kpi-margin  .value { color: var(--text-primary); }
+
+/* Charts layout */
+.charts-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.chart-card-wide,
+.chart-card-narrow {
+    min-height: 0;
+}
+
+.chart-canvas-wrapper {
+    position: relative;
+    height: 260px;
+}
+
+.chart-canvas-square {
+    height: 240px;
+}
+
+/* Rank badge */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: var(--accent-beige);
+    color: var(--text-primary);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+/* ============================================
    ACTIVE FILTER BADGE
    ============================================ */
 
@@ -1309,12 +1375,22 @@ textarea {
     .reports-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+    .charts-row {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
     .reports-grid, .clients-grid, .settings-grid {
         grid-template-columns: 1fr;
         gap: var(--space-md);
+    }
+    .charts-row {
+        grid-template-columns: 1fr;
+    }
+    .reports-header-row {
+        flex-direction: column;
+        align-items: flex-start;
     }
 
     .report-card {

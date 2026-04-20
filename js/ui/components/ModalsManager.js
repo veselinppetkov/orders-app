@@ -39,6 +39,27 @@ export class ModalsManager {
                 this.handleImagePaste(e);
             }
         });
+
+        // Delegated handler for all data-action buttons (replaces inline onclick)
+        document.getElementById('modal-container').addEventListener('click', (e) => {
+            const el = e.target.closest('[data-action]');
+            if (!el) return;
+            switch (el.dataset.action) {
+                case 'close':            this.close(); break;
+                case 'upload-image':     document.getElementById('orderImage')?.click(); break;
+                case 'remove-image':     this.removeImage(); break;
+                case 'quick-add-client': this.quickAddClient(); break;
+                case 'edit-client':      this.editClient(el.dataset.clientId); break;
+                case 'view-profile-image':
+                    this.open({
+                        type: 'image',
+                        imageSrc: el.src,
+                        title: el.dataset.model,
+                        caption: el.dataset.caption
+                    });
+                    break;
+            }
+        });
     }
 
     async open(data) {
@@ -98,7 +119,7 @@ export class ModalsManager {
                         <div class="error-state">
                             <h3>❌ Failed to load modal</h3>
                             <p>Error: ${error.message}</p>
-                            <button onclick="window.app.ui.modals.close()" class="btn">Close</button>
+                            <button data-action="close" class="btn">Close</button>
                         </div>
                     </div>
                 </div>
@@ -203,7 +224,7 @@ export class ModalsManager {
                     <h2>${isEdit ? '✏️ Редактиране на поръчка' :
             isDuplicate ? '📋 Дублиране на поръчка' :
                 '➕ Нова поръчка'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="order-form" class="modal-form">
@@ -219,7 +240,7 @@ export class ModalsManager {
                                 <datalist id="clients-list">
                                     ${clients.map(c => `<option value="${c.name}">`).join('')}
                                 </datalist>
-                                <button type="button" class="input-addon-btn" onclick="window.app.ui.modals.quickAddClient()">+</button>
+                                <button type="button" class="input-addon-btn" data-action="quick-add-client">+</button>
                             </div>
                             <div id="client-hint" class="hint-text"></div>
                         </div>
@@ -259,14 +280,14 @@ export class ModalsManager {
                         <label>Снимка на модела:</label>
                         <div class="image-upload-area">
                             <input type="file" id="orderImage" accept="image/*" style="display: none;">
-                            <button type="button" class="btn btn-upload" onclick="document.getElementById('orderImage').click()">
+                            <button type="button" class="btn btn-upload" data-action="upload-image">
                                 📷 Избери снимка
                             </button>
                             <div class="hint-text">Или поставете снимка с Ctrl+V</div>
                             <div id="image-preview" class="image-preview">
                                 ${formData?.imageData ? `
                                     <img src="${formData.imageData}" class="preview-img">
-                                    <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
+                                    <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
                                 ` : '<div class="no-image">Няма избрана снимка</div>'}
                             </div>
                         </div>
@@ -320,7 +341,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази промените' :
             isDuplicate ? 'Създай копие' :
@@ -343,7 +364,7 @@ export class ModalsManager {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2>${isEdit ? '✏️ Редактиране на клиент' : '👤 Нов клиент'}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                        <button class="modal-close" data-action="close">✕</button>
                     </div>
                     
                     <form id="client-form" class="modal-form">
@@ -384,7 +405,7 @@ export class ModalsManager {
                         </div>
                         
                         <div class="form-actions">
-                            <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                            <button type="button" class="btn secondary" data-action="close">Отказ</button>
                             <button type="submit" class="btn primary">
                                 ${isEdit ? 'Запази промените' : 'Създай клиент'}
                             </button>
@@ -412,7 +433,7 @@ export class ModalsManager {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>${isEdit ? '✏️ Редактиране на разход' : '💰 Нов разход'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="expense-form" class="modal-form">
@@ -433,7 +454,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази промените' : 'Добави разход'}
                         </button>
@@ -453,7 +474,7 @@ export class ModalsManager {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>${isEdit ? '✏️ Редактиране на кутия' : '📦 Нова кутия'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="inventory-form" class="modal-form">
@@ -495,7 +516,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази' : 'Добави'}
                         </button>
@@ -512,7 +533,7 @@ export class ModalsManager {
             <div class="modal-content modal-image">
                 <div class="modal-header">
                     <h2>📷 ${data.title || 'Снимка на модел'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 <div class="modal-image-body">
                     <img src="${data.imageSrc}" alt="${data.title}" class="full-image">
@@ -533,7 +554,7 @@ export class ModalsManager {
                 <div class="modal-content modal-large">
                     <div class="modal-header">
                         <h2>👤 ${client.name}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                        <button class="modal-close" data-action="close">✕</button>
                     </div>
                     
                     <div class="client-profile">
@@ -581,15 +602,12 @@ export class ModalsManager {
                                             <td class="image-cell">
                                                 ${o.imageData ?
             `<img src="${o.imageData}"
-                                                         class="model-image"
+                                                         class="model-image profile-order-img"
                                                          alt="${o.model}"
                                                          title="${o.model}"
-                                                         onclick="window.app.ui.modals.open({
-                                                             type: 'image',
-                                                             imageSrc: '${o.imageData}',
-                                                             title: '${o.model}',
-                                                             caption: 'Клиент: ${o.client} | Дата: ${formattedDate}'
-                                                         })">` :
+                                                         data-action="view-profile-image"
+                                                         data-model="${o.model.replace(/"/g, '&quot;')}"
+                                                         data-caption="Клиент: ${o.client} | Дата: ${formattedDate}">` :
             `<div class="no-image-placeholder">${o.model}</div>`}
                                             </td>
                                             <td>${(o.sellEUR || 0).toFixed(2)} €</td>
@@ -603,8 +621,8 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Затвори</button>
-                        <button type="button" class="btn primary" onclick="window.app.ui.modals.editClient('${client.id}')">
+                        <button type="button" class="btn secondary" data-action="close">Затвори</button>
+                        <button type="button" class="btn primary" data-action="edit-client" data-client-id="${client.id}">
                             Редактирай клиента
                         </button>
                     </div>
@@ -868,7 +886,7 @@ export class ModalsManager {
         if (preview) {
             preview.innerHTML = `
                 <img src="${imageSrc}" class="preview-img">
-                <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
+                <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
             `;
         }
     }
