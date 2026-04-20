@@ -7,6 +7,8 @@ export class ModalsManager {
         this.eventBus = eventBus;
         this.currentModal = null;
         this.tempImageData = null;
+        this._previousFocus = null;
+        this._tabHandler = null;
 
         this.initContainer();
         this.attachGlobalListeners();
@@ -40,6 +42,7 @@ export class ModalsManager {
     }
 
     async open(data) {
+        this._previousFocus = document.activeElement;
         this.currentModal = data;
         const container = document.getElementById('modal-container');
 
@@ -82,8 +85,10 @@ export class ModalsManager {
             }
 
             container.innerHTML = modalContent;
-            container.querySelector('.modal').classList.add('active');
+            const modal = container.querySelector('.modal');
+            modal.classList.add('active');
             this.attachModalListeners();
+            this._setupFocusTrap(modal);
 
         } catch (error) {
             console.error('❌ Failed to open modal:', error);
@@ -105,6 +110,14 @@ export class ModalsManager {
         const container = document.getElementById('modal-container');
         const modal = container.querySelector('.modal');
         if (modal) {
+            if (this._tabHandler) {
+                modal.removeEventListener('keydown', this._tabHandler);
+                this._tabHandler = null;
+            }
+            if (this._previousFocus) {
+                this._previousFocus.focus();
+                this._previousFocus = null;
+            }
             modal.classList.remove('active');
             setTimeout(() => {
                 container.innerHTML = '';
@@ -112,6 +125,52 @@ export class ModalsManager {
                 this.tempImageData = null;
             }, 300);
         }
+    }
+
+    _setupFocusTrap(modal) {
+        const heading = modal.querySelector('h2');
+        if (heading && !heading.id) heading.id = 'modal-title';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        if (heading?.id) modal.setAttribute('aria-labelledby', heading.id);
+
+        const sel = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+        const getFocusables = () => [...modal.querySelectorAll(sel)];
+
+        const first = getFocusables()[0];
+        if (first) first.focus();
+
+        this._tabHandler = (e) => {
+            if (e.key !== 'Tab') return;
+            const els = getFocusables();
+            if (!els.length) return;
+            const firstEl = els[0];
+            const lastEl = els[els.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+            } else {
+                if (document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+            }
+        };
+        modal.addEventListener('keydown', this._tabHandler);
+    }
+
+    _attachValidation(rules) {
+        Object.entries(rules).forEach(([fieldId, { validate, message }]) => {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            const errorSpan = document.createElement('span');
+            errorSpan.className = 'form-error';
+            errorSpan.textContent = message;
+            field.after(errorSpan);
+            const check = () => {
+                const invalid = !validate(field.value);
+                field.classList.toggle('invalid', invalid);
+                errorSpan.classList.toggle('visible', invalid);
+            };
+            field.addEventListener('input', check);
+            field.addEventListener('blur', check);
+        });
     }
 
     async renderOrderModal(data) {
@@ -561,15 +620,17 @@ export class ModalsManager {
             orderForm.addEventListener('submit', async (e) => {
                 await this.handleOrderSubmit(e);
             });
-
-            // Client field change
             document.getElementById('orderClient')?.addEventListener('input', async (e) => {
                 await this.updateClientHint(e.target.value);
             });
-
-            // Image upload
             document.getElementById('orderImage')?.addEventListener('change', (e) => {
                 this.handleImageUpload(e.target.files[0]);
+            });
+            this._attachValidation({
+                orderClient:  { validate: v => v.trim().length > 0, message: 'Клиентът е задължителен' },
+                orderModel:   { validate: v => v.trim().length > 0, message: 'Моделът е задължителен' },
+                orderCostUSD: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна сума' },
+                orderSellEUR: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна сума' },
             });
         }
 
@@ -579,6 +640,11 @@ export class ModalsManager {
             clientForm.addEventListener('submit', async (e) => {
                 await this.handleClientSubmit(e);
             });
+            this._attachValidation({
+                clientName:  { validate: v => v.trim().length > 0, message: 'Името е задължително' },
+                clientEmail: { validate: v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), message: 'Невалиден email адрес' },
+                clientPhone: { validate: v => !v || /^\+?[\d\s\-(]{6,20}$/.test(v), message: 'Невалиден телефонен номер' },
+            });
         }
 
         // Expense form
@@ -587,6 +653,10 @@ export class ModalsManager {
             expenseForm.addEventListener('submit', async (e) => {
                 await this.handleExpenseSubmit(e);
             });
+            this._attachValidation({
+                expenseName:   { validate: v => v.trim().length > 0, message: 'Името е задължително' },
+                expenseAmount: { validate: v => v !== '' && parseFloat(v) > 0, message: 'Въведете сума по-голяма от 0' },
+            });
         }
 
         // Inventory form
@@ -594,6 +664,11 @@ export class ModalsManager {
         if (inventoryForm) {
             inventoryForm.addEventListener('submit', async (e) => {
                 await this.handleInventorySubmit(e);
+            });
+            this._attachValidation({
+                itemBrand:         { validate: v => v.trim().length > 0, message: 'Брандът е задължителен' },
+                itemPurchasePrice: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна цена' },
+                itemSellPrice:     { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна цена' },
             });
         }
     }
@@ -951,6 +1026,44 @@ export class ModalsManager {
                 console.error('❌ Update clients datalist failed:', error);
             }
         }
+    }
+
+    confirm(message, details, onConfirm) {
+        this._previousFocus = document.activeElement;
+        const container = document.getElementById('modal-container');
+        const detailsHtml = details
+            ? `<div class="confirm-details">${details}</div>`
+            : '';
+        container.innerHTML = `
+            <div class="modal active" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                <div class="modal-content" style="max-width: 480px;">
+                    <div class="modal-header">
+                        <h2 id="confirm-title">⚠️ Потвърждение</h2>
+                        <button class="modal-close" id="confirm-x">✕</button>
+                    </div>
+                    <div class="modal-form">
+                        <p style="margin: 0 0 16px; color: var(--text-primary);">${message}</p>
+                        ${detailsHtml}
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn secondary" id="confirm-cancel">Отказ</button>
+                        <button class="btn danger" id="confirm-ok">Потвърди</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const closeConfirm = () => {
+            container.innerHTML = '';
+            this.currentModal = null;
+            document.removeEventListener('keydown', escHandler);
+            if (this._previousFocus) { this._previousFocus.focus(); this._previousFocus = null; }
+        };
+        const escHandler = (e) => { if (e.key === 'Escape') closeConfirm(); };
+        document.getElementById('confirm-ok').addEventListener('click', () => { closeConfirm(); onConfirm(); });
+        document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+        document.getElementById('confirm-x').addEventListener('click', closeConfirm);
+        document.addEventListener('keydown', escHandler);
+        document.getElementById('confirm-cancel').focus();
     }
 
     editClient(clientId) {

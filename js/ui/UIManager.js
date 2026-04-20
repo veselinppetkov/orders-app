@@ -176,15 +176,23 @@ export class UIManager {
                     <div class="undo-redo-controls">
                         <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
                             <span class="btn-icon">↩️</span>
-                            <span class="btn-text">Undo</span>
+                            <span class="btn-text">Undo <kbd>Ctrl+Z</kbd></span>
                         </button>
                         <button class="redo-btn" id="redo-btn" title="Повторение (Ctrl+Shift+Z)">
                             <span class="btn-icon">↪️</span>
-                            <span class="btn-text">Redo</span>
+                            <span class="btn-text">Redo <kbd>Ctrl+⇧+Z</kbd></span>
                         </button>
                         <div class="undo-info" id="undo-info">
                             <span id="undo-count">0</span> / <span id="redo-count">0</span>
                         </div>
+                    </div>
+                    <div class="global-search-wrapper">
+                        <div class="global-search-input-wrap">
+                            <span class="global-search-icon">🔍</span>
+                            <input type="text" id="global-search-input" class="global-search-input"
+                                   placeholder="Търси поръчки..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <div class="global-search-results" id="global-search-results"></div>
                     </div>
                 </div>
                 
@@ -347,6 +355,104 @@ export class UIManager {
                 await window.app.supabase.signOut();
             }
         });
+
+        this.setupGlobalSearch();
+    }
+
+    setupGlobalSearch() {
+        const input = document.getElementById('global-search-input');
+        const results = document.getElementById('global-search-results');
+        if (!input || !results) return;
+
+        let debounceTimer = null;
+
+        const closeResults = () => {
+            results.innerHTML = '';
+            results.classList.remove('visible');
+        };
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => this._runGlobalSearch(input.value.trim(), results), 300);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { input.value = ''; closeResults(); }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.global-search-wrapper')) closeResults();
+        });
+    }
+
+    async _runGlobalSearch(term, resultsEl) {
+        if (term.length < 2) { resultsEl.innerHTML = ''; resultsEl.classList.remove('visible'); return; }
+
+        try {
+            const allOrders = await this.modules.orders.getAllOrders();
+            const lower = term.toLowerCase();
+            const matches = allOrders.filter(o =>
+                (o.client  || '').toLowerCase().includes(lower) ||
+                (o.model   || '').toLowerCase().includes(lower) ||
+                (o.vendor  || '').toLowerCase().includes(lower) ||
+                (o.origin  || '').toLowerCase().includes(lower) ||
+                (o.phone   || '').toLowerCase().includes(lower)
+            ).slice(0, 10);
+
+            if (!matches.length) {
+                resultsEl.innerHTML = '<div class="search-result-empty">Няма резултати</div>';
+                resultsEl.classList.add('visible');
+                return;
+            }
+
+            resultsEl.innerHTML = matches.map(o => {
+                const monthKey = o.date ? o.date.substring(0, 7) : '';
+                return `
+                    <div class="search-result-item" data-order-id="${o.id}" data-month="${monthKey}">
+                        <div>
+                            <div class="search-result-client">${o.client} — ${o.model}</div>
+                            <div class="search-result-meta">${o.date || ''} · ${o.status}</div>
+                        </div>
+                        <div class="search-result-amount">${monthKey}</div>
+                    </div>
+                `;
+            }).join('');
+            resultsEl.classList.add('visible');
+
+            resultsEl.querySelectorAll('.search-result-item').forEach(el => {
+                el.addEventListener('click', async () => {
+                    const monthKey = el.dataset.month;
+                    const orderId = parseInt(el.dataset.orderId);
+                    resultsEl.innerHTML = '';
+                    resultsEl.classList.remove('visible');
+                    document.getElementById('global-search-input').value = '';
+
+                    if (monthKey && monthKey !== this.state.get('currentMonth')) {
+                        this.modules.orders.clearCache();
+                        this.modules.clients.clearCache();
+                        this.state.set('currentMonth', monthKey);
+                        localStorage.setItem('orderSystem_currentMonth', monthKey);
+                        const selector = document.getElementById('monthSelector');
+                        if (selector) selector.value = monthKey;
+                    }
+
+                    await this.switchView('orders');
+
+                    // Highlight the row briefly after render
+                    setTimeout(() => {
+                        const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
+                        if (row) {
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            row.classList.add('highlight-row');
+                            setTimeout(() => row.classList.remove('highlight-row'), 2000);
+                        }
+                    }, 400);
+                });
+            });
+
+        } catch (err) {
+            console.error('Global search error:', err);
+        }
     }
 
     formatMonthKey(date) {

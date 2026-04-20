@@ -182,11 +182,13 @@ export class UndoRedoManager {
 
         console.log('🔄 Restoring state...');
 
-        this.state.set('monthlyData', state.monthlyData);
-        this.state.set('clientsData', state.clientsData);
-        this.state.set('inventory', state.inventory);
+        this.state.update({
+            monthlyData: state.monthlyData,
+            clientsData: state.clientsData,
+            inventory: state.inventory
+        });
 
-        // ВАЖНО: Запазваме в localStorage
+        // Запазваме в localStorage
         this.storage.save('monthlyData', state.monthlyData);
         this.storage.save('clientsData', state.clientsData);
         this.storage.save('inventory', state.inventory);

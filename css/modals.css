@@ -137,6 +137,25 @@
     background: var(--bg-surface);
 }
 
+/* Validation states */
+.form-group input.invalid,
+.form-group select.invalid,
+.form-group textarea.invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.form-error {
+    display: none;
+    color: #dc3545;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.form-error.visible {
+    display: block;
+}
+
 /* Input with Button Addon */
 .input-with-button {
     position: relative;
