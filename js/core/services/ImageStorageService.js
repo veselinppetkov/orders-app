@@ -26,26 +26,15 @@ export class ImageStorageService {
         });
     }
 
-    async getImageUrl(imagePath) {
+    getImageUrl(imagePath) {
         if (!imagePath) return null;
-
-        try {
-            if (imagePath.startsWith('http')) return imagePath;
-
-            const { data, error } = await this.client.storage
-                .from(this.bucket)
-                .createSignedUrl(imagePath, 3600);
-
-            if (error) {
-                console.warn('⚠️ Cannot generate signed URL for:', imagePath, error);
-                return null;
-            }
-
-            return data.signedUrl;
-        } catch (error) {
-            console.error('❌ Error in getImageUrl:', error);
-            return null;
-        }
+        // Already a full URL (e.g. legacy signed URL stored in DB)
+        if (imagePath.startsWith('http')) return imagePath;
+        // Public bucket — construct URL directly, no API call needed
+        const { data } = this.client.storage
+            .from(this.bucket)
+            .getPublicUrl(imagePath);
+        return data?.publicUrl ?? null;
     }
 
     async deleteImage(imageUrl) {
