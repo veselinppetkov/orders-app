@@ -576,6 +576,30 @@ textarea {
     background: rgba(216, 199, 163, 0.12) !important;
 }
 
+/* Note sub-row — shown below orders that have notes */
+.note-row td {
+    background: var(--bg-surface);
+    border-top: none !important;
+    padding: 4px 16px 8px 16px;
+}
+
+.note-cell {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-style: italic;
+    line-height: 1.5;
+}
+
+.note-icon {
+    margin-right: 6px;
+    font-style: normal;
+    opacity: 0.7;
+}
+
+.note-row:hover td {
+    background: rgba(216, 199, 163, 0.04) !important;
+}
+
 .order-checkbox, #select-all {
     width: 18px;
     height: 18px;

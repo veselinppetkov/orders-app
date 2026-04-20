@@ -149,7 +149,6 @@ export default class OrdersView {
                             <th ${thClass('balanceEUR')} title="Сортирай по баланс">Баланс (€) ${this._sortArrow('balanceEUR')}</th>
                             <th>Пълен сет</th>
                             <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
-                            <th>Бележки</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -208,7 +207,6 @@ export default class OrdersView {
                     ${esc(order.status)}
                 </span>
             </td>
-            <td>${esc(order.notes)}</td>
             <td class="actions-cell">
                 <div class="row-actions">
                     <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
@@ -217,6 +215,12 @@ export default class OrdersView {
                 </div>
             </td>
         </tr>
+        ${order.notes ? `
+        <tr class="note-row${isSelected ? ' selected-row' : ''}" data-note-for="${order.id}">
+            <td colspan="13" class="note-cell">
+                <span class="note-icon">📝</span>${esc(order.notes)}
+            </td>
+        </tr>` : ''}
     `;
     }
 
@@ -300,14 +304,13 @@ export default class OrdersView {
             bulkActions.style.display = 'flex';
             selectedCount.textContent = this.selectedOrders.size;
 
-            // Update rows visual state
+            // Update rows visual state (main row + note sub-row)
             document.querySelectorAll('tr[data-order-id]').forEach(row => {
                 const orderId = parseInt(row.dataset.orderId);
-                if (this.selectedOrders.has(orderId)) {
-                    row.classList.add('selected-row');
-                } else {
-                    row.classList.remove('selected-row');
-                }
+                const selected = this.selectedOrders.has(orderId);
+                row.classList.toggle('selected-row', selected);
+                const noteRow = document.querySelector(`tr[data-note-for="${orderId}"]`);
+                if (noteRow) noteRow.classList.toggle('selected-row', selected);
             });
         } else {
             bulkActions.style.display = 'none';
