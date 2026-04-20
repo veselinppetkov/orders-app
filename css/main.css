@@ -360,17 +360,7 @@ tr:hover td {
     border: 1px solid var(--border-default);
 }
 
-/* ============================================
-   NOTIFICATIONS - MINIMALIST
-   ============================================ */
-
-#notification-container {
-    position: fixed;
-    top: 24px;
-    right: 24px;
-    z-index: 10000;
-    max-width: 400px;
-}
+/* Notification container defined in components.css (toast stacking) */
 
 .notification {
     padding: 16px 20px;
@@ -522,23 +512,7 @@ tr:hover td {
     margin-top: 20px;
 }
 
-/* Loading spinner */
-.loading-state::after {
-    content: '';
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--border-default);
-    border-top: 2px solid var(--accent-strong);
-    border-radius: 50%;
-    animation: spin 800ms linear infinite;
-    margin-left: 10px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
+/* Loading state — skeleton in UIManager is the primary loading UI */
 
 /* ============================================
    CRITICAL ERROR
@@ -862,12 +836,202 @@ tr:hover td {
         flex-direction: column;
     }
 
-    #notification-container {
-        top: 12px;
-        right: 12px;
-        left: 12px;
-        max-width: none;
+    /* Mobile notification override in components.css */
+
+    /* Orders table — hide low-priority columns on mobile */
+    .orders-table th:nth-child(4),  /* Телефон */
+    .orders-table td:nth-child(4),
+    .orders-table th:nth-child(5),  /* Източник */
+    .orders-table td:nth-child(5),
+    .orders-table th:nth-child(6),  /* Доставчик */
+    .orders-table td:nth-child(6),
+    .orders-table th:nth-child(8),  /* Общо € */
+    .orders-table td:nth-child(8),
+    .orders-table th:nth-child(11), /* Пълен сет */
+    .orders-table td:nth-child(11),
+    .orders-table th:nth-child(13), /* Бележки */
+    .orders-table td:nth-child(13) {
+        display: none;
     }
+
+    /* Stack controls and filters vertically */
+    .controls {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .filter-section {
+        flex-direction: column;
+    }
+
+    .bulk-actions {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .bulk-controls {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* Global search — full width on mobile */
+    .global-search-wrapper {
+        width: 100%;
+    }
+}
+
+/* ============================================
+   KEYBOARD SHORTCUT BADGES
+   ============================================ */
+
+kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: var(--font-mono, monospace);
+    border: 1px solid var(--border-default);
+    border-radius: 3px;
+    background: var(--bg-base);
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-left: 4px;
+    pointer-events: none;
+}
+
+/* ============================================
+   SORTABLE TABLE HEADERS
+   ============================================ */
+
+th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+th[data-sort]:hover {
+    background: var(--bg-base);
+}
+
+.sort-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 10px;
+    opacity: 0.4;
+}
+
+th[data-sort].sort-active .sort-arrow {
+    opacity: 1;
+    color: var(--accent-strong);
+}
+
+/* ============================================
+   GLOBAL SEARCH
+   ============================================ */
+
+.global-search-wrapper {
+    position: relative;
+}
+
+.global-search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.global-search-input {
+    padding: 7px 12px 7px 32px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font-size: 13px;
+    width: 220px;
+    transition: all 120ms ease-out;
+}
+
+.global-search-input:focus {
+    outline: none;
+    border-color: var(--accent-strong);
+    box-shadow: 0 0 0 3px rgba(216, 199, 163, 0.1);
+    width: 280px;
+}
+
+.global-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+.global-search-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 320px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    z-index: 1000;
+    max-height: 360px;
+    overflow-y: auto;
+    display: none;
+}
+
+.global-search-results.visible {
+    display: block;
+}
+
+.search-result-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    transition: background 80ms;
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--bg-base); }
+
+.search-result-client { font-weight: 600; }
+.search-result-meta { color: var(--text-secondary); font-size: 12px; }
+.search-result-amount { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; }
+
+.search-result-empty {
+    padding: 16px 14px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* Row highlight after global search navigation */
+@keyframes highlightFade {
+    0%   { background: rgba(216, 199, 163, 0.35); }
+    100% { background: transparent; }
+}
+tr.highlight-row td {
+    animation: highlightFade 2s ease-out forwards;
+}
+
+/* Confirm modal details block */
+.confirm-details {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    padding: var(--space-sm) var(--space-md);
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-height: 160px;
+    overflow-y: auto;
 }
 
 /* ============================================

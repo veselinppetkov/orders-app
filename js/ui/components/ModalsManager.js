@@ -7,6 +7,8 @@ export class ModalsManager {
         this.eventBus = eventBus;
         this.currentModal = null;
         this.tempImageData = null;
+        this._previousFocus = null;
+        this._tabHandler = null;
 
         this.initContainer();
         this.attachGlobalListeners();
@@ -37,9 +39,31 @@ export class ModalsManager {
                 this.handleImagePaste(e);
             }
         });
+
+        // Delegated handler for all data-action buttons (replaces inline onclick)
+        document.getElementById('modal-container').addEventListener('click', (e) => {
+            const el = e.target.closest('[data-action]');
+            if (!el) return;
+            switch (el.dataset.action) {
+                case 'close':            this.close(); break;
+                case 'upload-image':     document.getElementById('orderImage')?.click(); break;
+                case 'remove-image':     this.removeImage(); break;
+                case 'quick-add-client': this.quickAddClient(); break;
+                case 'edit-client':      this.editClient(el.dataset.clientId); break;
+                case 'view-profile-image':
+                    this.open({
+                        type: 'image',
+                        imageSrc: el.src,
+                        title: el.dataset.model,
+                        caption: el.dataset.caption
+                    });
+                    break;
+            }
+        });
     }
 
     async open(data) {
+        this._previousFocus = document.activeElement;
         this.currentModal = data;
         const container = document.getElementById('modal-container');
 
@@ -82,8 +106,10 @@ export class ModalsManager {
             }
 
             container.innerHTML = modalContent;
-            container.querySelector('.modal').classList.add('active');
+            const modal = container.querySelector('.modal');
+            modal.classList.add('active');
             this.attachModalListeners();
+            this._setupFocusTrap(modal);
 
         } catch (error) {
             console.error('❌ Failed to open modal:', error);
@@ -93,7 +119,7 @@ export class ModalsManager {
                         <div class="error-state">
                             <h3>❌ Failed to load modal</h3>
                             <p>Error: ${error.message}</p>
-                            <button onclick="window.app.ui.modals.close()" class="btn">Close</button>
+                            <button data-action="close" class="btn">Close</button>
                         </div>
                     </div>
                 </div>
@@ -105,6 +131,14 @@ export class ModalsManager {
         const container = document.getElementById('modal-container');
         const modal = container.querySelector('.modal');
         if (modal) {
+            if (this._tabHandler) {
+                modal.removeEventListener('keydown', this._tabHandler);
+                this._tabHandler = null;
+            }
+            if (this._previousFocus) {
+                this._previousFocus.focus();
+                this._previousFocus = null;
+            }
             modal.classList.remove('active');
             setTimeout(() => {
                 container.innerHTML = '';
@@ -112,6 +146,52 @@ export class ModalsManager {
                 this.tempImageData = null;
             }, 300);
         }
+    }
+
+    _setupFocusTrap(modal) {
+        const heading = modal.querySelector('h2');
+        if (heading && !heading.id) heading.id = 'modal-title';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        if (heading?.id) modal.setAttribute('aria-labelledby', heading.id);
+
+        const sel = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+        const getFocusables = () => [...modal.querySelectorAll(sel)];
+
+        const first = getFocusables()[0];
+        if (first) first.focus();
+
+        this._tabHandler = (e) => {
+            if (e.key !== 'Tab') return;
+            const els = getFocusables();
+            if (!els.length) return;
+            const firstEl = els[0];
+            const lastEl = els[els.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+            } else {
+                if (document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+            }
+        };
+        modal.addEventListener('keydown', this._tabHandler);
+    }
+
+    _attachValidation(rules) {
+        Object.entries(rules).forEach(([fieldId, { validate, message }]) => {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            const errorSpan = document.createElement('span');
+            errorSpan.className = 'form-error';
+            errorSpan.textContent = message;
+            field.after(errorSpan);
+            const check = () => {
+                const invalid = !validate(field.value);
+                field.classList.toggle('invalid', invalid);
+                errorSpan.classList.toggle('visible', invalid);
+            };
+            field.addEventListener('input', check);
+            field.addEventListener('blur', check);
+        });
     }
 
     async renderOrderModal(data) {
@@ -144,7 +224,7 @@ export class ModalsManager {
                     <h2>${isEdit ? '✏️ Редактиране на поръчка' :
             isDuplicate ? '📋 Дублиране на поръчка' :
                 '➕ Нова поръчка'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="order-form" class="modal-form">
@@ -160,7 +240,7 @@ export class ModalsManager {
                                 <datalist id="clients-list">
                                     ${clients.map(c => `<option value="${c.name}">`).join('')}
                                 </datalist>
-                                <button type="button" class="input-addon-btn" onclick="window.app.ui.modals.quickAddClient()">+</button>
+                                <button type="button" class="input-addon-btn" data-action="quick-add-client">+</button>
                             </div>
                             <div id="client-hint" class="hint-text"></div>
                         </div>
@@ -200,14 +280,14 @@ export class ModalsManager {
                         <label>Снимка на модела:</label>
                         <div class="image-upload-area">
                             <input type="file" id="orderImage" accept="image/*" style="display: none;">
-                            <button type="button" class="btn btn-upload" onclick="document.getElementById('orderImage').click()">
+                            <button type="button" class="btn btn-upload" data-action="upload-image">
                                 📷 Избери снимка
                             </button>
                             <div class="hint-text">Или поставете снимка с Ctrl+V</div>
                             <div id="image-preview" class="image-preview">
                                 ${formData?.imageData ? `
                                     <img src="${formData.imageData}" class="preview-img">
-                                    <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
+                                    <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
                                 ` : '<div class="no-image">Няма избрана снимка</div>'}
                             </div>
                         </div>
@@ -261,7 +341,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази промените' :
             isDuplicate ? 'Създай копие' :
@@ -284,7 +364,7 @@ export class ModalsManager {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2>${isEdit ? '✏️ Редактиране на клиент' : '👤 Нов клиент'}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                        <button class="modal-close" data-action="close">✕</button>
                     </div>
                     
                     <form id="client-form" class="modal-form">
@@ -325,7 +405,7 @@ export class ModalsManager {
                         </div>
                         
                         <div class="form-actions">
-                            <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                            <button type="button" class="btn secondary" data-action="close">Отказ</button>
                             <button type="submit" class="btn primary">
                                 ${isEdit ? 'Запази промените' : 'Създай клиент'}
                             </button>
@@ -353,7 +433,7 @@ export class ModalsManager {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>${isEdit ? '✏️ Редактиране на разход' : '💰 Нов разход'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="expense-form" class="modal-form">
@@ -374,7 +454,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази промените' : 'Добави разход'}
                         </button>
@@ -394,7 +474,7 @@ export class ModalsManager {
             <div class="modal-content">
                 <div class="modal-header">
                     <h2>${isEdit ? '✏️ Редактиране на кутия' : '📦 Нова кутия'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 
                 <form id="inventory-form" class="modal-form">
@@ -436,7 +516,7 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Отказ</button>
+                        <button type="button" class="btn secondary" data-action="close">Отказ</button>
                         <button type="submit" class="btn primary">
                             ${isEdit ? 'Запази' : 'Добави'}
                         </button>
@@ -453,7 +533,7 @@ export class ModalsManager {
             <div class="modal-content modal-image">
                 <div class="modal-header">
                     <h2>📷 ${data.title || 'Снимка на модел'}</h2>
-                    <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                    <button class="modal-close" data-action="close">✕</button>
                 </div>
                 <div class="modal-image-body">
                     <img src="${data.imageSrc}" alt="${data.title}" class="full-image">
@@ -474,7 +554,7 @@ export class ModalsManager {
                 <div class="modal-content modal-large">
                     <div class="modal-header">
                         <h2>👤 ${client.name}</h2>
-                        <button class="modal-close" onclick="window.app.ui.modals.close()">✕</button>
+                        <button class="modal-close" data-action="close">✕</button>
                     </div>
                     
                     <div class="client-profile">
@@ -522,15 +602,12 @@ export class ModalsManager {
                                             <td class="image-cell">
                                                 ${o.imageData ?
             `<img src="${o.imageData}"
-                                                         class="model-image"
+                                                         class="model-image profile-order-img"
                                                          alt="${o.model}"
                                                          title="${o.model}"
-                                                         onclick="window.app.ui.modals.open({
-                                                             type: 'image',
-                                                             imageSrc: '${o.imageData}',
-                                                             title: '${o.model}',
-                                                             caption: 'Клиент: ${o.client} | Дата: ${formattedDate}'
-                                                         })">` :
+                                                         data-action="view-profile-image"
+                                                         data-model="${o.model.replace(/"/g, '&quot;')}"
+                                                         data-caption="Клиент: ${o.client} | Дата: ${formattedDate}">` :
             `<div class="no-image-placeholder">${o.model}</div>`}
                                             </td>
                                             <td>${(o.sellEUR || 0).toFixed(2)} €</td>
@@ -544,8 +621,8 @@ export class ModalsManager {
                     </div>
                     
                     <div class="form-actions">
-                        <button type="button" class="btn secondary" onclick="window.app.ui.modals.close()">Затвори</button>
-                        <button type="button" class="btn primary" onclick="window.app.ui.modals.editClient('${client.id}')">
+                        <button type="button" class="btn secondary" data-action="close">Затвори</button>
+                        <button type="button" class="btn primary" data-action="edit-client" data-client-id="${client.id}">
                             Редактирай клиента
                         </button>
                     </div>
@@ -561,15 +638,17 @@ export class ModalsManager {
             orderForm.addEventListener('submit', async (e) => {
                 await this.handleOrderSubmit(e);
             });
-
-            // Client field change
             document.getElementById('orderClient')?.addEventListener('input', async (e) => {
                 await this.updateClientHint(e.target.value);
             });
-
-            // Image upload
             document.getElementById('orderImage')?.addEventListener('change', (e) => {
                 this.handleImageUpload(e.target.files[0]);
+            });
+            this._attachValidation({
+                orderClient:  { validate: v => v.trim().length > 0, message: 'Клиентът е задължителен' },
+                orderModel:   { validate: v => v.trim().length > 0, message: 'Моделът е задължителен' },
+                orderCostUSD: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна сума' },
+                orderSellEUR: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна сума' },
             });
         }
 
@@ -579,6 +658,11 @@ export class ModalsManager {
             clientForm.addEventListener('submit', async (e) => {
                 await this.handleClientSubmit(e);
             });
+            this._attachValidation({
+                clientName:  { validate: v => v.trim().length > 0, message: 'Името е задължително' },
+                clientEmail: { validate: v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), message: 'Невалиден email адрес' },
+                clientPhone: { validate: v => !v || /^\+?[\d\s\-(]{6,20}$/.test(v), message: 'Невалиден телефонен номер' },
+            });
         }
 
         // Expense form
@@ -587,6 +671,10 @@ export class ModalsManager {
             expenseForm.addEventListener('submit', async (e) => {
                 await this.handleExpenseSubmit(e);
             });
+            this._attachValidation({
+                expenseName:   { validate: v => v.trim().length > 0, message: 'Името е задължително' },
+                expenseAmount: { validate: v => v !== '' && parseFloat(v) > 0, message: 'Въведете сума по-голяма от 0' },
+            });
         }
 
         // Inventory form
@@ -594,6 +682,11 @@ export class ModalsManager {
         if (inventoryForm) {
             inventoryForm.addEventListener('submit', async (e) => {
                 await this.handleInventorySubmit(e);
+            });
+            this._attachValidation({
+                itemBrand:         { validate: v => v.trim().length > 0, message: 'Брандът е задължителен' },
+                itemPurchasePrice: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна цена' },
+                itemSellPrice:     { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна цена' },
             });
         }
     }
@@ -793,7 +886,7 @@ export class ModalsManager {
         if (preview) {
             preview.innerHTML = `
                 <img src="${imageSrc}" class="preview-img">
-                <button type="button" class="remove-img-btn" onclick="window.app.ui.modals.removeImage()">✕</button>
+                <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
             `;
         }
     }
@@ -951,6 +1044,44 @@ export class ModalsManager {
                 console.error('❌ Update clients datalist failed:', error);
             }
         }
+    }
+
+    confirm(message, details, onConfirm) {
+        this._previousFocus = document.activeElement;
+        const container = document.getElementById('modal-container');
+        const detailsHtml = details
+            ? `<div class="confirm-details">${details}</div>`
+            : '';
+        container.innerHTML = `
+            <div class="modal active" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                <div class="modal-content" style="max-width: 480px;">
+                    <div class="modal-header">
+                        <h2 id="confirm-title">⚠️ Потвърждение</h2>
+                        <button class="modal-close" id="confirm-x">✕</button>
+                    </div>
+                    <div class="modal-form">
+                        <p style="margin: 0 0 16px; color: var(--text-primary);">${message}</p>
+                        ${detailsHtml}
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn secondary" id="confirm-cancel">Отказ</button>
+                        <button class="btn danger" id="confirm-ok">Потвърди</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        const closeConfirm = () => {
+            container.innerHTML = '';
+            this.currentModal = null;
+            document.removeEventListener('keydown', escHandler);
+            if (this._previousFocus) { this._previousFocus.focus(); this._previousFocus = null; }
+        };
+        const escHandler = (e) => { if (e.key === 'Escape') closeConfirm(); };
+        document.getElementById('confirm-ok').addEventListener('click', () => { closeConfirm(); onConfirm(); });
+        document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+        document.getElementById('confirm-x').addEventListener('click', closeConfirm);
+        document.addEventListener('keydown', escHandler);
+        document.getElementById('confirm-cancel').focus();
     }
 
     editClient(clientId) {

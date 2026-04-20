@@ -23,6 +23,8 @@ export default class OrdersView {
             recentlyDelivered: false
         };
         this.selectedOrders = new Set(); // For bulk operations
+        this.sortBy = null;
+        this.sortDir = 'asc';
 
         this.pagination = {
             currentPage: 1,
@@ -47,6 +49,19 @@ export default class OrdersView {
             const currentMonth = this.state.get('currentMonth');
             const currentMonthOrders = await this.ordersModule.getOrders(currentMonth);
             const freeCountMonth = currentMonthOrders.filter(o => o.status === 'Свободен').length;
+
+            // Sort before pagination
+            if (this.sortBy) {
+                const dir = this.sortDir === 'asc' ? 1 : -1;
+                allOrders.sort((a, b) => {
+                    let va = a[this.sortBy], vb = b[this.sortBy];
+                    if (typeof va === 'string') va = va.toLowerCase();
+                    if (typeof vb === 'string') vb = vb.toLowerCase();
+                    if (va == null) return 1;
+                    if (vb == null) return -1;
+                    return va < vb ? -dir : va > vb ? dir : 0;
+                });
+            }
 
             // ADD: Update pagination totals
             this.updatePaginationTotals(allOrders.length);
@@ -107,7 +122,14 @@ export default class OrdersView {
     `;
     }
 
+    _sortArrow(field) {
+        if (this.sortBy !== field) return `<span class="sort-arrow">⇅</span>`;
+        return `<span class="sort-arrow active">${this.sortDir === 'asc' ? '↑' : '↓'}</span>`;
+    }
+
     renderTable(orders) {
+        const sa = this.sortBy;
+        const thClass = (f) => `data-sort="${f}"${sa === f ? ' class="sort-active"' : ''}`;
         return `
             <div style="overflow-x: auto;">
                 <table class="orders-table">
@@ -116,17 +138,17 @@ export default class OrdersView {
                             <th style="width: 40px;">
                                 <input type="checkbox" id="select-all">
                             </th>
-                            <th>Дата</th>
-                            <th>Клиент</th>
+                            <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
+                            <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
                             <th>Телефон</th>
-                            <th>Източник</th>
-                            <th>Доставчик</th>
-                            <th>Модел</th>
-                            <th>Общо (€)</th>
-                            <th>П-на цена (€)</th>
-                            <th>Баланс (€)</th>
+                            <th ${thClass('origin')} title="Сортирай по източник">Източник ${this._sortArrow('origin')}</th>
+                            <th ${thClass('vendor')} title="Сортирай по доставчик">Доставчик ${this._sortArrow('vendor')}</th>
+                            <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
+                            <th ${thClass('totalEUR')} title="Сортирай по обща сума">Общо (€) ${this._sortArrow('totalEUR')}</th>
+                            <th ${thClass('sellEUR')} title="Сортирай по продажна цена">П-на цена (€) ${this._sortArrow('sellEUR')}</th>
+                            <th ${thClass('balanceEUR')} title="Сортирай по баланс">Баланс (€) ${this._sortArrow('balanceEUR')}</th>
                             <th>Пълен сет</th>
-                            <th>Статус</th>
+                            <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
                             <th>Бележки</th>
                             <th>Действия</th>
                         </tr>
@@ -302,7 +324,10 @@ export default class OrdersView {
             return;
         }
 
-        if (confirm(`Промяна на статуса на ${this.selectedOrders.size} поръчки на "${newStatus}"?`)) {
+        window.app.ui.modals.confirm(
+            `Промяна на статуса на ${this.selectedOrders.size} поръчки на "${newStatus}"?`,
+            null,
+            async () => {
             let updated = 0;
             const orderIds = Array.from(this.selectedOrders);
 
@@ -335,39 +360,38 @@ export default class OrdersView {
             this.selectedOrders.clear();
             await this.refresh();
             this.updateBulkUI();
-        }
+        });
     }
 
     async bulkDelete() {
-        if (confirm(`Сигурни ли сте, че искате да изтриете ${this.selectedOrders.size} поръчки?`)) {
-            let deleted = 0;
-            const orderIds = Array.from(this.selectedOrders);
-
-            // Show progress for bulk operations
-            this.eventBus.emit('notification:show', {
-                message: `🔄 Изтриване на ${orderIds.length} поръчки...`,
-                type: 'info'
-            });
-
-            for (const orderId of orderIds) {
-                try {
-                    await this.ordersModule.delete(orderId);
-                    deleted++;
-                } catch (error) {
-                    console.error(`❌ Error deleting order ${orderId}:`, error);
+        const count = this.selectedOrders.size;
+        window.app.ui.modals.confirm(
+            `Сигурни ли сте, че искате да изтриете ${count} поръчки? Действието е необратимо.`,
+            null,
+            async () => {
+                let deleted = 0;
+                const orderIds = Array.from(this.selectedOrders);
+                this.eventBus.emit('notification:show', {
+                    message: `🔄 Изтриване на ${orderIds.length} поръчки...`,
+                    type: 'info'
+                });
+                for (const orderId of orderIds) {
+                    try {
+                        await this.ordersModule.delete(orderId);
+                        deleted++;
+                    } catch (error) {
+                        console.error(`❌ Error deleting order ${orderId}:`, error);
+                    }
                 }
+                this.selectedOrders.clear();
+                this.eventBus.emit('notification:show', {
+                    message: `✅ ${deleted} поръчки бяха изтрити`,
+                    type: 'success'
+                });
+                await this.refresh();
+                this.updateBulkUI();
             }
-
-            this.selectedOrders.clear();
-
-            this.eventBus.emit('notification:show', {
-                message: `✅ ${deleted} поръчки бяха изтрити`,
-                type: 'success'
-            });
-
-            await this.refresh();
-            this.updateBulkUI();
-        }
+        );
     }
 
     clearSelection() {
@@ -379,6 +403,21 @@ export default class OrdersView {
 
     // All existing listeners made async
     attachExistingListeners() {
+        // Sortable column headers
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.dataset.sort;
+                if (this.sortBy === field) {
+                    this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortBy = field;
+                    this.sortDir = 'asc';
+                }
+                this.pagination.currentPage = 1;
+                this.refresh();
+            });
+        });
+
         // Status badge click handlers
         document.querySelectorAll('.status-badge.clickable').forEach(badge => {
             badge.addEventListener('click', (e) => {
