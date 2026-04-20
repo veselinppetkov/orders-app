@@ -1,4 +1,5 @@
 import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
+import { FormatUtils } from '../../utils/FormatUtils.js';
 
 export class ModalsManager {
     constructor(modules, state, eventBus) {
@@ -111,6 +112,14 @@ export class ModalsManager {
             this.attachModalListeners();
             this._setupFocusTrap(modal);
 
+            // Direct close-button listeners as belt-and-suspenders fallback.
+            // The delegated handler on #modal-container covers the common case,
+            // but direct binding guarantees the button always works regardless of
+            // event-bubbling edge cases (e.g. position:fixed + deep nesting).
+            container.querySelectorAll('[data-action="close"]').forEach(btn => {
+                btn.addEventListener('click', () => this.close());
+            });
+
         } catch (error) {
             console.error('❌ Failed to open modal:', error);
             container.innerHTML = `
@@ -147,6 +156,9 @@ export class ModalsManager {
             }, 300);
         }
     }
+
+    // HTML-escape helper (delegates to FormatUtils)
+    _esc(str) { return FormatUtils.escapeHtml(String(str ?? '')); }
 
     _setupFocusTrap(modal) {
         const heading = modal.querySelector('h2');
@@ -528,16 +540,18 @@ export class ModalsManager {
     }
 
     renderImageModal(data) {
+        const safeTitle   = data.title   ? this._esc(data.title)   : 'Снимка на модел';
+        const safeCaption = data.caption ? this._esc(data.caption) : '';
         return `
         <div class="modal">
             <div class="modal-content modal-image">
                 <div class="modal-header">
-                    <h2>📷 ${data.title || 'Снимка на модел'}</h2>
-                    <button class="modal-close" data-action="close">✕</button>
+                    <h2>📷 ${safeTitle}</h2>
+                    <button class="modal-close" data-action="close" aria-label="Затвори">✕</button>
                 </div>
                 <div class="modal-image-body">
-                    <img src="${data.imageSrc}" alt="${data.title}" class="full-image">
-                    <p class="image-caption">${data.caption || ''}</p>
+                    <img src="${data.imageSrc}" alt="${safeTitle}" class="full-image">
+                    ${safeCaption ? `<p class="image-caption">${safeCaption}</p>` : ''}
                 </div>
             </div>
         </div>

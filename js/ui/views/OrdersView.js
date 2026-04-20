@@ -135,21 +135,14 @@ export default class OrdersView {
                 <table class="orders-table">
                     <thead>
                         <tr>
-                            <th style="width: 40px;">
-                                <input type="checkbox" id="select-all">
-                            </th>
+                            <th style="width: 38px;"><input type="checkbox" id="select-all"></th>
                             <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
                             <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
-                            <th>Телефон</th>
-                            <th ${thClass('origin')} title="Сортирай по източник">Източник ${this._sortArrow('origin')}</th>
-                            <th ${thClass('vendor')} title="Сортирай по доставчик">Доставчик ${this._sortArrow('vendor')}</th>
+                            <th ${thClass('origin')} title="Сортирай поизточник">Произход / Доставчик ${this._sortArrow('origin')}</th>
                             <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
-                            <th ${thClass('totalEUR')} title="Сортирай по обща сума">Общо (€) ${this._sortArrow('totalEUR')}</th>
-                            <th ${thClass('sellEUR')} title="Сортирай по продажна цена">П-на цена (€) ${this._sortArrow('sellEUR')}</th>
-                            <th ${thClass('balanceEUR')} title="Сортирай по баланс">Баланс (€) ${this._sortArrow('balanceEUR')}</th>
-                            <th>Пълен сет</th>
+                            <th ${thClass('totalEUR')} title="Сортирай по суми">Суми ${this._sortArrow('totalEUR')}</th>
                             <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
-                            <th>Действия</th>
+                            <th style="width: 100px;">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -161,44 +154,52 @@ export default class OrdersView {
     }
 
     renderOrderRow(order) {
-        const statusClass = this.ordersModule.getStatusClass(order.status);
         const isSelected = this.selectedOrders.has(order.id);
 
-        // Image click is wired up as data-attributes and handled via addEventListener
-        // in attachImageListeners(). Avoid inline onclick — embedding user-controlled
-        // model/client text into a JS string literal is an XSS vector.
-        const imageCell = order.imageData
+        // Model cell: image/placeholder + fullSet badge + note dot
+        const imageInner = order.imageData
             ? `<img src="${esc(order.imageData)}"
-                         class="model-image image-clickable"
-                         data-order-id="${order.id}"
-                         alt="${esc(order.model)}"
-                         title="${esc(order.model)}">`
+                     class="model-image image-clickable"
+                     data-order-id="${order.id}"
+                     alt="${esc(order.model)}"
+                     title="${esc(order.model)}">`
             : `<div class="no-image-placeholder">${esc(order.model)}</div>`;
+        const fullSetDot  = order.fullSet  ? `<span class="model-badge fullset-dot"  title="Пълен сет">✓</span>` : '';
+        const noteDot     = order.notes    ? `<span class="model-badge note-dot"      title="${esc(order.notes)}">✎</span>` : '';
+        const modelCell   = `<div class="model-cell-wrap">${imageInner}${fullSetDot}${noteDot}</div>`;
+
+        const balanceColor = order.balanceEUR < 0
+            ? 'var(--text-danger-strong)'
+            : 'var(--text-success-strong)';
 
         return `
-        <tr data-order-id="${order.id}" class="${isSelected ? 'selected-row' : ''}">
-            <td>
-                <input type="checkbox"
-                       class="order-checkbox"
-                       data-id="${order.id}"
-                       ${isSelected ? 'checked' : ''}>
+        <tr data-order-id="${order.id}" class="order-row clickable-row${isSelected ? ' selected-row' : ''}">
+            <td class="cell-checkbox"><input type="checkbox" class="order-checkbox" data-id="${order.id}" ${isSelected ? 'checked' : ''}></td>
+            <td class="cell-date">${this.formatDate(order.date)}</td>
+            <td class="cell-client">
+                <div class="cell-stack">
+                    <span class="cell-primary">${esc(order.client)}</span>
+                    ${order.phone ? `<span class="cell-secondary">${esc(order.phone)}</span>` : ''}
+                </div>
             </td>
-            <td>${this.formatDate(order.date)}</td>
-            <td>${esc(order.client)}</td>
-            <td>${esc(order.phone || '')}</td>
-            <td>
-                <span class="badge origin-badge"
-                      style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
-                    ${esc(order.origin)}
-                </span>
+            <td class="cell-origin">
+                <div class="cell-stack">
+                    <span class="badge origin-badge"
+                          style="background: ${FormatUtils.getOriginColor(order.origin)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getOriginColor(order.origin))}">
+                        ${esc(order.origin)}
+                    </span>
+                    <span class="cell-secondary">${esc(order.vendor)}</span>
+                </div>
             </td>
-            <td>${esc(order.vendor)}</td>
-            <td class="image-cell">${imageCell}</td>
-            <td><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></td>
-            <td>${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</td>
-            <td><strong style="color: ${order.balanceEUR < 0 ? '#dc3545' : '#28a745'}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</strong></td>
-            <td>${order.fullSet ? '✅' : '❌'}</td>
-            <td>
+            <td class="cell-model image-cell">${modelCell}</td>
+            <td class="cell-amounts">
+                <div class="cell-stack">
+                    <span class="cell-primary amounts-total"><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></span>
+                    <span class="cell-secondary amounts-balance" style="color: ${balanceColor}">${CurrencyUtils.formatAmount(order.balanceEUR, 'EUR')}</span>
+                    <span class="cell-tertiary amounts-sell">→ ${CurrencyUtils.formatAmount(order.sellEUR, 'EUR')}</span>
+                </div>
+            </td>
+            <td class="cell-status">
                 <span class="status-badge clickable"
                       data-order-id="${order.id}"
                       data-current-status="${esc(order.status)}"
@@ -207,7 +208,7 @@ export default class OrdersView {
                     ${esc(order.status)}
                 </span>
             </td>
-            <td class="actions-cell">
+            <td class="cell-actions actions-cell">
                 <div class="row-actions">
                     <button class="btn btn-sm" data-action="edit" data-id="${order.id}" title="Редактиране">✏️</button>
                     <button class="btn btn-sm info" data-action="duplicate" data-id="${order.id}" title="Дублиране">📋</button>
@@ -215,13 +216,121 @@ export default class OrdersView {
                 </div>
             </td>
         </tr>
-        ${order.notes ? `
-        <tr class="note-row${isSelected ? ' selected-row' : ''}" data-note-for="${order.id}">
-            <td colspan="13" class="note-cell">
-                <span class="note-icon">📝</span>${esc(order.notes)}
-            </td>
-        </tr>` : ''}
     `;
+    }
+
+    // ── Side Drawer ────────────────────────────────────────────────────────────
+
+    async openDrawer(orderId) {
+        this.closeDrawer();
+        const result = await this.ordersModule.findOrderById(orderId);
+        if (!result?.order) return;
+        const o = result.order;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'order-drawer-overlay';
+        overlay.addEventListener('click', () => this.closeDrawer());
+
+        // ESC closes drawer — store handler for cleanup in closeDrawer()
+        this._drawerEscHandler = (e) => { if (e.key === 'Escape') this.closeDrawer(); };
+        document.addEventListener('keydown', this._drawerEscHandler);
+
+        const balanceColor = o.balanceEUR < 0 ? 'var(--text-danger-strong)' : 'var(--text-success-strong)';
+        const imageHtml = o.imageData
+            ? `<img src="${esc(o.imageData)}" class="drawer-image" alt="${esc(o.model)}">`
+            : '';
+
+        const drawer = document.createElement('div');
+        drawer.id = 'order-drawer';
+        drawer.className = 'side-drawer';
+        drawer.innerHTML = `
+            <div class="drawer-header">
+                <div class="drawer-title">
+                    <span class="drawer-client">${esc(o.client)}</span>
+                    <span class="status-badge" style="background: ${FormatUtils.getStatusColor(o.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(o.status))}">${esc(o.status)}</span>
+                </div>
+                <button class="drawer-close" id="drawer-close-btn">✕</button>
+            </div>
+            <div class="drawer-body">
+                ${imageHtml ? `<div class="drawer-section drawer-image-section">${imageHtml}</div>` : ''}
+                <div class="drawer-section">
+                    <div class="drawer-meta-grid">
+                        <div class="drawer-meta-item"><span class="drawer-label">Дата</span><span>${esc(o.date || '')}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Телефон</span><span>${esc(o.phone || '—')}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Модел</span><span>${esc(o.model)}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Доставчик</span><span>${esc(o.vendor)}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Източник</span><span>${esc(o.origin)}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Пълен сет</span><span>${o.fullSet ? '✅ Да' : '❌ Не'}</span></div>
+                    </div>
+                </div>
+                <div class="drawer-section">
+                    <div class="drawer-financials">
+                        <div class="drawer-fin-row"><span>Доставна цена</span><span>${CurrencyUtils.formatAmount(o.costUSD || 0, 'USD')}</span></div>
+                        <div class="drawer-fin-row"><span>Доставка</span><span>${CurrencyUtils.formatAmount(o.shippingUSD || 0, 'USD')}</span></div>
+                        ${o.extrasEUR ? `<div class="drawer-fin-row"><span>Доп. разходи</span><span>${CurrencyUtils.formatAmount(o.extrasEUR, 'EUR')}</span></div>` : ''}
+                        <div class="drawer-fin-row"><span>Общо</span><strong>${CurrencyUtils.formatAmount(o.totalEUR, 'EUR')}</strong></div>
+                        <div class="drawer-fin-row"><span>Продажна цена</span><strong>${CurrencyUtils.formatAmount(o.sellEUR, 'EUR')}</strong></div>
+                        <div class="drawer-fin-row drawer-fin-balance"><span>Баланс</span><strong style="color: ${balanceColor}">${CurrencyUtils.formatAmount(o.balanceEUR, 'EUR')}</strong></div>
+                    </div>
+                </div>
+                ${o.notes ? `
+                <div class="drawer-section drawer-notes">
+                    <div class="drawer-label">📝 Бележки</div>
+                    <p class="drawer-notes-text">${esc(o.notes)}</p>
+                </div>` : ''}
+                <div class="drawer-actions">
+                    <button class="btn" data-drawer-action="edit" data-id="${o.id}">✏️ Редактирай</button>
+                    <button class="btn secondary" data-drawer-action="duplicate" data-id="${o.id}">📋 Дублирай</button>
+                    <button class="btn danger" data-drawer-action="delete" data-id="${o.id}">🗑️ Изтрий</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(drawer);
+
+        // Animate in
+        requestAnimationFrame(() => {
+            overlay.classList.add('active');
+            drawer.classList.add('open');
+        });
+
+        document.getElementById('drawer-close-btn').addEventListener('click', () => this.closeDrawer());
+
+        drawer.querySelectorAll('[data-drawer-action]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.dataset.drawerAction;
+                const id = parseInt(btn.dataset.id);
+                this.closeDrawer();
+                if (action === 'edit') this.eventBus.emit('modal:open', { type: 'order', mode: 'edit', id });
+                if (action === 'duplicate') this.eventBus.emit('modal:open', { type: 'order', mode: 'duplicate', id });
+                if (action === 'delete') {
+                    window.app.ui.modals.confirm(
+                        'Сигурни ли сте, че искате да изтриете тази поръчка?',
+                        null,
+                        async () => {
+                            await this.ordersModule.delete(id);
+                            this.eventBus.emit('notification:show', { message: '✅ Поръчката е изтрита', type: 'success' });
+                            await this.refresh();
+                        }
+                    );
+                }
+            });
+        });
+    }
+
+    closeDrawer() {
+        const drawer = document.getElementById('order-drawer');
+        const overlay = document.getElementById('order-drawer-overlay');
+        if (this._drawerEscHandler) {
+            document.removeEventListener('keydown', this._drawerEscHandler);
+            this._drawerEscHandler = null;
+        }
+        if (drawer) {
+            drawer.classList.remove('open');
+            overlay?.classList.remove('active');
+            setTimeout(() => { drawer.remove(); overlay?.remove(); }, 260);
+        }
     }
 
     attachListeners() {
@@ -518,9 +627,19 @@ export default class OrdersView {
             await this.refresh();
         });
 
-        // Image click — opens image modal (replaces former inline onclick to prevent XSS)
+        // Row click → open Side Drawer (skip interactive child elements)
+        document.querySelectorAll('.order-row.clickable-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('.order-checkbox, .status-badge, [data-action], .model-image, .row-actions, input, button')) return;
+                const orderId = parseInt(row.dataset.orderId);
+                this.openDrawer(orderId);
+            });
+        });
+
+        // Image click — opens image modal (stopPropagation prevents row-click drawer)
         document.querySelectorAll('.model-image.image-clickable').forEach(img => {
             img.addEventListener('click', async (e) => {
+                e.stopPropagation();
                 const orderId = parseInt(e.currentTarget.dataset.orderId);
                 const result = await this.ordersModule.findOrderById(orderId);
                 if (!result || !result.order) return;
@@ -537,37 +656,44 @@ export default class OrdersView {
         // Order actions - ALL ASYNC
         document.querySelectorAll('[data-action="edit"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const orderId = parseInt(e.target.dataset.id);
+                e.stopPropagation();
+                const orderId = parseInt(e.currentTarget.dataset.id);
                 this.eventBus.emit('modal:open', { type: 'order', mode: 'edit', id: orderId });
             });
         });
 
         document.querySelectorAll('[data-action="duplicate"]').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const orderId = parseInt(e.target.dataset.id);
+                e.stopPropagation();
+                const orderId = parseInt(e.currentTarget.dataset.id);
                 this.eventBus.emit('modal:open', { type: 'order', mode: 'duplicate', id: orderId });
             });
         });
 
         document.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', async (e) => { // MAKE ASYNC
-                const orderId = parseInt(e.target.dataset.id);
-                if (confirm('Сигурни ли сте, че искате да изтриете тази поръчка?')) {
-                    try {
-                        await this.ordersModule.delete(orderId); // ADD AWAIT
-                        await this.refresh(); // ADD AWAIT
-                        this.eventBus.emit('notification:show', {
-                            message: 'Поръчката е изтрита успешно!',
-                            type: 'success'
-                        });
-                    } catch (error) {
-                        console.error('❌ Delete failed:', error);
-                        this.eventBus.emit('notification:show', {
-                            message: 'Грешка при изтриване: ' + error.message,
-                            type: 'error'
-                        });
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const orderId = parseInt(e.currentTarget.dataset.id);
+                window.app.ui.modals.confirm(
+                    'Сигурни ли сте, че искате да изтриете тази поръчка?',
+                    null,
+                    async () => {
+                        try {
+                            await this.ordersModule.delete(orderId);
+                            await this.refresh();
+                            this.eventBus.emit('notification:show', {
+                                message: '✅ Поръчката е изтрита',
+                                type: 'success'
+                            });
+                        } catch (error) {
+                            console.error('❌ Delete failed:', error);
+                            this.eventBus.emit('notification:show', {
+                                message: '❌ ' + error.message,
+                                type: 'error'
+                            });
+                        }
                     }
-                }
+                );
             });
         });
     }

@@ -838,17 +838,13 @@ tr:hover td {
 
     /* Mobile notification override in components.css */
 
-    /* Orders table — hide low-priority columns on mobile */
-    .orders-table th:nth-child(4),  /* Телефон */
+    /* Orders table (8 cols) — on mobile keep: ☑ Date Client Status Actions */
+    .orders-table th:nth-child(4),  /* Произход/Доставчик */
     .orders-table td:nth-child(4),
-    .orders-table th:nth-child(5),  /* Източник */
+    .orders-table th:nth-child(5),  /* Модел */
     .orders-table td:nth-child(5),
-    .orders-table th:nth-child(6),  /* Доставчик */
-    .orders-table td:nth-child(6),
-    .orders-table th:nth-child(8),  /* Общо € */
-    .orders-table td:nth-child(8),
-    .orders-table th:nth-child(11), /* Пълен сет */
-    .orders-table td:nth-child(11) {
+    .orders-table th:nth-child(6),  /* Суми */
+    .orders-table td:nth-child(6) {
         display: none;
     }
 
