@@ -129,17 +129,7 @@ export class EventBus {
                 const metadata = this.listenerMetadata.get(handler);
 
                 // Call the handler
-                const result = handler(data);
-
-                // If handler is async, catch rejections so they don't escape as unhandledrejection
-                if (result && typeof result.catch === 'function') {
-                    result.catch(err => {
-                        console.error(`❌ Async listener error for "${event}":`, err);
-                        if (metadata) {
-                            metadata.errors.push({ time: new Date(), error: err.message });
-                        }
-                    });
-                }
+                handler(data);
 
                 // Update metadata
                 if (metadata) {

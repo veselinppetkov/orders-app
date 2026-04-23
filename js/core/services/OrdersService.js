@@ -48,7 +48,7 @@ export class OrdersService {
 
             if (error) throw error;
 
-            const transformedOrder = this.transformOrderFromDB(data);
+            const transformedOrder = await this.transformOrderFromDB(data);
             console.log('✅ Order created successfully:', transformedOrder.id);
             return transformedOrder;
         });
@@ -74,7 +74,7 @@ export class OrdersService {
             const { data, error } = await query;
             if (error) throw error;
 
-            const transformedOrders = data.map(o => this.transformOrderFromDB(o));
+            const transformedOrders = await Promise.all(data.map(o => this.transformOrderFromDB(o)));
             console.log(`✅ Loaded ${transformedOrders.length} orders`);
             return transformedOrders;
         });
@@ -93,7 +93,7 @@ export class OrdersService {
 
             if (error) throw error;
 
-            const transformedOrders = data.map(o => this.transformOrderFromDB(o));
+            const transformedOrders = await Promise.all(data.map(o => this.transformOrderFromDB(o)));
             console.log(`✅ Loaded ${transformedOrders.length} recently delivered orders`);
             return transformedOrders;
         });
@@ -107,11 +107,7 @@ export class OrdersService {
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
                 imageUrl = await this.images.uploadImage(orderData.imageData, `order-${orderId}-${Date.now()}`);
                 if (orderData.imageUrl && orderData.imageUrl !== imageUrl) {
-                    try {
-                        await this.images.deleteImage(orderData.imageUrl);
-                    } catch (e) {
-                        console.warn('⚠️ Orphaned old image (delete failed):', orderData.imageUrl, e);
-                    }
+                    await this.images.deleteImage(orderData.imageUrl);
                 }
             }
 
@@ -149,7 +145,7 @@ export class OrdersService {
 
             if (error) throw error;
 
-            const transformedOrder = this.transformOrderFromDB(data);
+            const transformedOrder = await this.transformOrderFromDB(data);
             console.log('✅ Order updated successfully');
             return transformedOrder;
         });
@@ -181,7 +177,7 @@ export class OrdersService {
         });
     }
 
-    transformOrderFromDB(dbOrder) {
+    async transformOrderFromDB(dbOrder) {
         const costUSD = parseFloat(dbOrder.cost_usd) || 0;
         const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
         const rate = parseFloat(dbOrder.rate) || 0;
@@ -192,7 +188,7 @@ export class OrdersService {
         const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         const balanceEUR = sellEUR - totalEUR;
 
-        const imageUrl = this.images.getImageUrl(dbOrder.image_url);
+        const imageUrl = await this.images.getImageUrl(dbOrder.image_url);
 
         return {
             id: dbOrder.id,

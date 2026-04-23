@@ -123,34 +123,19 @@ export default class ClientsView {
                 ? await window.app.modules.orders.getAllOrders()
                 : [];
 
-            // Index orders by client name once: turns N*M filter into N+M bucketed pass.
-            const ordersByClient = new Map();
-            for (const o of allOrders) {
-                if (!o.client) continue;
-                const bucket = ordersByClient.get(o.client);
-                if (bucket) bucket.push(o);
-                else ordersByClient.set(o.client, [o]);
-            }
-
+            // Compute stats for all clients in a single synchronous pass
             const clientsWithStats = clients.map(client => {
-                const clientOrders = ordersByClient.get(client.name) || [];
-                let totalRevenue = 0;
-                let totalProfit = 0;
-                let latest = null;
-                let earliest = null;
-                for (const o of clientOrders) {
-                    totalRevenue += (o.sellEUR || 0);
-                    totalProfit += (o.balanceEUR || 0);
-                    const d = new Date(o.date);
-                    if (!latest || d > new Date(latest.date)) latest = o;
-                    if (!earliest || d < new Date(earliest.date)) earliest = o;
-                }
+                const clientOrders = allOrders.filter(o => o.client === client.name);
+                const sorted = clientOrders.length > 0
+                    ? [...clientOrders].sort((a, b) => new Date(b.date) - new Date(a.date))
+                    : [];
+                const totalRevenue = clientOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
                 const stats = {
                     totalOrders: clientOrders.length,
                     totalRevenue,
-                    totalProfit,
-                    lastOrder: latest,
-                    firstOrder: earliest,
+                    totalProfit: clientOrders.reduce((sum, o) => sum + (o.balanceEUR || 0), 0),
+                    lastOrder: sorted[0] || null,
+                    firstOrder: sorted[sorted.length - 1] || null,
                     avgOrderValue: clientOrders.length > 0 ? totalRevenue / clientOrders.length : 0
                 };
                 return { ...client, stats };

@@ -615,12 +615,10 @@ export class UIManager {
         toastEl.setAttribute('role', 'alert');
         toastEl.setAttribute('aria-live', 'polite');
 
-        // Build structure via innerHTML (static markup) then inject message with textContent
-        // to prevent XSS if a caller emits a toast with unsanitized user input.
         toastEl.innerHTML = `
             <div class="toast-content">
                 <div class="toast-icon">${this.getToastIcon(toast.type)}</div>
-                <div class="toast-message"></div>
+                <div class="toast-message">${toast.message}</div>
             </div>
             <div class="toast-actions">
                 ${toast.undoAction ? `
@@ -633,7 +631,6 @@ export class UIManager {
                 </button>
             </div>
         `;
-        toastEl.querySelector('.toast-message').textContent = toast.message ?? '';
 
         // Event listeners
         toastEl.querySelector('.toast-close')?.addEventListener('click', () => {

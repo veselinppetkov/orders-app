@@ -104,13 +104,9 @@ export class ClientsService {
     }
 
     extractDbId(clientId) {
-        const raw = (typeof clientId === 'string' && clientId.startsWith('client_'))
-            ? clientId.slice('client_'.length)
-            : clientId;
-        const n = parseInt(raw, 10);
-        if (!Number.isInteger(n) || n <= 0) {
-            throw new Error(`Invalid client id: ${clientId}`);
+        if (typeof clientId === 'string' && clientId.startsWith('client_')) {
+            return parseInt(clientId.replace('client_', ''));
         }
-        return n;
+        return parseInt(clientId);
     }
 }

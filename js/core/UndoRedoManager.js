@@ -188,25 +188,23 @@ export class UndoRedoManager {
             inventory: state.inventory
         });
 
-        const saves = [
-            this.storage.save('monthlyData', state.monthlyData),
-            this.storage.save('clientsData', state.clientsData),
-            this.storage.save('inventory', state.inventory)
-        ];
+        // Запазваме в localStorage
+        this.storage.save('monthlyData', state.monthlyData);
+        this.storage.save('clientsData', state.clientsData);
+        this.storage.save('inventory', state.inventory);
 
-        if (saves.some(ok => !ok)) {
-            console.error('❌ Undo/redo: one or more saves failed');
-            window.app?.ui?.eventBus?.emit('toast:show', {
-                type: 'error',
-                message: 'Запис при undo/redo се провали'
-            });
-        }
+        // Проверяваме че е запазено
+        setTimeout(() => {
+            const verification = this.storage.load('monthlyData');
+            const currentMonth = this.state.get('currentMonth');
+            const ordersCount = verification?.[currentMonth]?.orders?.length || 0;
+            console.log(`✅ Verification: ${ordersCount} orders in localStorage for ${currentMonth}`);
+        }, 100);
 
-        // Refresh UI, then release the flag so any state reads during refresh
-        // still see us as "undo/redo in progress" and don't capture new history.
-        this.refreshCurrentView(() => {
-            this.isUndoRedoOperation = false;
-        });
+        this.isUndoRedoOperation = false;
+
+        // Опресняваме UI
+        this.refreshCurrentView();
     }
 
     getUndoMessage(state) {
@@ -270,17 +268,11 @@ export class UndoRedoManager {
         return actionTexts[action] || 'Неизвестно действие';
     }
 
-    refreshCurrentView(onDone) {
+    refreshCurrentView() {
         if (window.app?.ui?.currentView?.refresh) {
-            setTimeout(async () => {
-                try {
-                    await window.app.ui.currentView.refresh();
-                } finally {
-                    if (typeof onDone === 'function') onDone();
-                }
+            setTimeout(() => {
+                window.app.ui.currentView.refresh();
             }, 100);
-        } else if (typeof onDone === 'function') {
-            onDone();
         }
 
         // Обновяваме и Undo/Redo бутоните

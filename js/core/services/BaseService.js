@@ -31,8 +31,7 @@ export class BaseService {
             successCount: 0,
             errorCount: 0,
             totalResponseTime: 0,
-            avgResponseTime: 0,
-            maxConcurrent: 0
+            avgResponseTime: 0
         };
 
         this.initialize();
@@ -125,10 +124,13 @@ export class BaseService {
         let lastError;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            await this.acquireSlot();
             try {
+                await this.waitForSlot();
                 const startTime = performance.now();
+                this.activeRequests++;
+
                 const result = await operation();
+
                 const responseTime = performance.now() - startTime;
                 this.updateStats(true, responseTime);
                 return result;
@@ -147,33 +149,21 @@ export class BaseService {
                     await this.sleep(delay);
                 }
             } finally {
-                this.releaseSlot();
+                this.activeRequests--;
+                this.processQueue();
             }
         }
 
         throw lastError;
     }
 
-    // Counting semaphore: slot is claimed atomically before the caller proceeds,
-    // so we can never briefly exceed maxConcurrentRequests even under burst loads.
-    acquireSlot() {
-        if (this.activeRequests < this.maxConcurrentRequests) {
-            this.activeRequests++;
-            if (this.activeRequests > this.stats.maxConcurrent) {
-                this.stats.maxConcurrent = this.activeRequests;
-            }
-            return Promise.resolve();
-        }
+    waitForSlot() {
+        if (this.activeRequests < this.maxConcurrentRequests) return Promise.resolve();
         return new Promise(resolve => this.requestQueue.push(resolve));
     }
 
-    releaseSlot() {
-        this.activeRequests--;
+    processQueue() {
         if (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrentRequests) {
-            this.activeRequests++;
-            if (this.activeRequests > this.stats.maxConcurrent) {
-                this.stats.maxConcurrent = this.activeRequests;
-            }
             const next = this.requestQueue.shift();
             next();
         }
