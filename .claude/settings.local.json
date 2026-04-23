@@ -8,7 +8,13 @@
       "Bash(cmd /c \"gh pr create --title \\\\\"Fix clients view performance — batch stats and add pagination\\\\\" --body \\\\\"## Summary\\\\n\\\\n- **Batch stats calculation**: replaced N async getClientStats\\(\\) calls \\(one per client, each fetching all orders\\) with a single getAllOrders\\(\\) call followed by synchronous in-memory filtering. For 50 clients this goes from 50 DB fetches to 1.\\\\n- **Removed clearCache\\(\\) from refresh\\(\\)**: the cache was being wiped on every search keystroke and sort change. Cache now persists across search/sort interactions.\\\\n- **Added pagination \\(30 per page\\)**: prevents rendering hundreds of DOM nodes at once.\\\\n\\\\n## Test plan\\\\n\\\\n- [ ] Open the Clients section — should load faster than before\\\\n- [ ] Search for a client — should filter quickly without freezing\\\\n- [ ] Change sort order — should re-sort without re-fetching from DB\\\\n- [ ] If >30 clients, pagination buttons should appear and work\\\\n- [ ] Create, edit, delete a client — should still work\\\\n\\\\nGenerated with Claude Code\\\\\"\")",
       "Bash(curl -s -X POST https://api.github.com/repos/veselinppetkov/orders-app/pulls -H 'Authorization: token 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' -H 'Content-Type: application/json' -d '{ *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('html_url', d.get\\('message','error'\\)\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(node --version)",
+      "Bash(python --version)",
+      "Bash(python3 --version)",
+      "Bash(npx --version)",
+      "Bash(npx serve *)",
+      "Bash(gh pr create --title 'Move notes to always-visible sub-row' --body ' *)"
     ]
   }
 }

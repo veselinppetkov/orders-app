@@ -252,8 +252,18 @@ export class StateManager {
         }
     }
 
-    // GET complete state (read-only copy)
+    // GET complete state (read-only shallow copy, frozen).
+    // Callers that need to mutate must use cloneState() explicitly.
     getState() {
+        if (this._stateSnapshotFor !== this.state.lastUpdate) {
+            this._stateSnapshot = Object.freeze({ ...this.state });
+            this._stateSnapshotFor = this.state.lastUpdate;
+        }
+        return this._stateSnapshot;
+    }
+
+    // Deep clone for callers that legitimately need to mutate.
+    cloneState() {
         return JSON.parse(JSON.stringify(this.state));
     }
 
