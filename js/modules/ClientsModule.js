@@ -19,6 +19,9 @@ export class ClientsModule {
             maxCacheSize: 1000 // max clients to cache
         };
 
+        // In-flight request deduplication
+        this._inflight = new Map();
+
         // Operation tracking
         this.pendingOperations = new Set();
         this.optimisticUpdates = new Map(); // tempId -> client
@@ -32,33 +35,40 @@ export class ClientsModule {
             statsCalculations: 0
         };
 
+        this._realtimeChannel = null;
         console.log('👥 ClientsModule initialized with enhanced caching');
         this.setupEventHandlers();
+        this.setupRealtimeSubscription();
     }
 
     setupEventHandlers() {
-        // Clear cache when data changes externally
-        this.eventBus.on('data:invalidate', () => {
-            this.clearCache();
-        });
+        this.eventBus.on('data:invalidate', () => this.clearCache());
+        this.eventBus.on('order:created', () => this.clearStatsCache());
+        this.eventBus.on('order:updated', () => this.clearStatsCache());
+        this.eventBus.on('order:deleted', () => this.clearStatsCache());
+        this.eventBus.on('storage:health-warning', () => this.reduceCacheSize());
+    }
 
-        // Clear client stats when orders change
-        this.eventBus.on('order:created', () => {
-            this.clearStatsCache();
-        });
+    setupRealtimeSubscription() {
+        try {
+            const client = this.supabase?.supabase;
+            if (!client?.channel) return;
 
-        this.eventBus.on('order:updated', () => {
-            this.clearStatsCache();
-        });
-
-        this.eventBus.on('order:deleted', () => {
-            this.clearStatsCache();
-        });
-
-        // Monitor storage health
-        this.eventBus.on('storage:health-warning', () => {
-            this.reduceCacheSize();
-        });
+            this._realtimeChannel = client
+                .channel('clients-realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, (payload) => {
+                    console.log('🔴 Realtime clients change:', payload.eventType);
+                    this.clearCache();
+                    this.clearStatsCache();
+                    this.eventBus.emit('clients:realtime-change', { event: payload.eventType, record: payload.new || payload.old });
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('✅ Clients realtime subscribed');
+                    if (status === 'CHANNEL_ERROR') console.warn('⚠️ Clients realtime channel error');
+                });
+        } catch (e) {
+            console.warn('⚠️ Could not set up clients realtime:', e.message);
+        }
     }
 
     // CREATE CLIENT with optimistic updates
@@ -227,36 +237,37 @@ export class ClientsModule {
         }
     }
 
-    // GET ALL CLIENTS with smart caching
+    // GET ALL CLIENTS with smart caching + in-flight deduplication
     async getAllClients() {
+        const KEY = '__all__';
         this.stats.totalLoads++;
 
-        try {
-            // Check cache first
-            if (this.isCacheValid()) {
-                this.stats.cacheHits++;
-                const cachedClients = Array.from(this.cache.clients.values());
-                console.log(`📂 Using cached clients: ${cachedClients.length} clients`);
-                return this.mergeWithOptimisticUpdates(cachedClients);
-            }
-
-            this.stats.cacheMisses++;
-            console.log('📂 Loading clients from Supabase...');
-
-            // Load from Supabase
-            const clients = await this.supabase.getClients();
-            this.stats.supabaseOperations++;
-
-            // Update cache
-            this.updateCache(clients);
-
-            console.log(`✅ Loaded ${clients.length} clients from Supabase`);
-            return this.mergeWithOptimisticUpdates(clients);
-
-        } catch (error) {
-            console.error('❌ Failed to load clients:', error);
-            throw error;
+        if (this._inflight.has(KEY)) {
+            this.stats.cacheHits++;
+            return this._inflight.get(KEY);
         }
+
+        if (this.isCacheValid()) {
+            this.stats.cacheHits++;
+            return this.mergeWithOptimisticUpdates(Array.from(this.cache.clients.values()));
+        }
+
+        this.stats.cacheMisses++;
+
+        const promise = this.supabase.getClients()
+            .then(clients => {
+                this.stats.supabaseOperations++;
+                this.updateCache(clients);
+                this._inflight.delete(KEY);
+                return this.mergeWithOptimisticUpdates(clients);
+            })
+            .catch(err => {
+                this._inflight.delete(KEY);
+                throw err;
+            });
+
+        this._inflight.set(KEY, promise);
+        return promise;
     }
 
     // GET SINGLE CLIENT
@@ -529,8 +540,13 @@ export class ClientsModule {
     destroy() {
         console.log('🗑️ Destroying ClientsModule...');
 
+        if (this._realtimeChannel) {
+            try { this.supabase?.supabase?.removeChannel(this._realtimeChannel); } catch (_) {}
+            this._realtimeChannel = null;
+        }
         this.clearCache();
         this.clearStatsCache();
+        this._inflight.clear();
         this.pendingOperations.clear();
         this.optimisticUpdates.clear();
 

@@ -116,7 +116,11 @@ export class OrdersService {
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
                 imageUrl = await this.images.uploadImage(orderData.imageData, `order-${orderId}-${Date.now()}`);
                 if (previousImagePath && previousImagePath !== imageUrl) {
-                    await this.images.deleteImage(previousImagePath);
+                    try {
+                        await this.images.deleteImage(previousImagePath);
+                    } catch (e) {
+                        console.warn('⚠️ Orphaned old image (delete failed):', previousImagePath, e);
+                    }
                 }
             }
 

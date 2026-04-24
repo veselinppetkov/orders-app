@@ -1,6 +1,7 @@
 import { DebounceUtils } from '../../utils/DebounceUtils.js';
 import { FormatUtils } from '../../utils/FormatUtils.js';
 import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
+import { VirtualScroller } from '../../utils/VirtualScroller.js';
 
 const esc = FormatUtils.escapeHtml;
 
@@ -128,29 +129,46 @@ export default class OrdersView {
     }
 
     renderTable(orders) {
+        const VIRTUAL_THRESHOLD = 50;
         const sa = this.sortBy;
         const thClass = (f) => `data-sort="${f}"${sa === f ? ' class="sort-active"' : ''}`;
+        const thead = `
+            <thead>
+                <tr>
+                    <th style="width: 38px;"><input type="checkbox" id="select-all"></th>
+                    <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
+                    <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
+                    <th ${thClass('origin')} title="Сортирай поизточник">Произход / Доставчик ${this._sortArrow('origin')}</th>
+                    <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
+                    <th ${thClass('totalEUR')} title="Сортирай по суми">Суми ${this._sortArrow('totalEUR')}</th>
+                    <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
+                    <th style="width: 100px;">Действия</th>
+                </tr>
+            </thead>`;
+
+        if (orders.length >= VIRTUAL_THRESHOLD) {
+            this._vsOrders = orders;
+            return `
+                <div id="orders-vs-container" style="overflow-x:auto;">
+                    <div id="orders-vs-scroll" style="height:65vh;overflow-y:auto;">
+                        <table class="orders-table">
+                            ${thead}
+                            <tbody id="orders-vs-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+
+        this._vsOrders = null;
         return `
             <div style="overflow-x: auto;">
                 <table class="orders-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 38px;"><input type="checkbox" id="select-all"></th>
-                            <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
-                            <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
-                            <th ${thClass('origin')} title="Сортирай поизточник">Произход / Доставчик ${this._sortArrow('origin')}</th>
-                            <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
-                            <th ${thClass('totalEUR')} title="Сортирай по суми">Суми ${this._sortArrow('totalEUR')}</th>
-                            <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
-                            <th style="width: 100px;">Действия</th>
-                        </tr>
-                    </thead>
+                    ${thead}
                     <tbody>
                         ${orders.map(order => this.renderOrderRow(order)).join('')}
                     </tbody>
                 </table>
-            </div>
-        `;
+            </div>`;
     }
 
     renderOrderRow(order) {
@@ -334,72 +352,148 @@ export default class OrdersView {
     }
 
     attachListeners() {
-        // All existing listeners made async
+        // Document-level delegated listeners are bound once via _initDocumentListeners.
+        // Element-scoped listeners below are safe to re-add on every refresh
+        // because the old DOM nodes (and their listeners) are discarded.
+        this._initDocumentListeners();
+
         this.attachExistingListeners();
         this.attachBulkListeners();
-        document.addEventListener('click', (e) => {
-            if (e.target.id === 'page-first') {
-                this.goToPage(1);
-            } else if (e.target.id === 'page-prev') {
-                this.goToPage(this.pagination.currentPage - 1);
-            } else if (e.target.id === 'page-next') {
-                this.goToPage(this.pagination.currentPage + 1);
-            } else if (e.target.id === 'page-last') {
-                this.goToPage(this.pagination.totalPages);
-            } else if (e.target.classList.contains('page-num')) {
-                const page = parseInt(e.target.dataset.page);
-                this.goToPage(page);
-            }
-        });
 
-        // UPDATE: Filter handlers to reset pagination
+        // Filter handlers to reset pagination
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this.filters.search = e.target.value;
-                this.applyFilters(); // This now resets pagination
+                this.applyFilters();
             });
+        }
+
+        // Virtual scroll — mount after DOM is ready
+        if (this._vsOrders) {
+            const scroll = document.getElementById('orders-vs-scroll');
+            const tbody  = document.getElementById('orders-vs-tbody');
+            if (scroll && tbody) {
+                if (this._virtualScroller) this._virtualScroller.destroy();
+                this._virtualScroller = new VirtualScroller({
+                    container: scroll,
+                    tbody,
+                    items: this._vsOrders,
+                    renderRow: (order) => this.renderOrderRow(order)
+                });
+                this._virtualScroller.mount();
+            }
+            this._vsOrders = null;
+        }
+    }
+
+    _initDocumentListeners() {
+        if (this._docListenersBound) return;
+        this._docListenersBound = true;
+
+        // Pagination — delegated on document so it survives re-renders.
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'page-first') this.goToPage(1);
+            else if (e.target.id === 'page-prev') this.goToPage(this.pagination.currentPage - 1);
+            else if (e.target.id === 'page-next') this.goToPage(this.pagination.currentPage + 1);
+            else if (e.target.id === 'page-last') this.goToPage(this.pagination.totalPages);
+            else if (e.target.classList.contains('page-num')) this.goToPage(parseInt(e.target.dataset.page));
+        });
+
+        // Status popover close-on-outside-click — also bound once.
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
+                this.closeStatusPopover();
+            }
+        });
+
+        // Row-level events — delegated so virtual-scrolled rows work without re-binding.
+        document.addEventListener('click', (e) => {
+            // Status badge → popover
+            const badge = e.target.closest('.status-badge.clickable');
+            if (badge) { e.stopPropagation(); this.showStatusPopover(badge); return; }
+
+            // Image → modal
+            const img = e.target.closest('.model-image.image-clickable');
+            if (img) {
+                e.stopPropagation();
+                const orderId = parseInt(img.dataset.orderId);
+                this.ordersModule.findOrderById(orderId).then(result => {
+                    if (!result?.order) return;
+                    const o = result.order;
+                    window.app.ui.modals.open({
+                        type: 'image', imageSrc: o.imageData, title: o.model,
+                        caption: `Клиент: ${o.client} | Дата: ${this.formatDate(o.date)}`
+                    });
+                });
+                return;
+            }
+
+            // Action buttons (edit / duplicate / delete)
+            const actionBtn = e.target.closest('[data-action]');
+            if (actionBtn && actionBtn.closest('.orders-table')) {
+                e.stopPropagation();
+                this._handleRowAction(actionBtn.dataset.action, parseInt(actionBtn.dataset.id));
+                return;
+            }
+
+            // Row click → side drawer
+            const row = e.target.closest('.order-row.clickable-row');
+            if (row && !e.target.closest('.order-checkbox, .status-badge, [data-action], .model-image, .row-actions, input, button')) {
+                this.openDrawer(parseInt(row.dataset.orderId));
+            }
+        });
+
+        // Checkbox delegation (works for virtual-scrolled rows too)
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'select-all') {
+                const checked = e.target.checked;
+                document.querySelectorAll('.order-checkbox').forEach(cb => {
+                    cb.checked = checked;
+                    const id = parseInt(cb.dataset.id);
+                    if (checked) this.selectedOrders.add(id); else this.selectedOrders.delete(id);
+                });
+                this.updateBulkUI();
+            } else if (e.target.classList.contains('order-checkbox')) {
+                const id = parseInt(e.target.dataset.id);
+                if (e.target.checked) this.selectedOrders.add(id); else this.selectedOrders.delete(id);
+                this.updateBulkUI();
+            }
+        });
+    }
+
+    _handleRowAction(action, orderId) {
+        switch (action) {
+            case 'edit':
+                this.eventBus.emit('modal:open', { type: 'order', mode: 'edit', id: orderId });
+                break;
+            case 'duplicate':
+                this.eventBus.emit('modal:open', { type: 'order', mode: 'duplicate', id: orderId });
+                break;
+            case 'delete':
+                window.app.ui.modals.confirm('Сигурни ли сте, че искате да изтриете тази поръчка?', null, async () => {
+                    try {
+                        await this.ordersModule.delete(orderId);
+                        await this.refresh();
+                        this.eventBus.emit('notification:show', { message: '✅ Поръчката е изтрита', type: 'success' });
+                    } catch (error) {
+                        console.error('❌ Delete failed:', error);
+                        this.eventBus.emit('notification:show', { message: '❌ ' + error.message, type: 'error' });
+                    }
+                });
+                break;
         }
     }
 
     attachBulkListeners() {
-        // Select all checkbox
-        document.getElementById('select-all')?.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.order-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = e.target.checked;
-                const orderId = parseInt(cb.dataset.id);
-                if (e.target.checked) {
-                    this.selectedOrders.add(orderId);
-                } else {
-                    this.selectedOrders.delete(orderId);
-                }
-            });
-            this.updateBulkUI();
-        });
-
-        // Individual checkboxes
-        document.querySelectorAll('.order-checkbox').forEach(cb => {
-            cb.addEventListener('change', (e) => {
-                const orderId = parseInt(e.target.dataset.id);
-                if (e.target.checked) {
-                    this.selectedOrders.add(orderId);
-                } else {
-                    this.selectedOrders.delete(orderId);
-                }
-                this.updateBulkUI();
-            });
-        });
-
-        // Bulk action buttons
+        // Checkbox events are delegated in _initDocumentListeners() for virtual-scroll compat.
+        // Only bind the bulk action toolbar buttons here (they're outside the table).
         document.getElementById('apply-bulk-status')?.addEventListener('click', async () => {
             await this.applyBulkStatus();
         });
-
         document.getElementById('clear-selection')?.addEventListener('click', () => {
             this.clearSelection();
         });
-
         document.getElementById('bulk-delete')?.addEventListener('click', async () => {
             await this.bulkDelete();
         });
@@ -530,20 +624,8 @@ export default class OrdersView {
             });
         });
 
-        // Status badge click handlers
-        document.querySelectorAll('.status-badge.clickable').forEach(badge => {
-            badge.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.showStatusPopover(e.target);
-            });
-        });
-
-        // Close popover when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
-                this.closeStatusPopover();
-            }
-        });
+        // Status badge, row click, image click, action buttons — delegated once
+        // in _initDocumentListeners() for virtual-scroll compatibility.
 
         // New order button
         document.getElementById('new-order-btn')?.addEventListener('click', () => {
@@ -627,75 +709,8 @@ export default class OrdersView {
             await this.refresh();
         });
 
-        // Row click → open Side Drawer (skip interactive child elements)
-        document.querySelectorAll('.order-row.clickable-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                if (e.target.closest('.order-checkbox, .status-badge, [data-action], .model-image, .row-actions, input, button')) return;
-                const orderId = parseInt(row.dataset.orderId);
-                this.openDrawer(orderId);
-            });
-        });
-
-        // Image click — opens image modal (stopPropagation prevents row-click drawer)
-        document.querySelectorAll('.model-image.image-clickable').forEach(img => {
-            img.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const orderId = parseInt(e.currentTarget.dataset.orderId);
-                const result = await this.ordersModule.findOrderById(orderId);
-                if (!result || !result.order) return;
-                const o = result.order;
-                window.app.ui.modals.open({
-                    type: 'image',
-                    imageSrc: o.imageData,
-                    title: o.model,
-                    caption: `Клиент: ${o.client} | Дата: ${this.formatDate(o.date)}`
-                });
-            });
-        });
-
-        // Order actions - ALL ASYNC
-        document.querySelectorAll('[data-action="edit"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const orderId = parseInt(e.currentTarget.dataset.id);
-                this.eventBus.emit('modal:open', { type: 'order', mode: 'edit', id: orderId });
-            });
-        });
-
-        document.querySelectorAll('[data-action="duplicate"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const orderId = parseInt(e.currentTarget.dataset.id);
-                this.eventBus.emit('modal:open', { type: 'order', mode: 'duplicate', id: orderId });
-            });
-        });
-
-        document.querySelectorAll('[data-action="delete"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const orderId = parseInt(e.currentTarget.dataset.id);
-                window.app.ui.modals.confirm(
-                    'Сигурни ли сте, че искате да изтриете тази поръчка?',
-                    null,
-                    async () => {
-                        try {
-                            await this.ordersModule.delete(orderId);
-                            await this.refresh();
-                            this.eventBus.emit('notification:show', {
-                                message: '✅ Поръчката е изтрита',
-                                type: 'success'
-                            });
-                        } catch (error) {
-                            console.error('❌ Delete failed:', error);
-                            this.eventBus.emit('notification:show', {
-                                message: '❌ ' + error.message,
-                                type: 'error'
-                            });
-                        }
-                    }
-                );
-            });
-        });
+        // Row click, image click, action buttons, status badge — all delegated
+        // once in _initDocumentListeners() so virtual-scrolled rows work too.
     }
 
     // COMPLETE ASYNC REFRESH
@@ -703,11 +718,29 @@ export default class OrdersView {
         this.selectedOrders.clear();
         const container = document.getElementById('view-container');
         if (container) {
-            // Show loading state
+            // Show skeleton loading state
             container.innerHTML = `
-            <div class="loading-state">
-                <h3>📦 Loading orders...</h3>
-                <p>Fetching data from database...</p>
+            <div class="orders-view">
+                <div class="month-stats">
+                    ${Array.from({ length: 4 }, () => `
+                        <div class="stat-item">
+                            <div class="skeleton-line sk-line-s" style="height:14px;width:60px;margin:0 auto 6px;"></div>
+                            <div class="skeleton-line sk-title" style="height:22px;width:80px;margin:0 auto;"></div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0;margin-top:16px;border:1px solid var(--border-default,#e2e8f0);border-radius:var(--radius-md,8px);overflow:hidden;">
+                    ${Array.from({ length: 8 }, (_, i) => `
+                        <div class="skeleton-table-row" style="${i % 2 === 1 ? 'background:var(--bg-subtle,#f8fafc)' : ''}">
+                            <div class="skeleton-line sk-cell-md"></div>
+                            <div class="skeleton-line sk-cell-lg"></div>
+                            <div class="skeleton-line sk-cell-sm"></div>
+                            <div class="skeleton-line sk-cell-md"></div>
+                            <div class="skeleton-line sk-cell-xs"></div>
+                            <div class="skeleton-line sk-cell-sm"></div>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `;
 

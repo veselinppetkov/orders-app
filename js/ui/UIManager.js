@@ -621,7 +621,7 @@ export class UIManager {
         toastEl.innerHTML = `
             <div class="toast-content">
                 <div class="toast-icon">${this.getToastIcon(toast.type)}</div>
-                <div class="toast-message">${toast.message}</div>
+                <div class="toast-message"></div>
             </div>
             <div class="toast-actions">
                 ${toast.undoAction ? `
@@ -634,6 +634,8 @@ export class UIManager {
                 </button>
             </div>
         `;
+        // Use textContent to prevent XSS from caller-supplied messages
+        toastEl.querySelector('.toast-message').textContent = toast.message ?? '';
 
         // Event listeners
         toastEl.querySelector('.toast-close')?.addEventListener('click', () => {
