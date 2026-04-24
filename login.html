@@ -202,12 +202,10 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-    // Initialize Supabase
-    const SUPABASE_URL = 'https://xxpdogtyvnqfmnmphycp.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_AV8q3GxCLMBN-5hrFHckVw_TqMyg31-';
-
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="module">
+    // Key lives in js/config.js (gitignored) — single source of truth.
+    import { Config } from './js/config.js';
+    const supabaseClient = supabase.createClient(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY);
 
     const loginForm = document.getElementById('loginForm');
     const loginBtn = document.getElementById('loginBtn');

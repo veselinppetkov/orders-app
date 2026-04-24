@@ -334,9 +334,29 @@ export default class OrdersView {
     }
 
     attachListeners() {
-        // All existing listeners made async
+        // Document-level delegated listeners are bound once via _initDocumentListeners.
+        // Element-scoped listeners below are safe to re-add on every refresh
+        // because the old DOM nodes (and their listeners) are discarded.
+        this._initDocumentListeners();
+
         this.attachExistingListeners();
         this.attachBulkListeners();
+
+        // Filter handlers to reset pagination
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value;
+                this.applyFilters();
+            });
+        }
+    }
+
+    _initDocumentListeners() {
+        if (this._docListenersBound) return;
+        this._docListenersBound = true;
+
+        // Pagination — delegated on document so it survives re-renders.
         document.addEventListener('click', (e) => {
             if (e.target.id === 'page-first') {
                 this.goToPage(1);
@@ -347,19 +367,16 @@ export default class OrdersView {
             } else if (e.target.id === 'page-last') {
                 this.goToPage(this.pagination.totalPages);
             } else if (e.target.classList.contains('page-num')) {
-                const page = parseInt(e.target.dataset.page);
-                this.goToPage(page);
+                this.goToPage(parseInt(e.target.dataset.page));
             }
         });
 
-        // UPDATE: Filter handlers to reset pagination
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.filters.search = e.target.value;
-                this.applyFilters(); // This now resets pagination
-            });
-        }
+        // Status popover close-on-outside-click — also bound once.
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
+                this.closeStatusPopover();
+            }
+        });
     }
 
     attachBulkListeners() {
@@ -538,12 +555,7 @@ export default class OrdersView {
             });
         });
 
-        // Close popover when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
-                this.closeStatusPopover();
-            }
-        });
+        // (Popover outside-click is bound once in _initDocumentListeners.)
 
         // New order button
         document.getElementById('new-order-btn')?.addEventListener('click', () => {

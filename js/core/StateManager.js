@@ -7,6 +7,7 @@ export class StateManager {
         this.changeLog = [];
         this.maxLogEntries = 50;
         this.isUpdating = false;
+        this._version = 0;          // increments on every mutation, used by getState cache
 
         console.log('🏗️ StateManager initialized with clean state');
     }
@@ -86,6 +87,7 @@ export class StateManager {
             // Apply the change
             this.state[key] = value;
             this.state.lastUpdate = Date.now();
+            this._version++;
 
             // Log the change
             this.logChange('set', key, oldValue, value);
@@ -145,6 +147,7 @@ export class StateManager {
             });
 
             this.state.lastUpdate = Date.now();
+            this._version++;
 
             // Log the batch update
             this.logChange('batch_update', keys, oldState, { ...this.state });
@@ -252,8 +255,19 @@ export class StateManager {
         }
     }
 
-    // GET complete state (read-only copy)
+    // GET complete state — returns a cached frozen shallow copy.
+    // Cache is keyed by _version (an integer counter) so it's always accurate
+    // even when multiple mutations happen within the same millisecond.
+    // Callers that need to mutate the result must call cloneState() instead.
     getState() {
+        if (this._stateSnapshotVersion !== this._version) {
+            this._stateSnapshot = Object.freeze({ ...this.state });
+            this._stateSnapshotVersion = this._version;
+        }
+        return this._stateSnapshot;
+    }
+
+    cloneState() {
         return JSON.parse(JSON.stringify(this.state));
     }
 

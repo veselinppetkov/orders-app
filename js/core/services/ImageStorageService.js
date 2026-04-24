@@ -10,8 +10,23 @@ export class ImageStorageService {
         return this.base.executeRequest(async () => {
             console.log('📤 Uploading image:', filename);
 
-            const response = await fetch(base64Data);
-            const blob = await response.blob();
+            let blob;
+            try {
+                const response = await fetch(base64Data);
+                blob = await response.blob();
+            } catch (e) {
+                throw new Error(`Invalid image data: ${e.message}`);
+            }
+
+            const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            const MAX_BYTES = 10 * 1024 * 1024;
+            if (!ALLOWED.includes(blob.type)) {
+                throw new Error(`Unsupported image type: ${blob.type || 'unknown'}`);
+            }
+            if (blob.size > MAX_BYTES) {
+                throw new Error(`Image too large: ${(blob.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`);
+            }
+
             const extension = blob.type.split('/')[1] || 'jpg';
             const filePath = `${filename}.${extension}`;
 
