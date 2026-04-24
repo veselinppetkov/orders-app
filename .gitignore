@@ -1,5 +1,6 @@
 .env
 .env.local
+.claude/
 js/config.local.js
 .idea/
 .vscode/
