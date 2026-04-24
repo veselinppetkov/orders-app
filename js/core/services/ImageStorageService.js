@@ -48,19 +48,40 @@ export class ImageStorageService {
         }
     }
 
-    async deleteImage(imageUrl) {
-        if (!imageUrl || !imageUrl.includes(this.bucket)) return;
+    getStoragePath(imageReference) {
+        if (!imageReference) return null;
+
+        if (!imageReference.startsWith('http')) {
+            return imageReference.split('?')[0].replace(/^\/+/, '');
+        }
 
         try {
-            const urlParts = imageUrl.split('/');
-            const filename = urlParts[urlParts.length - 1];
+            const url = new URL(imageReference);
+            const pathParts = decodeURIComponent(url.pathname).split('/').filter(Boolean);
+            const bucketIndex = pathParts.lastIndexOf(this.bucket);
 
+            if (bucketIndex === -1 || bucketIndex === pathParts.length - 1) {
+                return null;
+            }
+
+            return pathParts.slice(bucketIndex + 1).join('/');
+        } catch (error) {
+            console.warn('⚠️ Could not parse image reference:', imageReference, error);
+            return null;
+        }
+    }
+
+    async deleteImage(imageReference) {
+        const imagePath = this.getStoragePath(imageReference);
+        if (!imagePath) return;
+
+        try {
             const { error } = await this.client.storage
                 .from(this.bucket)
-                .remove([filename]);
+                .remove([imagePath]);
 
             if (error) throw error;
-            console.log('✅ Image deleted:', filename);
+            console.log('✅ Image deleted:', imagePath);
         } catch (error) {
             console.warn('⚠️ Image deletion failed:', error);
         }

@@ -1,6 +1,6 @@
-js/config.js
 .env
 .env.local
+js/config.local.js
 .idea/
 .vscode/
 .DS_Store

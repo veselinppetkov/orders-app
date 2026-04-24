@@ -201,13 +201,14 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-    // Initialize Supabase
-    const SUPABASE_URL = 'https://xxpdogtyvnqfmnmphycp.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_AV8q3GxCLMBN-5hrFHckVw_TqMyg31-';
+<script
+        src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.104.1/dist/umd/supabase.js"
+        integrity="sha384-bYM/KZp3sHR8/mPjlAsotoCaDWykHXDhYAE3eJalEburZQwZAsMSeQxer09tprOT"
+        crossorigin="anonymous"></script>
+<script type="module">
+    import { Config } from './js/config.js';
 
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(Config.SUPABASE_URL, Config.SUPABASE_ANON_KEY);
 
     const loginForm = document.getElementById('loginForm');
     const loginBtn = document.getElementById('loginBtn');

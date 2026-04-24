@@ -436,7 +436,11 @@ export class OrdersModule {
             status: data.status || 'Очакван',
             fullSet: data.fullSet || false,
             notes: data.notes || '',
-            imageData: data.imageData || null
+            imageData: data.imageData || null,
+            imageUrl: data.imageUrl || null,
+            imagePath: data.imagePath || null,
+            previousImagePath: data.previousImagePath || data.imagePath || null,
+            removeImage: data.removeImage || false
         };
 
         // Calculate derived fields (EUR only)
