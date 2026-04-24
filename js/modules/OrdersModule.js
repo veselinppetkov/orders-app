@@ -12,11 +12,14 @@ export class OrdersModule {
 
         // Cache management
         this.cache = {
-            orders: new Map(), // month -> orders array
+            orders: new Map(), // month -> orders array  ('__all__' for all-months)
             lastUpdate: new Map(), // month -> timestamp
             cacheTimeout: 5 * 60 * 1000, // 5 minutes
-            maxCacheSize: 10 // max months to cache
+            maxCacheSize: 12 // max cache entries (10 months + '__all__' + buffer)
         };
+
+        // In-flight request deduplication: key -> Promise
+        this._inflight = new Map();
 
         // Operation tracking
         this.pendingOperations = new Set();
@@ -30,20 +33,37 @@ export class OrdersModule {
             supabaseOperations: 0
         };
 
+        this._realtimeChannel = null;
         console.log('📦 OrdersModule initialized with enhanced caching');
         this.setupEventHandlers();
+        this.setupRealtimeSubscription();
     }
 
     setupEventHandlers() {
-        // Clear cache when data changes externally
-        this.eventBus.on('data:invalidate', () => {
-            this.clearCache();
-        });
+        this.eventBus.on('data:invalidate', () => this.clearCache());
+        this.eventBus.on('storage:health-warning', () => this.reduceCacheSize());
+    }
 
-        // Monitor storage health
-        this.eventBus.on('storage:health-warning', () => {
-            this.reduceCacheSize();
-        });
+    setupRealtimeSubscription() {
+        try {
+            const client = this.supabase?.supabase;
+            if (!client?.channel) return;
+
+            this._realtimeChannel = client
+                .channel('orders-realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+                    console.log('🔴 Realtime orders change:', payload.eventType);
+                    // Invalidate all cache so next read picks up the change
+                    this.clearCache();
+                    this.eventBus.emit('orders:realtime-change', { event: payload.eventType, record: payload.new || payload.old });
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') console.log('✅ Orders realtime subscribed');
+                    if (status === 'CHANNEL_ERROR') console.warn('⚠️ Orders realtime channel error');
+                });
+        } catch (e) {
+            console.warn('⚠️ Could not set up orders realtime:', e.message);
+        }
     }
 
     // DELETE ORDER with proper cleanup
@@ -87,54 +107,72 @@ export class OrdersModule {
         }
     }
 
-    // GET ORDERS with smart caching
+    // GET ORDERS with smart caching + in-flight deduplication
     async getOrders(month = null) {
         const targetMonth = month || this.state.get('currentMonth');
         this.stats.totalLoads++;
 
-        try {
-            // Check cache first
-            if (this.isCacheValid(targetMonth)) {
-                this.stats.cacheHits++;
-                const cachedOrders = this.cache.orders.get(targetMonth);
-                console.log(`📂 Using cached orders for ${targetMonth}: ${cachedOrders.length} orders`);
-                return this.mergeWithOptimisticUpdates(cachedOrders, targetMonth);
-            }
-
-            this.stats.cacheMisses++;
-            console.log(`📂 Loading orders from Supabase for month: ${targetMonth}`);
-
-            // Load from Supabase
-            const orders = await this.supabase.getOrders(targetMonth);
-            this.stats.supabaseOperations++;
-
-            // Update cache
-            this.updateCache(targetMonth, orders);
-
-            console.log(`✅ Loaded ${orders.length} orders for ${targetMonth}`);
-            return this.mergeWithOptimisticUpdates(orders, targetMonth);
-
-        } catch (error) {
-            console.error('❌ Failed to load orders:', error);
-            throw error;
+        // Return in-flight request if one is already pending for this month
+        if (this._inflight.has(targetMonth)) {
+            this.stats.cacheHits++;
+            return this._inflight.get(targetMonth);
         }
+
+        // Check cache first
+        if (this.isCacheValid(targetMonth)) {
+            this.stats.cacheHits++;
+            const cachedOrders = this.cache.orders.get(targetMonth);
+            return this.mergeWithOptimisticUpdates(cachedOrders, targetMonth);
+        }
+
+        this.stats.cacheMisses++;
+
+        const promise = this.supabase.getOrders(targetMonth)
+            .then(orders => {
+                this.stats.supabaseOperations++;
+                this.updateCache(targetMonth, orders);
+                this._inflight.delete(targetMonth);
+                return this.mergeWithOptimisticUpdates(orders, targetMonth);
+            })
+            .catch(err => {
+                this._inflight.delete(targetMonth);
+                throw err;
+            });
+
+        this._inflight.set(targetMonth, promise);
+        return promise;
     }
 
-    // GET ALL ORDERS across months
+    // GET ALL ORDERS across months — cached + deduplicated
     async getAllOrders() {
-        try {
-            console.log('📂 Loading all orders from Supabase...');
+        const ALL_KEY = '__all__';
 
-            const orders = await this.supabase.getOrders(); // No month filter
-            this.stats.supabaseOperations++;
-
-            console.log(`✅ Loaded ${orders.length} total orders`);
-            return orders;
-
-        } catch (error) {
-            console.error('❌ Failed to load all orders:', error);
-            throw error;
+        if (this._inflight.has(ALL_KEY)) {
+            this.stats.cacheHits++;
+            return this._inflight.get(ALL_KEY);
         }
+
+        if (this.isCacheValid(ALL_KEY)) {
+            this.stats.cacheHits++;
+            return this.cache.orders.get(ALL_KEY);
+        }
+
+        this.stats.cacheMisses++;
+
+        const promise = this.supabase.getOrders()
+            .then(orders => {
+                this.stats.supabaseOperations++;
+                this.updateCache(ALL_KEY, orders);
+                this._inflight.delete(ALL_KEY);
+                return orders;
+            })
+            .catch(err => {
+                this._inflight.delete(ALL_KEY);
+                throw err;
+            });
+
+        this._inflight.set(ALL_KEY, promise);
+        return promise;
     }
 
     // GET RECENTLY DELIVERED - bypasses cache, sorts by updated_at
@@ -272,34 +310,34 @@ export class OrdersModule {
             orders.push(order);
             orders.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
+        // All-orders cache is stale after any mutation
+        this.cache.orders.delete('__all__');
+        this.cache.lastUpdate.delete('__all__');
     }
 
     updateOrderInCache(order, oldMonth, newMonth) {
-        // Remove from old month cache
         if (oldMonth && this.cache.orders.has(oldMonth)) {
             const oldOrders = this.cache.orders.get(oldMonth);
             const index = oldOrders.findIndex(o => o.id === order.id);
-            if (index !== -1) {
-                oldOrders.splice(index, 1);
-            }
+            if (index !== -1) oldOrders.splice(index, 1);
         }
-
-        // Add to new month cache
         if (newMonth && this.cache.orders.has(newMonth)) {
             const newOrders = this.cache.orders.get(newMonth);
             newOrders.push(order);
             newOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
+        this.cache.orders.delete('__all__');
+        this.cache.lastUpdate.delete('__all__');
     }
 
     removeOrderFromCache(orderId, month) {
         if (this.cache.orders.has(month)) {
             const orders = this.cache.orders.get(month);
             const index = orders.findIndex(o => o.id === orderId);
-            if (index !== -1) {
-                orders.splice(index, 1);
-            }
+            if (index !== -1) orders.splice(index, 1);
         }
+        this.cache.orders.delete('__all__');
+        this.cache.lastUpdate.delete('__all__');
     }
 
     clearCache() {
@@ -634,7 +672,12 @@ export class OrdersModule {
     destroy() {
         console.log('🗑️ Destroying OrdersModule...');
 
+        if (this._realtimeChannel) {
+            try { this.supabase?.supabase?.removeChannel(this._realtimeChannel); } catch (_) {}
+            this._realtimeChannel = null;
+        }
         this.clearCache();
+        this._inflight.clear();
         this.pendingOperations.clear();
         this.optimisticUpdates.clear();
 

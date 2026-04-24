@@ -255,9 +255,18 @@ export default class ClientsView {
         const container = document.getElementById('view-container');
         if (container) {
             container.innerHTML = `
-                <div class="loading-state">
-                    <h3>👥 Loading clients...</h3>
-                    <p>Fetching data from database...</p>
+                <div class="clients-view">
+                    <h2>👥 Клиентски профили</h2>
+                    <div class="skeleton-clients-grid">
+                        ${Array.from({ length: 6 }, () => `
+                            <div class="skeleton-card">
+                                <div class="skeleton-line sk-title"></div>
+                                <div class="skeleton-line sk-line"></div>
+                                <div class="skeleton-line sk-line-s"></div>
+                                <div class="skeleton-line sk-line"></div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
 
