@@ -441,15 +441,12 @@ export class UIManager {
 
                     await this.switchView('orders');
 
-                    // Highlight the row briefly after render
-                    setTimeout(() => {
-                        const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
-                        if (row) {
-                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            row.classList.add('highlight-row');
-                            setTimeout(() => row.classList.remove('highlight-row'), 2000);
+                    if (this.currentView?.revealOrder) {
+                        const revealed = await this.currentView.revealOrder(orderId);
+                        if (!revealed) {
+                            this.showNotification('Поръчката не беше намерена в текущия изглед.', 'warning');
                         }
-                    }, 400);
+                    }
                 });
             });
 
