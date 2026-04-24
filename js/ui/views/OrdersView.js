@@ -38,9 +38,7 @@ export default class OrdersView {
     async render() {
         try {
             const stats = await this.reportsModule.getMonthlyStats();
-            const allOrders = this.filters.recentlyDelivered
-                ? await this.ordersModule.getRecentlyDelivered(10)
-                : await this.ordersModule.filterOrders(this.filters);
+            const allOrders = await this.getDisplayOrders();
 
             // Calculate free watches count across all months - use getAllOrders() not getOrders(null)
             const allMonthsOrders = await this.ordersModule.getAllOrders();
@@ -50,19 +48,6 @@ export default class OrdersView {
             const currentMonth = this.state.get('currentMonth');
             const currentMonthOrders = await this.ordersModule.getOrders(currentMonth);
             const freeCountMonth = currentMonthOrders.filter(o => o.status === 'Свободен').length;
-
-            // Sort before pagination
-            if (this.sortBy) {
-                const dir = this.sortDir === 'asc' ? 1 : -1;
-                allOrders.sort((a, b) => {
-                    let va = a[this.sortBy], vb = b[this.sortBy];
-                    if (typeof va === 'string') va = va.toLowerCase();
-                    if (typeof vb === 'string') vb = vb.toLowerCase();
-                    if (va == null) return 1;
-                    if (vb == null) return -1;
-                    return va < vb ? -dir : va > vb ? dir : 0;
-                });
-            }
 
             // ADD: Update pagination totals
             this.updatePaginationTotals(allOrders.length);
@@ -93,6 +78,92 @@ export default class OrdersView {
             </div>
         `;
         }
+    }
+
+    async getDisplayOrders() {
+        const allOrders = this.filters.recentlyDelivered
+            ? await this.ordersModule.getRecentlyDelivered(10)
+            : await this.ordersModule.filterOrders(this.filters);
+
+        if (this.sortBy) {
+            const dir = this.sortDir === 'asc' ? 1 : -1;
+            allOrders.sort((a, b) => {
+                let va = a[this.sortBy], vb = b[this.sortBy];
+                if (typeof va === 'string') va = va.toLowerCase();
+                if (typeof vb === 'string') vb = vb.toLowerCase();
+                if (va == null) return 1;
+                if (vb == null) return -1;
+                return va < vb ? -dir : va > vb ? dir : 0;
+            });
+        }
+
+        return allOrders;
+    }
+
+    resetFiltersForOrderReveal() {
+        this.filters = {
+            status: 'all',
+            search: '',
+            origin: '',
+            vendor: '',
+            showAllMonths: false,
+            recentlyDelivered: false
+        };
+    }
+
+    waitForRow(orderId, timeout = 1200) {
+        const selector = `tr[data-order-id="${CSS.escape(String(orderId))}"]`;
+        const started = performance.now();
+
+        return new Promise(resolve => {
+            const find = () => {
+                const row = document.querySelector(selector);
+                if (row) {
+                    resolve(row);
+                    return;
+                }
+
+                if (performance.now() - started >= timeout) {
+                    resolve(null);
+                    return;
+                }
+
+                requestAnimationFrame(find);
+            };
+
+            find();
+        });
+    }
+
+    async revealOrder(orderId) {
+        let allOrders = await this.getDisplayOrders();
+        let orderIndex = allOrders.findIndex(order => String(order.id) === String(orderId));
+
+        if (orderIndex === -1) {
+            this.resetFiltersForOrderReveal();
+            allOrders = await this.getDisplayOrders();
+            orderIndex = allOrders.findIndex(order => String(order.id) === String(orderId));
+        }
+
+        if (orderIndex === -1) return false;
+
+        this.pagination.currentPage = Math.floor(orderIndex / this.pagination.ordersPerPage) + 1;
+        await this.refresh();
+
+        const row = await this.waitForRow(orderId);
+        if (!row) return false;
+
+        row.classList.remove('highlight-row');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+        window.setTimeout(() => {
+            row.classList.add('highlight-row');
+            row.setAttribute('tabindex', '-1');
+            row.focus({ preventScroll: true });
+            window.setTimeout(() => row.classList.remove('highlight-row'), 3200);
+        }, 250);
+
+        return true;
     }
 
     renderBulkActions() {
