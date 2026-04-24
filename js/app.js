@@ -87,16 +87,16 @@ export class App {
         console.log('📂 Loading application data...');
 
         try {
-            // Get current month from localStorage (UI preference)
-            const savedMonth = localStorage.getItem('orderSystem_currentMonth');
-            const currentMonth = savedMonth || this.getCurrentMonth();
+            // Get current month via StorageService (UI preference)
+            const savedMonth = this.storage.load('currentMonth');
+            const currentMonth = (typeof savedMonth === 'string' && savedMonth) ? savedMonth : this.getCurrentMonth();
 
             // Load settings with localStorage fallback (settings are not business data)
             const settings = await this.loadSettingsWithFallback();
 
-            // Load UI preferences from localStorage
-            const availableMonthsStr = localStorage.getItem('orderSystem_availableMonths');
-            const availableMonths = availableMonthsStr ? JSON.parse(availableMonthsStr) : this.generateDefaultMonths(currentMonth);
+            // Load UI preferences via StorageService
+            const savedMonths = this.storage.load('availableMonths');
+            const availableMonths = Array.isArray(savedMonths) ? savedMonths : this.generateDefaultMonths(currentMonth);
 
             // Initialize application state (business data will be loaded by modules from Supabase)
             const applicationData = {
@@ -242,7 +242,8 @@ console.log('✅ Business modules initialized');
         });
 
         // Periodic auto-save for settings and UI state
-        setInterval(() => this.performAutoSave(), 30000);
+        if (this.autoSaveIntervalId) clearInterval(this.autoSaveIntervalId);
+        this.autoSaveIntervalId = setInterval(() => this.performAutoSave(), 30000);
     }
 
     setupBrowserProtection() {
