@@ -8,6 +8,7 @@ export class ModalsManager {
         this.eventBus = eventBus;
         this.currentModal = null;
         this.tempImageData = null;
+        this.imageMarkedForRemoval = false;
         this._previousFocus = null;
         this._tabHandler = null;
 
@@ -66,6 +67,10 @@ export class ModalsManager {
     async open(data) {
         this._previousFocus = document.activeElement;
         this.currentModal = data;
+        if (data.type === 'order') {
+            this.tempImageData = null;
+            this.imageMarkedForRemoval = false;
+        }
         const container = document.getElementById('modal-container');
 
         // Show loading state
@@ -153,6 +158,7 @@ export class ModalsManager {
                 container.innerHTML = '';
                 this.currentModal = null;
                 this.tempImageData = null;
+                this.imageMarkedForRemoval = false;
             }, 300);
         }
     }
@@ -243,14 +249,14 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Дата:</label>
-                            <input type="date" id="orderDate" value="${formData?.date || new Date().toISOString().split('T')[0]}" required>
+                            <input type="date" id="orderDate" value="${this._esc(formData?.date || new Date().toISOString().split('T')[0])}" required>
                         </div>
                         <div class="form-group">
                             <label>Клиент:</label>
                             <div class="input-with-button">
-                                <input type="text" id="orderClient" list="clients-list" value="${formData?.client || ''}" required placeholder="Изберете или въведете клиент">
+                                <input type="text" id="orderClient" list="clients-list" value="${this._esc(formData?.client || '')}" required placeholder="Изберете или въведете клиент">
                                 <datalist id="clients-list">
-                                    ${clients.map(c => `<option value="${c.name}">`).join('')}
+                                    ${clients.map(c => `<option value="${this._esc(c.name)}">`).join('')}
                                 </datalist>
                                 <button type="button" class="input-addon-btn" data-action="quick-add-client">+</button>
                             </div>
@@ -261,13 +267,13 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Телефон:</label>
-                            <input type="tel" id="orderPhone" value="${formData?.phone || ''}">
+                            <input type="tel" id="orderPhone" value="${this._esc(formData?.phone || '')}">
                         </div>
                         <div class="form-group">
                             <label>Източник:</label>
                             <select id="orderOrigin" required>
                                 ${settings.origins.map(o => `
-                                    <option value="${o}" ${formData?.origin === o ? 'selected' : ''}>${o}</option>
+                                    <option value="${this._esc(o)}" ${formData?.origin === o ? 'selected' : ''}>${this._esc(o)}</option>
                                 `).join('')}
                             </select>
                         </div>
@@ -278,13 +284,13 @@ export class ModalsManager {
                             <label>Доставчик:</label>
                             <select id="orderVendor" required>
                                 ${settings.vendors.map(v => `
-                                    <option value="${v}" ${formData?.vendor === v ? 'selected' : ''}>${v}</option>
+                                    <option value="${this._esc(v)}" ${formData?.vendor === v ? 'selected' : ''}>${this._esc(v)}</option>
                                 `).join('')}
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Модел:</label>
-                            <input type="text" id="orderModel" value="${formData?.model || ''}" required placeholder="Описание на модела">
+                            <input type="text" id="orderModel" value="${this._esc(formData?.model || '')}" required placeholder="Описание на модела">
                         </div>
                     </div>
                     
@@ -298,7 +304,7 @@ export class ModalsManager {
                             <div class="hint-text">Или поставете снимка с Ctrl+V</div>
                             <div id="image-preview" class="image-preview">
                                 ${formData?.imageData ? `
-                                    <img src="${formData.imageData}" class="preview-img">
+                                    <img src="${this._esc(formData.imageData)}" class="preview-img">
                                     <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
                                 ` : '<div class="no-image">Няма избрана снимка</div>'}
                             </div>
@@ -308,23 +314,23 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Доставна цена (USD):</label>
-                            <input type="number" id="orderCostUSD" value="${formData?.costUSD || ''}" step="0.01" required>
+                            <input type="number" id="orderCostUSD" value="${this._esc(formData?.costUSD || '')}" step="0.01" required>
                         </div>
                         <div class="form-group">
                             <label>Доставка (USD):</label>
-                            <input type="number" id="orderShippingUSD" value="${formData?.shippingUSD || settings.factoryShipping}" step="0.01">
+                            <input type="number" id="orderShippingUSD" value="${this._esc(formData?.shippingUSD || settings.factoryShipping)}" step="0.01">
                         </div>
                     </div>
                     
                     <div class="form-row">
                         <div class="form-group">
                             <label>Доп. разходи (€):</label>
-                            <input type="number" id="orderExtrasEUR" value="${formData?.extrasEUR || ''}" step="0.01" placeholder="0.00">
+                            <input type="number" id="orderExtrasEUR" value="${this._esc(formData?.extrasEUR || '')}" step="0.01" placeholder="0.00">
                             <small style="color:#6c757d;">Допълнителни разходи в евро</small>
                         </div>
                         <div class="form-group">
                             <label>Продажна цена (€):</label>
-                            <input type="number" id="orderSellEUR" value="${formData?.sellEUR || ''}" step="0.01" placeholder="0.00">
+                            <input type="number" id="orderSellEUR" value="${this._esc(formData?.sellEUR || '')}" step="0.01" placeholder="0.00">
                             <small style="color:#6c757d;">Крайна цена за клиента в евро</small>
                         </div>
                     </div>
@@ -349,7 +355,7 @@ export class ModalsManager {
                     
                     <div class="form-group">
                         <label>Бележки:</label>
-                        <textarea id="orderNotes" rows="3">${formData?.notes || ''}</textarea>
+                        <textarea id="orderNotes" rows="3">${this._esc(formData?.notes || '')}</textarea>
                     </div>
                     
                     <div class="form-actions">
@@ -382,23 +388,23 @@ export class ModalsManager {
                     <form id="client-form" class="modal-form">
                         <div class="form-group">
                             <label>Име на клиента:</label>
-                            <input type="text" id="clientName" value="${client?.name || ''}" required>
+                            <input type="text" id="clientName" value="${this._esc(client?.name || '')}" required>
                         </div>
                         
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Телефон:</label>
-                                <input type="tel" id="clientPhone" value="${client?.phone || ''}">
+                                <input type="tel" id="clientPhone" value="${this._esc(client?.phone || '')}">
                             </div>
                             <div class="form-group">
                                 <label>Email:</label>
-                                <input type="email" id="clientEmail" value="${client?.email || ''}">
+                                <input type="email" id="clientEmail" value="${this._esc(client?.email || '')}">
                             </div>
                         </div>
                         
                         <div class="form-group">
                             <label>Адрес:</label>
-                            <textarea id="clientAddress" rows="2">${client?.address || ''}</textarea>
+                            <textarea id="clientAddress" rows="2">${this._esc(client?.address || '')}</textarea>
                         </div>
                         
                         <div class="form-group">
@@ -406,14 +412,14 @@ export class ModalsManager {
                             <select id="clientPreferredSource">
                                 <option value="">Няма предпочитание</option>
                                 ${settings.origins.map(o => `
-                                    <option value="${o}" ${client?.preferredSource === o ? 'selected' : ''}>${o}</option>
+                                    <option value="${this._esc(o)}" ${client?.preferredSource === o ? 'selected' : ''}>${this._esc(o)}</option>
                                 `).join('')}
                             </select>
                         </div>
                         
                         <div class="form-group">
                             <label>Бележки:</label>
-                            <textarea id="clientNotes" rows="3" placeholder="Предпочитания, специални условия...">${client?.notes || ''}</textarea>
+                            <textarea id="clientNotes" rows="3" placeholder="Предпочитания, специални условия...">${this._esc(client?.notes || '')}</textarea>
                         </div>
                         
                         <div class="form-actions">
@@ -451,18 +457,18 @@ export class ModalsManager {
                 <form id="expense-form" class="modal-form">
                     <div class="form-group">
                         <label>Име на разхода:</label>
-                        <input type="text" id="expenseName" value="${expense?.name || ''}" required>
+                        <input type="text" id="expenseName" value="${this._esc(expense?.name || '')}" required>
                     </div>
                     
                     <div class="form-group">
                         <label>Сума (€):</label>
-                        <input type="number" id="expenseAmount" value="${expense?.amount || ''}" step="0.01" placeholder="0.00" required>
+                        <input type="number" id="expenseAmount" value="${this._esc(expense?.amount || '')}" step="0.01" placeholder="0.00" required>
                         <small style="color:#6c757d;">Размер на разхода в евро</small>
                     </div>
                     
                     <div class="form-group">
                         <label>Бележка:</label>
-                        <textarea id="expenseNote" rows="3">${expense?.note || ''}</textarea>
+                        <textarea id="expenseNote" rows="3">${this._esc(expense?.note || '')}</textarea>
                     </div>
                     
                     <div class="form-actions">
@@ -492,7 +498,7 @@ export class ModalsManager {
                 <form id="inventory-form" class="modal-form">
                     <div class="form-group">
                         <label>Бранд:</label>
-                        <input type="text" id="itemBrand" value="${item?.brand || ''}" required>
+                        <input type="text" id="itemBrand" value="${this._esc(item?.brand || '')}" required>
                     </div>
                     
                     <div class="form-group">
@@ -506,12 +512,12 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Доставна цена (€):</label>
-                            <input type="number" id="itemPurchasePrice" value="${item?.purchasePrice || ''}" step="0.01" placeholder="0.00" required>
+                            <input type="number" id="itemPurchasePrice" value="${this._esc(item?.purchasePrice || '')}" step="0.01" placeholder="0.00" required>
                             <small style="color:#6c757d;">Цена на закупуване в евро</small>
                         </div>
                         <div class="form-group">
                             <label>Продажна цена (€):</label>
-                            <input type="number" id="itemSellPrice" value="${item?.sellPrice || ''}" step="0.01" placeholder="0.00" required>
+                            <input type="number" id="itemSellPrice" value="${this._esc(item?.sellPrice || '')}" step="0.01" placeholder="0.00" required>
                             <small style="color:#6c757d;">Препоръчана цена за клиенти в евро</small>
                         </div>
                     </div>
@@ -519,11 +525,11 @@ export class ModalsManager {
                     <div class="form-row">
                         <div class="form-group">
                             <label>Наличност (бр.):</label>
-                            <input type="number" id="itemStock" value="${item?.stock || 0}" min="0" required>
+                            <input type="number" id="itemStock" value="${this._esc(item?.stock || 0)}" min="0" required>
                         </div>
                         <div class="form-group">
                             <label>Поръчани (бр.):</label>
-                            <input type="number" id="itemOrdered" value="${item?.ordered || 0}" min="0">
+                            <input type="number" id="itemOrdered" value="${this._esc(item?.ordered || 0)}" min="0">
                         </div>
                     </div>
                     
@@ -550,7 +556,7 @@ export class ModalsManager {
                     <button class="modal-close" data-action="close" aria-label="Затвори">✕</button>
                 </div>
                 <div class="modal-image-body">
-                    <img src="${data.imageSrc}" alt="${safeTitle}" class="full-image">
+                    <img src="${this._esc(data.imageSrc)}" alt="${safeTitle}" class="full-image">
                     ${safeCaption ? `<p class="image-caption">${safeCaption}</p>` : ''}
                 </div>
             </div>
@@ -567,17 +573,17 @@ export class ModalsManager {
             <div class="modal">
                 <div class="modal-content modal-large">
                     <div class="modal-header">
-                        <h2>👤 ${client.name}</h2>
+                        <h2>👤 ${this._esc(client.name)}</h2>
                         <button class="modal-close" data-action="close">✕</button>
                     </div>
                     
                     <div class="client-profile">
                         <div class="profile-info">
-                            <p><strong>Телефон:</strong> ${client.phone || 'Няма'}</p>
-                            <p><strong>Email:</strong> ${client.email || 'Няма'}</p>
-                            <p><strong>Адрес:</strong> ${client.address || 'Няма'}</p>
-                            <p><strong>Предпочитан източник:</strong> ${client.preferredSource || 'Няма'}</p>
-                            <p><strong>Бележки:</strong> ${client.notes || 'Няма'}</p>
+                            <p><strong>Телефон:</strong> ${this._esc(client.phone || 'Няма')}</p>
+                            <p><strong>Email:</strong> ${this._esc(client.email || 'Няма')}</p>
+                            <p><strong>Адрес:</strong> ${this._esc(client.address || 'Няма')}</p>
+                            <p><strong>Предпочитан източник:</strong> ${this._esc(client.preferredSource || 'Няма')}</p>
+                            <p><strong>Бележки:</strong> ${this._esc(client.notes || 'Няма')}</p>
                         </div>
                         
                         <div class="profile-stats">
@@ -615,17 +621,17 @@ export class ModalsManager {
                                             <td>${formattedDate}</td>
                                             <td class="image-cell">
                                                 ${o.imageData ?
-            `<img src="${o.imageData}"
+            `<img src="${this._esc(o.imageData)}"
                                                          class="model-image profile-order-img"
-                                                         alt="${o.model}"
-                                                         title="${o.model}"
+                                                         alt="${this._esc(o.model)}"
+                                                         title="${this._esc(o.model)}"
                                                          data-action="view-profile-image"
-                                                         data-model="${o.model.replace(/"/g, '&quot;')}"
-                                                         data-caption="Клиент: ${o.client} | Дата: ${formattedDate}">` :
-            `<div class="no-image-placeholder">${o.model}</div>`}
+                                                         data-model="${this._esc(o.model)}"
+                                                         data-caption="${this._esc(`Клиент: ${o.client} | Дата: ${formattedDate}`)}">` :
+            `<div class="no-image-placeholder">${this._esc(o.model)}</div>`}
                                             </td>
                                             <td>${(o.sellEUR || 0).toFixed(2)} €</td>
-                                            <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${o.status}</span></td>
+                                            <td><span class="status-badge ${this.modules.orders.getStatusClass(o.status)}">${this._esc(o.status)}</span></td>
                                         </tr>
                                     `;
                                     }).join('')}
@@ -636,7 +642,7 @@ export class ModalsManager {
                     
                     <div class="form-actions">
                         <button type="button" class="btn secondary" data-action="close">Затвори</button>
-                        <button type="button" class="btn primary" data-action="edit-client" data-client-id="${client.id}">
+                        <button type="button" class="btn primary" data-action="edit-client" data-client-id="${this._esc(client.id)}">
                             Редактирай клиента
                         </button>
                     </div>
@@ -710,12 +716,21 @@ export class ModalsManager {
     async handleOrderSubmit(e) {
         e.preventDefault();
 
-        // Get existing image data for edit mode
+        // Get existing image data/path for edit mode
         let existingImageData = null;
+        let existingImagePath = null;
         if (this.currentModal.mode === 'edit') {
             const result = await this.modules.orders.findOrderById(this.currentModal.id);
             existingImageData = result?.order?.imageData || null;
+            existingImagePath = result?.order?.imagePath || result?.order?.imageUrl || null;
         }
+
+        const imageData = this.imageMarkedForRemoval
+            ? null
+            : (this.tempImageData || existingImageData);
+        const imagePath = this.imageMarkedForRemoval
+            ? null
+            : existingImagePath;
 
         // FIXED: Ensure all form values are properly captured (no undefined/null values)
         const orderData = {
@@ -733,7 +748,10 @@ export class ModalsManager {
             status: document.getElementById('orderStatus').value,
             fullSet: document.getElementById('orderFullSet').checked,
             notes: document.getElementById('orderNotes').value || '',
-            imageData: this.tempImageData || existingImageData
+            imageData,
+            imagePath,
+            previousImagePath: existingImagePath,
+            removeImage: this.imageMarkedForRemoval
         };
 
         try {
@@ -876,6 +894,7 @@ export class ModalsManager {
             const reader = new FileReader();
             reader.onload = (e) => {
                 this.tempImageData = e.target.result;
+                this.imageMarkedForRemoval = false;
                 this.updateImagePreview(e.target.result);
             };
             reader.readAsDataURL(file);
@@ -899,7 +918,7 @@ export class ModalsManager {
         const preview = document.getElementById('image-preview');
         if (preview) {
             preview.innerHTML = `
-                <img src="${imageSrc}" class="preview-img">
+                <img src="${this._esc(imageSrc)}" class="preview-img">
                 <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
             `;
         }
@@ -907,6 +926,7 @@ export class ModalsManager {
 
     removeImage() {
         this.tempImageData = null;
+        this.imageMarkedForRemoval = true;
         const preview = document.getElementById('image-preview');
         if (preview) {
             preview.innerHTML = '<div class="no-image">Няма избрана снимка</div>';

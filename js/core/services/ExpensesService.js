@@ -42,21 +42,7 @@ export class ExpensesService {
             const { data, error } = await query;
             if (error) throw error;
 
-            return data.map(exp => {
-                const amountEUR = parseFloat(exp.amount_eur) || 0;
-                return {
-                    id: exp.id,
-                    month: exp.month_key,
-                    name: exp.name || 'Без име',
-                    category: exp.name || 'Без име',
-                    amount: amountEUR,
-                    amountEUR: amountEUR,
-                    description: exp.note || '',
-                    note: exp.note || '',
-                    isDefault: false,
-                    currency: 'EUR'
-                };
-            });
+            return data.map(exp => this.transformExpenseFromDB(exp));
         });
     }
 
@@ -99,13 +85,18 @@ export class ExpensesService {
 
     transformExpenseFromDB(dbExpense) {
         const amountEUR = parseFloat(dbExpense.amount_eur) || 0;
+        const name = dbExpense.name || 'Без име';
+        const note = dbExpense.note || '';
+
         return {
             id: dbExpense.id,
-            month: dbExpense.month,
-            category: dbExpense.category,
+            month: dbExpense.month_key,
+            name,
+            category: name,
             amount: amountEUR,
             amountEUR,
-            description: dbExpense.description || '',
+            description: note,
+            note,
             isDefault: dbExpense.is_default || false,
             currency: 'EUR'
         };

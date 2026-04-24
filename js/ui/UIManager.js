@@ -1,4 +1,7 @@
 import {ModalsManager} from "./components/ModalsManager.js";
+import { FormatUtils } from "../utils/FormatUtils.js";
+
+const esc = FormatUtils.escapeHtml;
 
 export class UIManager {
     constructor(modules, state, eventBus, router, undoRedo) {
@@ -408,12 +411,12 @@ export class UIManager {
             resultsEl.innerHTML = matches.map(o => {
                 const monthKey = o.date ? o.date.substring(0, 7) : '';
                 return `
-                    <div class="search-result-item" data-order-id="${o.id}" data-month="${monthKey}">
+                    <div class="search-result-item" data-order-id="${esc(o.id)}" data-month="${esc(monthKey)}">
                         <div>
-                            <div class="search-result-client">${o.client} — ${o.model}</div>
-                            <div class="search-result-meta">${o.date || ''} · ${o.status}</div>
+                            <div class="search-result-client">${esc(o.client)} — ${esc(o.model)}</div>
+                            <div class="search-result-meta">${esc(o.date || '')} · ${esc(o.status)}</div>
                         </div>
-                        <div class="search-result-amount">${monthKey}</div>
+                        <div class="search-result-amount">${esc(monthKey)}</div>
                     </div>
                 `;
             }).join('');

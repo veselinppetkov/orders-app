@@ -103,14 +103,23 @@ export class OrdersService {
         return this.base.executeRequest(async () => {
             console.log('✏️ Updating order in Supabase:', orderId);
 
-            let imageUrl = orderData.imageUrl;
+            const previousImagePath = orderData.previousImagePath || orderData.imagePath || orderData.imageUrl || null;
+            let imageUrl = orderData.imagePath || orderData.imageUrl || null;
+
+            if (orderData.removeImage) {
+                if (previousImagePath) {
+                    await this.images.deleteImage(previousImagePath);
+                }
+                imageUrl = null;
+            }
+
             if (orderData.imageData && orderData.imageData.startsWith('data:image')) {
                 imageUrl = await this.images.uploadImage(orderData.imageData, `order-${orderId}-${Date.now()}`);
-                if (orderData.imageUrl && orderData.imageUrl !== imageUrl) {
+                if (previousImagePath && previousImagePath !== imageUrl) {
                     try {
-                        await this.images.deleteImage(orderData.imageUrl);
+                        await this.images.deleteImage(previousImagePath);
                     } catch (e) {
-                        console.warn('⚠️ Orphaned old image (delete failed):', orderData.imageUrl, e);
+                        console.warn('⚠️ Orphaned old image (delete failed):', previousImagePath, e);
                     }
                 }
             }
