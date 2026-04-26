@@ -132,7 +132,6 @@ export class UIManager {
 
         this.eventBus.on('route:change', (view) => this.switchView(view));
         this.eventBus.on('notification:show', (data) => this.showNotification(data.message, data.type));
-        this.eventBus.on('modal:open', (data) => this.openModal(data));
 
         await this.switchView('orders');
     }

@@ -74,20 +74,23 @@ export class ClientsModule {
     // CREATE CLIENT with optimistic updates
     async create(clientData) {
         const operationId = `create_${Date.now()}`;
+        let optimisticClient = null;
         this.pendingOperations.add(operationId);
 
         try {
+            const normalizedData = this.normalizeClientData(clientData);
+
             // Validate input data
-            this.validateClientData(clientData);
+            this.validateClientData(normalizedData);
 
             // Check for duplicates
-            await this.checkForDuplicates(clientData);
+            await this.checkForDuplicates(normalizedData);
 
             // Emit before-create event for undo/redo
-            this.eventBus.emit('client:before-created', clientData);
+            this.eventBus.emit('client:before-created', normalizedData);
 
             // Create optimistic client for immediate UI feedback
-            const optimisticClient = this.createOptimisticClient(clientData);
+            optimisticClient = this.createOptimisticClient(normalizedData);
             this.addOptimisticUpdate(optimisticClient);
 
             // Emit optimistic creation
@@ -98,7 +101,7 @@ export class ClientsModule {
             });
 
             // Attempt Supabase save
-            const savedClient = await this.supabase.createClient(clientData);
+            const savedClient = await this.supabase.createClient(normalizedData);
             this.stats.supabaseOperations++;
 
             // Replace optimistic with real client
@@ -120,8 +123,8 @@ export class ClientsModule {
 
         } catch (error) {
             // Remove failed optimistic update
-            if (this.optimisticUpdates.has(operationId)) {
-                this.optimisticUpdates.delete(operationId);
+            if (optimisticClient) {
+                this.removeOptimisticUpdate(optimisticClient.id);
             }
 
             this.eventBus.emit('client:create-failed', { error, clientData, operationId });
@@ -138,8 +141,10 @@ export class ClientsModule {
         this.pendingOperations.add(operationId);
 
         try {
+            const normalizedData = this.normalizeClientData(clientData);
+
             // Validate input data
-            this.validateClientData(clientData);
+            this.validateClientData(normalizedData);
 
             // Find current client
             const currentClient = await this.getClient(clientId);
@@ -148,17 +153,17 @@ export class ClientsModule {
             }
 
             // Check for duplicates (excluding current client)
-            await this.checkForDuplicates(clientData, clientId);
+            await this.checkForDuplicates(normalizedData, clientId);
 
             // Emit before-update event for undo/redo
             this.eventBus.emit('client:before-updated', {
                 id: clientId,
                 currentClient,
-                newData: clientData
+                newData: normalizedData
             });
 
             // Update in Supabase
-            const savedClient = await this.supabase.updateClient(clientId, clientData);
+            const savedClient = await this.supabase.updateClient(clientId, normalizedData);
             this.stats.supabaseOperations++;
 
             // Update cache
@@ -298,8 +303,11 @@ export class ClientsModule {
     // GET CLIENT BY NAME
     async getClientByName(name) {
         try {
+            const normalizedName = typeof name === 'string' ? name.trim().toLowerCase() : '';
+            if (!normalizedName) return null;
+
             const allClients = await this.getAllClients();
-            return allClients.find(c => c.name === name) || null;
+            return allClients.find(c => c.name.toLowerCase().trim() === normalizedName) || null;
 
         } catch (error) {
             console.error('❌ Failed to get client by name:', error);
@@ -472,6 +480,11 @@ export class ClientsModule {
         }
     }
 
+    removeOptimisticUpdate(tempId) {
+        this.optimisticUpdates.delete(tempId);
+        this.cache.clients.delete(tempId);
+    }
+
     mergeWithOptimisticUpdates(clients) {
         const optimisticClients = Array.from(this.optimisticUpdates.values());
 
@@ -480,6 +493,19 @@ export class ClientsModule {
     }
 
     // VALIDATION AND DUPLICATE CHECKING
+    normalizeClientData(clientData = {}) {
+        const trimString = (value) => typeof value === 'string' ? value.trim() : '';
+
+        return {
+            name: trimString(clientData.name),
+            phone: trimString(clientData.phone),
+            email: trimString(clientData.email),
+            address: trimString(clientData.address),
+            preferredSource: trimString(clientData.preferredSource),
+            notes: trimString(clientData.notes)
+        };
+    }
+
     validateClientData(clientData) {
         assertValid(clientData, clientSchema);
     }
@@ -487,10 +513,11 @@ export class ClientsModule {
     async checkForDuplicates(clientData, excludeId = null) {
         try {
             const allClients = await this.getAllClients();
+            const clientName = clientData.name.toLowerCase().trim();
 
             const duplicate = allClients.find(client =>
                 client.id !== excludeId &&
-                client.name.toLowerCase().trim() === clientData.name.toLowerCase().trim()
+                client.name.toLowerCase().trim() === clientName
             );
 
             if (duplicate) {
