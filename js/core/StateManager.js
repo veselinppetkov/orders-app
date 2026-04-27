@@ -25,7 +25,8 @@ export class StateManager {
 
             // Configuration
             settings: {
-                usdRate: 1.71,
+                eurRate: 0.92,
+                baseCurrency: 'EUR',
                 factoryShipping: 1.5,
                 origins: ['OLX', 'Bazar.bg', 'Instagram', 'WhatsApp', 'IG Ads', 'Facebook', 'OLX Romania', 'Viber'],
                 vendors: ['Доставчик 1', 'Доставчик 2', 'Доставчик 3', 'AliExpress', 'Local Supplier', 'China Direct']
@@ -237,7 +238,7 @@ export class StateManager {
 
                 case 'settings':
                     return typeof newValue === 'object' && newValue !== null &&
-                        typeof newValue.usdRate === 'number' &&
+                        typeof newValue.eurRate === 'number' &&
                         typeof newValue.factoryShipping === 'number' &&
                         Array.isArray(newValue.origins) &&
                         Array.isArray(newValue.vendors);
