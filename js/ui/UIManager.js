@@ -223,7 +223,6 @@ export class UIManager {
             <main id="view-container" class="view-container"></main>
         </div>
         
-        <div id="modal-container"></div>
         <div id="notification-container"></div>
     `;
 

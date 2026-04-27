@@ -11,16 +11,55 @@ export class ModalsManager {
         this.imageMarkedForRemoval = false;
         this._previousFocus = null;
         this._tabHandler = null;
+        this.container = null;
+        this._boundContainer = null;
+        this._containerClickHandler = (e) => this.handleContainerClick(e);
 
         this.initContainer();
         this.attachGlobalListeners();
     }
 
     initContainer() {
-        if (!document.getElementById('modal-container')) {
-            const container = document.createElement('div');
-            container.id = 'modal-container';
-            document.body.appendChild(container);
+        this.container = document.getElementById('modal-container');
+
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.id = 'modal-container';
+            document.body.appendChild(this.container);
+        }
+
+        this.attachContainerListener();
+        return this.container;
+    }
+
+    attachContainerListener() {
+        if (!this.container || this._boundContainer === this.container) return;
+
+        if (this._boundContainer) {
+            this._boundContainer.removeEventListener('click', this._containerClickHandler);
+        }
+
+        this.container.addEventListener('click', this._containerClickHandler);
+        this._boundContainer = this.container;
+    }
+
+    handleContainerClick(e) {
+        const el = e.target.closest('[data-action]');
+        if (!el) return;
+        switch (el.dataset.action) {
+            case 'close':            this.close(); break;
+            case 'upload-image':     document.getElementById('orderImage')?.click(); break;
+            case 'remove-image':     this.removeImage(); break;
+            case 'quick-add-client': this.quickAddClient(); break;
+            case 'edit-client':      this.editClient(el.dataset.clientId); break;
+            case 'view-profile-image':
+                this.open({
+                    type: 'image',
+                    imageSrc: el.src,
+                    title: el.dataset.model,
+                    caption: el.dataset.caption
+                });
+                break;
         }
     }
 
@@ -43,25 +82,7 @@ export class ModalsManager {
         });
 
         // Delegated handler for all data-action buttons (replaces inline onclick)
-        document.getElementById('modal-container').addEventListener('click', (e) => {
-            const el = e.target.closest('[data-action]');
-            if (!el) return;
-            switch (el.dataset.action) {
-                case 'close':            this.close(); break;
-                case 'upload-image':     document.getElementById('orderImage')?.click(); break;
-                case 'remove-image':     this.removeImage(); break;
-                case 'quick-add-client': this.quickAddClient(); break;
-                case 'edit-client':      this.editClient(el.dataset.clientId); break;
-                case 'view-profile-image':
-                    this.open({
-                        type: 'image',
-                        imageSrc: el.src,
-                        title: el.dataset.model,
-                        caption: el.dataset.caption
-                    });
-                    break;
-            }
-        });
+        this.attachContainerListener();
     }
 
     async open(data) {
@@ -71,7 +92,7 @@ export class ModalsManager {
             this.tempImageData = null;
             this.imageMarkedForRemoval = false;
         }
-        const container = document.getElementById('modal-container');
+        const container = this.initContainer();
 
         // Show loading state
         container.innerHTML = `
@@ -142,7 +163,7 @@ export class ModalsManager {
     }
 
     close() {
-        const container = document.getElementById('modal-container');
+        const container = this.initContainer();
         const modal = container.querySelector('.modal');
         if (modal) {
             if (this._tabHandler) {
@@ -1018,7 +1039,7 @@ export class ModalsManager {
     }
 
     async quickAddClient() {
-        const clientName = document.getElementById('orderClient').value;
+        const clientName = document.getElementById('orderClient').value.trim();
         if (!clientName) {
             this.eventBus.emit('notification:show', {
                 message: 'Моля въведете име на клиент',
@@ -1082,7 +1103,7 @@ export class ModalsManager {
 
     confirm(message, details, onConfirm) {
         this._previousFocus = document.activeElement;
-        const container = document.getElementById('modal-container');
+        const container = this.initContainer();
         const detailsHtml = details
             ? `<div class="confirm-details">${details}</div>`
             : '';

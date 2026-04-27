@@ -87,9 +87,9 @@ export class App {
         console.log('📂 Loading application data...');
 
         try {
-            // Get current month via StorageService (UI preference)
-            const savedMonth = this.storage.load('currentMonth');
-            const currentMonth = (typeof savedMonth === 'string' && savedMonth) ? savedMonth : this.getCurrentMonth();
+            // Always start on the actual current month. The saved month is a UI
+            // navigation preference, but using it on startup can reopen stale months.
+            const currentMonth = this.getCurrentMonth();
 
             // Load settings with localStorage fallback (settings are not business data)
             const settings = await this.loadSettingsWithFallback();
