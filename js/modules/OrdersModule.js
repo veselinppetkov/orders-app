@@ -144,8 +144,9 @@ export class OrdersModule {
     }
 
     // GET ALL ORDERS across months — cached + deduplicated
-    async getAllOrders() {
-        const ALL_KEY = '__all__';
+    async getAllOrders(options = {}) {
+        const includeImageUrls = options.includeImageUrls === true;
+        const ALL_KEY = includeImageUrls ? '__all__:images' : '__all__';
 
         if (this._inflight.has(ALL_KEY)) {
             this.stats.cacheHits++;
@@ -159,7 +160,7 @@ export class OrdersModule {
 
         this.stats.cacheMisses++;
 
-        const promise = this.supabase.getOrders()
+        const promise = this.supabase.getOrders(null, { includeImageUrls })
             .then(orders => {
                 this.stats.supabaseOperations++;
                 this.updateCache(ALL_KEY, orders);
@@ -310,9 +311,8 @@ export class OrdersModule {
             orders.push(order);
             orders.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
-        // All-orders cache is stale after any mutation
-        this.cache.orders.delete('__all__');
-        this.cache.lastUpdate.delete('__all__');
+        // All-orders caches are stale after any mutation
+        this.invalidateAllOrdersCache();
     }
 
     updateOrderInCache(order, oldMonth, newMonth) {
@@ -326,8 +326,7 @@ export class OrdersModule {
             newOrders.push(order);
             newOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
         }
-        this.cache.orders.delete('__all__');
-        this.cache.lastUpdate.delete('__all__');
+        this.invalidateAllOrdersCache();
     }
 
     removeOrderFromCache(orderId, month) {
@@ -336,8 +335,15 @@ export class OrdersModule {
             const index = orders.findIndex(o => o.id === orderId);
             if (index !== -1) orders.splice(index, 1);
         }
-        this.cache.orders.delete('__all__');
-        this.cache.lastUpdate.delete('__all__');
+        this.invalidateAllOrdersCache();
+    }
+
+    invalidateAllOrdersCache() {
+        for (const key of ['__all__', '__all__:images']) {
+            this.cache.orders.delete(key);
+            this.cache.lastUpdate.delete(key);
+            this._inflight.delete(key);
+        }
     }
 
     clearCache() {

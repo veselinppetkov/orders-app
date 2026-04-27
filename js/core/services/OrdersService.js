@@ -54,9 +54,11 @@ export class OrdersService {
         });
     }
 
-    async getOrders(month = null) {
+    async getOrders(month = null, options = {}) {
         return this.base.executeRequest(async () => {
             console.log('📂 Loading orders from Supabase, month:', month || 'all');
+
+            const includeImageUrls = options.includeImageUrls !== false;
 
             let query = this.client
                 .from('orders')
@@ -74,7 +76,9 @@ export class OrdersService {
             const { data, error } = await query;
             if (error) throw error;
 
-            const transformedOrders = await Promise.all(data.map(o => this.transformOrderFromDB(o)));
+            const transformedOrders = await Promise.all(
+                data.map(o => this.transformOrderFromDB(o, { includeImageUrls }))
+            );
             console.log(`✅ Loaded ${transformedOrders.length} orders`);
             return transformedOrders;
         });
@@ -190,7 +194,7 @@ export class OrdersService {
         });
     }
 
-    async transformOrderFromDB(dbOrder) {
+    async transformOrderFromDB(dbOrder, options = {}) {
         const costUSD = parseFloat(dbOrder.cost_usd) || 0;
         const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
         const rate = parseFloat(dbOrder.rate) || 0;
@@ -201,7 +205,10 @@ export class OrdersService {
         const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
         const balanceEUR = sellEUR - totalEUR;
 
-        const imageUrl = await this.images.getImageUrl(dbOrder.image_url);
+        const includeImageUrls = options.includeImageUrls !== false;
+        const imageUrl = includeImageUrls
+            ? await this.images.getImageUrl(dbOrder.image_url)
+            : null;
 
         return {
             id: dbOrder.id,

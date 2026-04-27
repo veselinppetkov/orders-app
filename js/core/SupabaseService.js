@@ -33,7 +33,7 @@ export class SupabaseService {
 
     // Orders
     createOrder(data) { return this.orders.createOrder(data); }
-    getOrders(month) { return this.orders.getOrders(month); }
+    getOrders(month, options) { return this.orders.getOrders(month, options); }
     getRecentlyDelivered(limit) { return this.orders.getRecentlyDelivered(limit); }
     updateOrder(id, data) { return this.orders.updateOrder(id, data); }
     deleteOrder(id) { return this.orders.deleteOrder(id); }
