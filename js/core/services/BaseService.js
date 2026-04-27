@@ -180,10 +180,14 @@ export class BaseService {
     }
 
     isNonRetryableError(error) {
-        const nonRetryableCodes = ['PGRST301', 'PGRST204', '42P01', '23505'];
+        const nonRetryableCodes = ['PGRST116', 'PGRST204', 'PGRST301', '42P01', '23505'];
+        const message = String(error.message || '').toLowerCase();
         return nonRetryableCodes.includes(error.code) ||
-            error.message.includes('permission') ||
-            error.message.includes('authentication');
+            error.status === 406 ||
+            error.statusCode === 406 ||
+            message.includes('not found') ||
+            message.includes('permission') ||
+            message.includes('authentication');
     }
 
     updateStats(success, responseTime) {
