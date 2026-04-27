@@ -384,7 +384,11 @@ export default class OrdersView {
             drawer.classList.add('open');
         });
 
-        document.getElementById('drawer-close-btn').addEventListener('click', () => this.closeDrawer());
+        drawer.querySelector('#drawer-close-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.closeDrawer();
+        });
 
         drawer.querySelectorAll('[data-drawer-action]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -409,16 +413,24 @@ export default class OrdersView {
     }
 
     closeDrawer() {
-        const drawer = document.getElementById('order-drawer');
-        const overlay = document.getElementById('order-drawer-overlay');
         if (this._drawerEscHandler) {
             document.removeEventListener('keydown', this._drawerEscHandler);
             this._drawerEscHandler = null;
         }
-        if (drawer) {
-            drawer.classList.remove('open');
-            overlay?.classList.remove('active');
-            setTimeout(() => { drawer.remove(); overlay?.remove(); }, 260);
+
+        const drawers = document.querySelectorAll('#order-drawer');
+        const overlays = document.querySelectorAll('#order-drawer-overlay');
+
+        if (drawers.length) {
+            drawers.forEach(drawer => drawer.classList.remove('open'));
+            overlays.forEach(overlay => overlay.classList.remove('active'));
+
+            setTimeout(() => {
+                drawers.forEach(drawer => drawer.remove());
+                overlays.forEach(overlay => overlay.remove());
+            }, 260);
+        } else {
+            overlays.forEach(overlay => overlay.remove());
         }
     }
 
@@ -459,42 +471,56 @@ export default class OrdersView {
     }
 
     _initDocumentListeners() {
-        if (this._docListenersBound) return;
-        this._docListenersBound = true;
+        if (OrdersView._docListenersBound) return;
+        OrdersView._docListenersBound = true;
+
+        const getCurrentOrdersView = () => {
+            const view = window.app?.ui?.currentView;
+            return view instanceof OrdersView ? view : null;
+        };
 
         // Pagination — delegated on document so it survives re-renders.
         document.addEventListener('click', (e) => {
-            if (e.target.id === 'page-first') this.goToPage(1);
-            else if (e.target.id === 'page-prev') this.goToPage(this.pagination.currentPage - 1);
-            else if (e.target.id === 'page-next') this.goToPage(this.pagination.currentPage + 1);
-            else if (e.target.id === 'page-last') this.goToPage(this.pagination.totalPages);
-            else if (e.target.classList.contains('page-num')) this.goToPage(parseInt(e.target.dataset.page));
+            const view = getCurrentOrdersView();
+            if (!view) return;
+
+            if (e.target.id === 'page-first') view.goToPage(1);
+            else if (e.target.id === 'page-prev') view.goToPage(view.pagination.currentPage - 1);
+            else if (e.target.id === 'page-next') view.goToPage(view.pagination.currentPage + 1);
+            else if (e.target.id === 'page-last') view.goToPage(view.pagination.totalPages);
+            else if (e.target.classList.contains('page-num')) view.goToPage(parseInt(e.target.dataset.page));
         });
 
         // Status popover close-on-outside-click — also bound once.
         document.addEventListener('click', (e) => {
+            const view = getCurrentOrdersView();
+            if (!view) return;
+
             if (!e.target.closest('.status-popover') && !e.target.closest('.status-badge')) {
-                this.closeStatusPopover();
+                view.closeStatusPopover();
             }
         });
 
         // Row-level events — delegated so virtual-scrolled rows work without re-binding.
         document.addEventListener('click', (e) => {
+            const view = getCurrentOrdersView();
+            if (!view) return;
+
             // Status badge → popover
             const badge = e.target.closest('.status-badge.clickable');
-            if (badge) { e.stopPropagation(); this.showStatusPopover(badge); return; }
+            if (badge) { e.stopPropagation(); view.showStatusPopover(badge); return; }
 
             // Image → modal
             const img = e.target.closest('.model-image.image-clickable');
             if (img) {
                 e.stopPropagation();
                 const orderId = parseInt(img.dataset.orderId);
-                this.ordersModule.findOrderById(orderId).then(result => {
+                view.ordersModule.findOrderById(orderId).then(result => {
                     if (!result?.order) return;
                     const o = result.order;
                     window.app.ui.modals.open({
                         type: 'image', imageSrc: o.imageData, title: o.model,
-                        caption: `Клиент: ${o.client} | Дата: ${this.formatDate(o.date)}`
+                        caption: `Клиент: ${o.client} | Дата: ${view.formatDate(o.date)}`
                     });
                 });
                 return;
@@ -504,31 +530,34 @@ export default class OrdersView {
             const actionBtn = e.target.closest('[data-action]');
             if (actionBtn && actionBtn.closest('.orders-table')) {
                 e.stopPropagation();
-                this._handleRowAction(actionBtn.dataset.action, parseInt(actionBtn.dataset.id));
+                view._handleRowAction(actionBtn.dataset.action, parseInt(actionBtn.dataset.id));
                 return;
             }
 
             // Row click → side drawer
             const row = e.target.closest('.order-row.clickable-row');
             if (row && !e.target.closest('.order-checkbox, .status-badge, [data-action], .model-image, .row-actions, input, button')) {
-                this.openDrawer(parseInt(row.dataset.orderId));
+                view.openDrawer(parseInt(row.dataset.orderId));
             }
         });
 
         // Checkbox delegation (works for virtual-scrolled rows too)
         document.addEventListener('change', (e) => {
+            const view = getCurrentOrdersView();
+            if (!view) return;
+
             if (e.target.id === 'select-all') {
                 const checked = e.target.checked;
                 document.querySelectorAll('.order-checkbox').forEach(cb => {
                     cb.checked = checked;
                     const id = parseInt(cb.dataset.id);
-                    if (checked) this.selectedOrders.add(id); else this.selectedOrders.delete(id);
+                    if (checked) view.selectedOrders.add(id); else view.selectedOrders.delete(id);
                 });
-                this.updateBulkUI();
+                view.updateBulkUI();
             } else if (e.target.classList.contains('order-checkbox')) {
                 const id = parseInt(e.target.dataset.id);
-                if (e.target.checked) this.selectedOrders.add(id); else this.selectedOrders.delete(id);
-                this.updateBulkUI();
+                if (e.target.checked) view.selectedOrders.add(id); else view.selectedOrders.delete(id);
+                view.updateBulkUI();
             }
         });
     }
