@@ -51,21 +51,26 @@ export class ExpensesService {
             console.log('✏️ Updating expense:', expenseId);
 
             const amountEUR = parseFloat(expenseData.amount) || 0;
+            const updatePayload = {
+                name: expenseData.category || expenseData.name,
+                amount: 0,
+                amount_eur: amountEUR,
+                note: expenseData.description || expenseData.note || ''
+            };
 
-            const { data, error } = await this.client
+            const { error, count } = await this.client
                 .from('expenses')
-                .update({
-                    name: expenseData.category || expenseData.name,
-                    amount: 0,
-                    amount_eur: amountEUR,
-                    note: expenseData.description || expenseData.note || ''
-                })
-                .eq('id', expenseId)
-                .select()
-                .single();
+                .update(updatePayload, { count: 'exact' })
+                .eq('id', expenseId);
 
             if (error) throw error;
-            return this.transformExpenseFromDB(data);
+            if (count === 0) throw new Error(`Expense not found or not editable: ${expenseId}`);
+
+            return this.transformExpenseFromDB({
+                id: expenseId,
+                month_key: expenseData.month || expenseData.monthKey || null,
+                ...updatePayload
+            });
         });
     }
 

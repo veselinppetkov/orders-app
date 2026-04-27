@@ -52,24 +52,28 @@ export class ClientsService {
             console.log('✏️ Updating client in Supabase:', clientId);
 
             const dbId = this.extractDbId(clientId);
+            const updatePayload = {
+                name: clientData.name,
+                phone: clientData.phone || '',
+                email: clientData.email || '',
+                address: clientData.address || '',
+                preferred_source: clientData.preferredSource || '',
+                notes: clientData.notes || ''
+            };
 
-            const { data, error } = await this.client
+            const { error, count } = await this.client
                 .from('clients')
-                .update({
-                    name: clientData.name,
-                    phone: clientData.phone || '',
-                    email: clientData.email || '',
-                    address: clientData.address || '',
-                    preferred_source: clientData.preferredSource || '',
-                    notes: clientData.notes || ''
-                })
-                .eq('id', dbId)
-                .select()
-                .single();
+                .update(updatePayload, { count: 'exact' })
+                .eq('id', dbId);
 
             if (error) throw error;
+            if (count === 0) throw new Error(`Client not found or not editable: ${clientId}`);
 
-            const transformed = this.transformClientFromDB(data);
+            const transformed = this.transformClientFromDB({
+                id: dbId,
+                ...updatePayload,
+                created_at: clientData.createdDate || null
+            });
             console.log('✅ Client updated successfully');
             return transformed;
         });

@@ -28,15 +28,13 @@ export class SettingsService {
         return this.base.executeRequest(async () => {
             console.log('💾 Saving settings to Supabase');
 
-            const { data, error } = await this.client
+            const { error } = await this.client
                 .from('settings')
-                .upsert({ id: 1, data: settings })
-                .select()
-                .single();
+                .upsert({ id: 1, data: settings });
 
             if (error) throw error;
             console.log('✅ Settings saved to Supabase');
-            return data.data;
+            return settings;
         });
     }
 

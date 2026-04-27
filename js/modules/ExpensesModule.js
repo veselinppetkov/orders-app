@@ -265,6 +265,7 @@ async update(expenseId, expenseData) {
         // Custom expenses: Update in Supabase
         // ============================================
         const updatedExpense = await this.supabase.updateExpense(expenseId, {
+            month: currentMonth,
             name: expenseData.name.trim(),
             amount: parseFloat(expenseData.amount) || 0,
             note: expenseData.note?.trim() || ''
