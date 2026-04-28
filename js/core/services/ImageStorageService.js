@@ -3,6 +3,13 @@ export class ImageStorageService {
         this.base = base;
         this.bucket = base.config.bucket;
 
+        this.fullImageMaxDimension = 1600;
+        this.fullImageQuality = 0.82;
+        this.thumbnailMaxDimension = 240;
+        this.thumbnailQuality = 0.72;
+        this.outputMimeType = 'image/webp';
+        this.outputExtension = 'webp';
+
         this.signedUrlTtlSeconds = 3600;
         this.signedUrlCacheSkewMs = 5 * 60 * 1000;
         this.signedUrlCache = new Map();
@@ -18,35 +25,151 @@ export class ImageStorageService {
         return this.base.executeRequest(async () => {
             console.log('Uploading image:', filename);
 
-            let blob;
+            let sourceBlob;
             try {
                 const response = await fetch(base64Data);
-                blob = await response.blob();
+                sourceBlob = await response.blob();
             } catch (e) {
                 throw new Error(`Invalid image data: ${e.message}`);
             }
 
             const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
             const maxBytes = 10 * 1024 * 1024;
-            if (!allowedTypes.includes(blob.type)) {
-                throw new Error(`Unsupported image type: ${blob.type || 'unknown'}`);
+            if (!allowedTypes.includes(sourceBlob.type)) {
+                throw new Error(`Unsupported image type: ${sourceBlob.type || 'unknown'}`);
             }
-            if (blob.size > maxBytes) {
-                throw new Error(`Image too large: ${(blob.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`);
+            if (sourceBlob.size > maxBytes) {
+                throw new Error(`Image too large: ${(sourceBlob.size / 1024 / 1024).toFixed(1)} MB (max 10 MB)`);
             }
 
-            const extension = blob.type.split('/')[1] || 'jpg';
-            const filePath = `${filename}.${extension}`;
+            const safeFilename = this.normalizeFilename(filename);
+            const filePath = `${safeFilename}.${this.outputExtension}`;
+            const thumbnailPath = this.getThumbnailPath(filePath);
+            const { fullBlob, thumbnailBlob } = await this.createImageVariants(sourceBlob);
 
-            const { error } = await this.client.storage
+            const { error: fullError } = await this.client.storage
                 .from(this.bucket)
-                .upload(filePath, blob, { cacheControl: '3600', upsert: true });
+                .upload(filePath, fullBlob, {
+                    cacheControl: '31536000',
+                    contentType: this.outputMimeType,
+                    upsert: true
+                });
 
-            if (error) throw error;
+            if (fullError) throw fullError;
+
+            const { error: thumbnailError } = await this.client.storage
+                .from(this.bucket)
+                .upload(thumbnailPath, thumbnailBlob, {
+                    cacheControl: '31536000',
+                    contentType: this.outputMimeType,
+                    upsert: true
+                });
+
+            if (thumbnailError) {
+                try {
+                    await this.client.storage.from(this.bucket).remove([filePath]);
+                } catch (cleanupError) {
+                    console.warn('Failed to cleanup full image after thumbnail upload error:', cleanupError);
+                }
+                throw thumbnailError;
+            }
 
             this.clearCachedSignedUrl(filePath);
+            this.clearCachedSignedUrl(thumbnailPath);
             console.log('Image uploaded successfully:', filePath);
             return filePath;
+        });
+    }
+
+    normalizeFilename(filename) {
+        const fallback = `order-${Date.now()}`;
+        const clean = String(filename || fallback)
+            .replace(/\.[a-z0-9]+$/i, '')
+            .replace(/^\/+/, '')
+            .replace(/[^a-zA-Z0-9/_-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/\/+/g, '/')
+            .replace(/^\/|\/$/g, '');
+
+        return clean || fallback;
+    }
+
+    async createImageVariants(sourceBlob) {
+        const image = await this.loadImage(sourceBlob);
+
+        try {
+            const fullBlob = await this.resizeImageBlob(
+                image,
+                this.fullImageMaxDimension,
+                this.fullImageQuality
+            );
+            const thumbnailBlob = await this.resizeImageBlob(
+                image,
+                this.thumbnailMaxDimension,
+                this.thumbnailQuality
+            );
+
+            return { fullBlob, thumbnailBlob };
+        } finally {
+            this.releaseImage(image);
+        }
+    }
+
+    async loadImage(blob) {
+        if (typeof createImageBitmap === 'function') {
+            return createImageBitmap(blob, { imageOrientation: 'from-image' });
+        }
+
+        return new Promise((resolve, reject) => {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(img);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject(new Error('Could not decode image'));
+            };
+            img.src = url;
+        });
+    }
+
+    releaseImage(image) {
+        if (typeof image?.close === 'function') {
+            image.close();
+        }
+    }
+
+    resizeImageBlob(image, maxDimension, quality) {
+        const sourceWidth = image.width || image.naturalWidth;
+        const sourceHeight = image.height || image.naturalHeight;
+        if (!sourceWidth || !sourceHeight) {
+            throw new Error('Invalid image dimensions');
+        }
+
+        const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+        const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas is not available');
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+        return new Promise((resolve, reject) => {
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    reject(new Error('Could not encode image as WebP'));
+                    return;
+                }
+                resolve(blob);
+            }, this.outputMimeType, quality);
         });
     }
 
@@ -74,6 +197,22 @@ export class ImageStorageService {
         }
     }
 
+    async getThumbnailUrl(imagePath) {
+        if (!imagePath) return null;
+
+        const imageStoragePath = this.getStoragePath(imagePath);
+        if (!imageStoragePath) return null;
+
+        if (!this.hasDerivedThumbnail(imageStoragePath)) {
+            return this.getImageUrl(imageStoragePath);
+        }
+
+        const thumbnailPath = this.getThumbnailPath(imageStoragePath);
+        const thumbnailUrl = await this.getImageUrl(thumbnailPath);
+
+        return thumbnailUrl || this.getImageUrl(imageStoragePath);
+    }
+
     getCachedSignedUrl(imagePath) {
         const cached = this.signedUrlCache.get(imagePath);
         if (!cached) return null;
@@ -90,6 +229,20 @@ export class ImageStorageService {
         if (!imagePath) return;
         this.signedUrlCache.delete(imagePath);
         this.inflightSignedUrls.delete(imagePath);
+    }
+
+    getThumbnailPath(imageReference) {
+        const imagePath = this.getStoragePath(imageReference);
+        if (!imagePath) return null;
+        if (imagePath.startsWith('thumbnails/')) return imagePath;
+
+        const withoutExtension = imagePath.replace(/\.[^/.]+$/, '');
+        return `thumbnails/${withoutExtension}.${this.outputExtension}`;
+    }
+
+    hasDerivedThumbnail(imageReference) {
+        const imagePath = this.getStoragePath(imageReference);
+        return Boolean(imagePath && imagePath.toLowerCase().endsWith(`.${this.outputExtension}`));
     }
 
     enqueueSignedUrlRequest(task) {
@@ -189,13 +342,16 @@ export class ImageStorageService {
         if (!imagePath) return;
 
         try {
+            const thumbnailPath = this.getThumbnailPath(imagePath);
+            const paths = Array.from(new Set([imagePath, thumbnailPath].filter(Boolean)));
+
             const { error } = await this.client.storage
                 .from(this.bucket)
-                .remove([imagePath]);
+                .remove(paths);
 
             if (error) throw error;
-            this.clearCachedSignedUrl(imagePath);
-            console.log('Image deleted:', imagePath);
+            paths.forEach(path => this.clearCachedSignedUrl(path));
+            console.log('Image deleted:', paths);
         } catch (error) {
             console.warn('Image deletion failed:', error);
         }

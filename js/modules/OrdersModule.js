@@ -189,6 +189,15 @@ export class OrdersModule {
         }
     }
 
+    async getFullImageUrl(orderOrPath) {
+        const imagePath = typeof orderOrPath === 'string'
+            ? orderOrPath
+            : (orderOrPath?.imagePath || null);
+
+        if (!imagePath) return null;
+        return this.supabase.getImageUrl(imagePath);
+    }
+
     // FIND ORDER BY ID with cache lookup
     async findOrderById(orderId) {
         try {

@@ -53,14 +53,27 @@ export class ModalsManager {
             case 'quick-add-client': this.quickAddClient(); break;
             case 'edit-client':      this.editClient(el.dataset.clientId); break;
             case 'view-profile-image':
-                this.open({
-                    type: 'image',
-                    imageSrc: el.src,
-                    title: el.dataset.model,
-                    caption: el.dataset.caption
-                });
+                this.openProfileImage(el);
                 break;
         }
+    }
+
+    async openProfileImage(el) {
+        let fullImageUrl = null;
+        try {
+            fullImageUrl = el.dataset.imagePath
+                ? await this.modules.orders.getFullImageUrl(el.dataset.imagePath)
+                : null;
+        } catch (error) {
+            console.warn('Could not load full profile image:', error);
+        }
+
+        this.open({
+            type: 'image',
+            imageSrc: fullImageUrl || el.src,
+            title: el.dataset.model,
+            caption: el.dataset.caption
+        });
     }
 
     attachGlobalListeners() {
@@ -588,7 +601,7 @@ export class ModalsManager {
     async renderClientProfileModal(data) {
         const client = await this.modules.clients.getClient(data.id);
         const stats = await this.modules.clients.getClientStats(client.name);
-        const orders = await this.modules.clients.getClientOrders(client.name);
+        const orders = await this.modules.clients.getClientOrders(client.name, { includeImageUrls: true });
 
         return `
             <div class="modal">
@@ -648,6 +661,7 @@ export class ModalsManager {
                                                          title="${this._esc(o.model)}"
                                                          data-action="view-profile-image"
                                                          data-model="${this._esc(o.model)}"
+                                                         data-image-path="${this._esc(o.imagePath || '')}"
                                                          data-caption="${this._esc(`Клиент: ${o.client} | Дата: ${formattedDate}`)}">` :
             `<div class="no-image-placeholder">${this._esc(o.model)}</div>`}
                                             </td>

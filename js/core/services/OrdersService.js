@@ -227,8 +227,8 @@ export class OrdersService {
         const balanceEUR = sellEUR - totalEUR;
 
         const includeImageUrls = options.includeImageUrls !== false;
-        const imageUrl = includeImageUrls
-            ? await this.images.getImageUrl(dbOrder.image_url)
+        const displayImageUrl = includeImageUrls
+            ? await this.images.getThumbnailUrl(dbOrder.image_url)
             : null;
 
         return {
@@ -249,8 +249,8 @@ export class OrdersService {
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',
-            imageData: imageUrl,
-            imageUrl,
+            imageData: displayImageUrl,
+            imageUrl: displayImageUrl,
             imagePath: dbOrder.image_url
         };
     }

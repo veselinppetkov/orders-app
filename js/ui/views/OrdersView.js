@@ -325,8 +325,15 @@ export default class OrdersView {
         document.addEventListener('keydown', this._drawerEscHandler);
 
         const balanceColor = o.balanceEUR < 0 ? 'var(--text-danger-strong)' : 'var(--text-success-strong)';
-        const imageHtml = o.imageData
-            ? `<img src="${esc(o.imageData)}" class="drawer-image" alt="${esc(o.model)}">`
+        let fullImageUrl = null;
+        try {
+            fullImageUrl = await this.ordersModule.getFullImageUrl(o);
+        } catch (error) {
+            console.warn('Could not load full drawer image:', error);
+        }
+        const drawerImageUrl = fullImageUrl || o.imageData;
+        const imageHtml = drawerImageUrl
+            ? `<img src="${esc(drawerImageUrl)}" class="drawer-image" alt="${esc(o.model)}">`
             : '';
 
         const drawer = document.createElement('div');
@@ -515,14 +522,20 @@ export default class OrdersView {
             if (img) {
                 e.stopPropagation();
                 const orderId = parseInt(img.dataset.orderId);
-                view.ordersModule.findOrderById(orderId).then(result => {
+                view.ordersModule.findOrderById(orderId).then(async result => {
                     if (!result?.order) return;
                     const o = result.order;
+                    let fullImageUrl = null;
+                    try {
+                        fullImageUrl = await view.ordersModule.getFullImageUrl(o);
+                    } catch (error) {
+                        console.warn('Could not load full order image:', error);
+                    }
                     window.app.ui.modals.open({
-                        type: 'image', imageSrc: o.imageData, title: o.model,
+                        type: 'image', imageSrc: fullImageUrl || o.imageData, title: o.model,
                         caption: `Клиент: ${o.client} | Дата: ${view.formatDate(o.date)}`
                     });
-                });
+                }).catch(error => console.warn('Could not open order image:', error));
                 return;
             }
 

@@ -316,7 +316,7 @@ export class ClientsModule {
     }
 
     // GET CLIENT ORDERS
-    async getClientOrders(clientName) {
+    async getClientOrders(clientName, options = {}) {
         try {
             // Get orders from OrdersModule
             if (!window.app?.modules?.orders) {
@@ -324,7 +324,9 @@ export class ClientsModule {
                 return [];
             }
 
-            const allOrders = await window.app.modules.orders.getAllOrders();
+            const allOrders = await window.app.modules.orders.getAllOrders({
+                includeImageUrls: options.includeImageUrls === true
+            });
             return allOrders.filter(order => order.client === clientName);
 
         } catch (error) {

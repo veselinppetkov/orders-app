@@ -64,6 +64,7 @@ export class SupabaseService {
     // Images (public for compatibility)
     uploadImage(data, filename) { return this.images.uploadImage(data, filename); }
     getImageUrl(path) { return this.images.getImageUrl(path); }
+    getThumbnailUrl(path) { return this.images.getThumbnailUrl(path); }
     deleteImage(url) { return this.images.deleteImage(url); }
 
     // Health / stats / debug
