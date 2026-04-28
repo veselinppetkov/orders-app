@@ -228,8 +228,9 @@ export class OrdersModule {
     async filterOrders(filters) {
         try {
             // Get orders - if showAllMonths is true, use getAllOrders(), otherwise get current month
+            const needsImageUrls = filters.status === 'Свободен';
             let orders = filters.showAllMonths
-                ? await this.getAllOrders()
+                ? await this.getAllOrders({ includeImageUrls: needsImageUrls })
                 : await this.getOrders(this.state.get('currentMonth'));
 
             // Apply filters efficiently
