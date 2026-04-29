@@ -44,11 +44,18 @@ export default class OrdersView {
                 this.getDisplayOrders(),
                 this.ordersModule.getOrders(currentMonth)
             ]);
+            const previousMonth = this.getPreviousMonthKey(currentMonth);
+            let previousStats = null;
+            try {
+                previousStats = await this.reportsModule.getMonthlyStats(previousMonth);
+            } catch (error) {
+                console.warn('Could not load previous month stats:', error);
+            }
 
             const hasAdditionalFilters = Boolean(this.filters.search || this.filters.origin || this.filters.vendor);
             const freeCountTotal = this.filters.showAllMonths && this.filters.status === FREE_STATUS && !hasAdditionalFilters
                 ? allOrders.length
-                : (await this.ordersModule.getAllOrders({ status: FREE_STATUS })).length;
+                : (await this.ordersModule.getAllOrders()).filter(o => o.status === FREE_STATUS).length;
 
             // Calculate free watches count for current month only
             const freeCountMonth = currentMonthOrders.filter(o => o.status === FREE_STATUS).length;
@@ -62,15 +69,7 @@ export default class OrdersView {
 
             return `
         <div class="orders-view">
-            <div class="page-head orders-page-head">
-                <div>
-                    <div class="page-eyebrow">Управление</div>
-                    <h2 class="page-title">Поръчки за ${this.formatMonth(currentMonth)}</h2>
-                    <p class="page-sub">${allOrders.length} резултата в текущия изглед</p>
-                </div>
-                <button class="btn btn-primary" id="new-order-btn">Нова поръчка</button>
-            </div>
-            ${this.renderStats(stats)}
+            ${this.renderStats(stats, previousStats, currentMonth, previousMonth)}
             ${this.renderControls(freeCountMonth, freeCountTotal, statusCounts)}
             ${this.renderBulkActions()}
             ${await this.renderFilters()}
@@ -128,6 +127,19 @@ export default class OrdersView {
         });
 
         return counts;
+    }
+
+    getPreviousMonthKey(monthKey) {
+        const [year, month] = monthKey.split('-').map(Number);
+        const date = new Date(year, month - 2, 1);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    formatMonthName(monthKey, mode = 'short') {
+        const [, month] = monthKey.split('-');
+        const full = ['Януари', 'Февруари', 'Март', 'Април', 'Май', 'Юни', 'Юли', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември'];
+        const short = ['Ян', 'Фев', 'Мар', 'Апр', 'Май', 'Юни', 'Юли', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
+        return (mode === 'full' ? full : short)[parseInt(month, 10) - 1];
     }
 
     resetFiltersForOrderReveal() {
@@ -239,8 +251,9 @@ export default class OrdersView {
                     <th style="width: 38px;"><input type="checkbox" id="select-all"></th>
                     <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
                     <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
+                    <th ${thClass('model')} title="Сортирай по модел">Снимка ${this._sortArrow('model')}</th>
+                    <th class="no-sort">Бележки</th>
                     <th ${thClass('origin')} title="Сортирай по източник">Източник / доставчик ${this._sortArrow('origin')}</th>
-                    <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
                     <th ${thClass('totalEUR')} title="Сортирай по суми">Финанси ${this._sortArrow('totalEUR')}</th>
                     <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
                     <th style="width: 100px;">Действия</th>
@@ -275,7 +288,7 @@ export default class OrdersView {
     renderEmptyRows() {
         return `
             <tr>
-                <td colspan="8">
+                <td colspan="9">
                     <div class="empty-state orders-empty-state">
                         <div class="empty-state-icon">П</div>
                         <h3 class="empty-state-title">Няма поръчки</h3>
@@ -293,25 +306,17 @@ export default class OrdersView {
     renderOrderRow(order) {
         const isSelected = this.selectedOrders.has(order.id);
 
-        // Model cell: image/placeholder + fullSet badge + note dot
+        // Product image cell. No generated initials are shown; empty products stay neutral.
         const imageInner = order.imageData
             ? `<img src="${esc(order.imageData)}"
                      class="model-image image-clickable"
                      data-order-id="${order.id}"
                      alt="${esc(order.model)}"
                      title="${esc(order.model)}">`
-            : `<div class="no-image-placeholder">${esc((order.model || '??').slice(0, 2).toUpperCase())}</div>`;
-        const fullSetDot  = order.fullSet  ? `<span class="model-badge fullset-dot"  title="Пълен сет">✓</span>` : '';
-        const noteDot     = order.notes    ? `<span class="model-badge note-dot"      title="${esc(order.notes)}">✎</span>` : '';
-        const modelCell   = `
-            <div class="model-cell-inline">
-                <div class="model-cell-wrap">${imageInner}${fullSetDot}${noteDot}</div>
-                <div class="model-copy">
-                    <span class="cell-primary">${esc(order.model || 'Без модел')}</span>
-                    <span class="cell-secondary">${order.fullSet ? 'Пълен сет' : 'Без пълен сет'}${order.notes ? ' · има бележка' : ''}</span>
-                </div>
-            </div>
-        `;
+            : `<div class="no-image-placeholder" title="${esc(order.model || 'Без модел')}">Без снимка</div>`;
+        const notesCell = order.notes
+            ? `<div class="notes-preview">${esc(order.notes)}</div>`
+            : `<div class="notes-preview notes-empty">Няма бележки</div>`;
 
         const balanceColor = order.balanceEUR < 0
             ? 'var(--text-danger-strong)'
@@ -327,6 +332,10 @@ export default class OrdersView {
                     ${order.phone ? `<span class="cell-secondary">${esc(order.phone)}</span>` : ''}
                 </div>
             </td>
+            <td class="cell-product image-cell">
+                <div class="product-thumb-wrap">${imageInner}</div>
+            </td>
+            <td class="cell-notes">${notesCell}</td>
             <td class="cell-origin">
                 <div class="cell-stack">
                     <span class="badge origin-badge"
@@ -336,7 +345,6 @@ export default class OrdersView {
                     <span class="cell-secondary">${esc(order.vendor)}</span>
                 </div>
             </td>
-            <td class="cell-model image-cell">${modelCell}</td>
             <td class="cell-amounts">
                 <div class="cell-stack">
                     <span class="cell-primary amounts-total"><strong>${CurrencyUtils.formatAmount(order.totalEUR, 'EUR')}</strong></span>
@@ -787,10 +795,6 @@ export default class OrdersView {
         // Status badge, row click, image click, action buttons — delegated once
         // in _initDocumentListeners() for virtual-scroll compatibility.
 
-        // New order button
-        document.getElementById('new-order-btn')?.addEventListener('click', () => {
-            this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
-        });
         document.getElementById('retry-orders-view')?.addEventListener('click', () => {
             this.refresh();
         });
@@ -969,38 +973,40 @@ export default class OrdersView {
         return `${months[parseInt(month) - 1]} ${year}`;
     }
 
-    // Utility methods remain the same
-    renderStats(stats) {
-        // Helper function to get KPI class based on type and value
-        const getKpiClass = (type, value) => {
-            if (type === 'profit') return value >= 0 ? 'kpi-profit' : 'kpi-loss';
-            if (type === 'expense') return 'kpi-expense';
-            return '';
-        };
-
-        const soldCount = stats.orderCount || 0;
-        const freeCount = stats.freeWatchCount || 0;
-        const totalCount = soldCount + freeCount;
+    renderStats(stats, previousStats = null, currentMonth = '', previousMonth = '') {
+        const currentCount = stats.totalOrders ?? ((stats.orderCount || 0) + (stats.freeWatchCount || 0));
+        const previousCount = previousStats
+            ? (previousStats.totalOrders ?? ((previousStats.orderCount || 0) + (previousStats.freeWatchCount || 0)))
+            : 0;
+        const revenue = stats.revenue || 0;
+        const operatingExpenses = stats.operatingExpenses || 0;
+        const watchCosts = stats.watchCosts || 0;
+        const totalExpenses = stats.expenses ?? (operatingExpenses + watchCosts);
+        const balance = stats.profit ?? (revenue - totalExpenses);
+        const percentChange = previousCount > 0
+            ? ((currentCount - previousCount) / previousCount) * 100
+            : (currentCount > 0 ? 100 : 0);
+        const roundedChange = Math.round(percentChange);
+        const changePrefix = roundedChange > 0 ? '+' : '';
+        const previousMonthName = previousMonth ? this.formatMonthName(previousMonth, 'full').toLowerCase() : 'предходния месец';
+        const balanceClass = balance >= 0 ? 'kpi-balance-positive' : 'kpi-balance-negative';
 
         return `
             <div class="month-stats">
-                <div class="stat-item kpi-revenue">
-                    <div class="stat-label">Оборот</div>
-                    <div class="stat-value">${stats.revenue.toFixed(2)} €</div>
-                    <div class="stat-sublabel">Продажби без свободни часовници</div>
-                </div>
                 <div class="stat-item">
-                    <div class="stat-label">Часовници този месец</div>
-                    <div class="stat-value">${totalCount}</div>
-                    <div class="stat-sublabel">Продадени: ${soldCount} • Свободни: ${freeCount}</div>
+                    <div class="stat-label">Поръчки този месец</div>
+                    <div class="stat-value">${currentCount}</div>
+                    <div class="stat-sublabel ${roundedChange >= 0 ? 'trend-up' : 'trend-down'}">${changePrefix}${roundedChange}% спрямо ${previousMonthName}</div>
                 </div>
-                <div class="stat-item ${getKpiClass('expense', stats.operatingExpenses)}">
+                <div class="stat-item kpi-expense">
                     <div class="stat-label">Оперативни разходи</div>
-                    <div class="stat-value">${stats.operatingExpenses.toFixed(2)} €</div>
+                    <div class="stat-value">${operatingExpenses.toFixed(2)} €</div>
+                    <div class="stat-sublabel">Разходи за текущия месец</div>
                 </div>
-                <div class="stat-item ${getKpiClass('profit', stats.profit)}">
-                    <div class="stat-label">Печалба</div>
-                    <div class="stat-value">${stats.profit.toFixed(2)} €</div>
+                <div class="stat-item ${balanceClass}">
+                    <div class="stat-label">Баланс</div>
+                    <div class="stat-value">${balance.toFixed(2)} €</div>
+                    <div class="stat-sublabel">Приходи минус часовници и оперативни разходи</div>
                 </div>
             </div>
         `;
