@@ -249,7 +249,7 @@ export class UIManager {
                     <div class="brand-mark">Atelier</div>
                 </div>
 
-                <div class="nav-section-label">Управление</div>
+                <div class="nav-section-label">Меню</div>
                 <nav class="nav">
                     ${this.getNavigationItems().map(item => `
                         <button class="nav-item ${item.view === 'orders' ? 'active' : ''}" data-view="${item.view}" type="button">

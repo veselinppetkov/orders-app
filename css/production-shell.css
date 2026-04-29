@@ -249,16 +249,17 @@ textarea {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 28px;
-    min-height: 126px;
-    padding: 26px 34px;
+    gap: 34px;
+    min-height: 150px;
+    padding: 30px 38px;
     background: rgba(246, 241, 231, 0.94);
     border-bottom: 1px solid #e0d8c9;
     backdrop-filter: blur(12px);
 }
 
 .topbar-left {
-    min-width: 270px;
+    flex: 1 0 430px;
+    min-width: 360px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -271,23 +272,24 @@ textarea {
 .topbar-title {
     margin: 0;
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 42px;
+    font-size: 66px;
     font-weight: 500;
-    line-height: 0.95;
+    line-height: 0.9;
     color: #171510;
     letter-spacing: 0;
 }
 
 .topbar-subtitle {
-    margin: 9px 0 0;
+    margin: 14px 0 0;
     color: #867860;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
 }
 
 .topbar-actions {
     min-width: 0;
-    flex: 0 1 870px;
+    flex: 0 1 850px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -1163,6 +1165,10 @@ textarea {
         flex-wrap: wrap;
     }
 
+    .topbar-left {
+        flex-basis: 100%;
+    }
+
     .topbar-actions {
         flex: 1 1 100%;
         justify-content: flex-start;
@@ -1229,7 +1235,11 @@ textarea {
     }
 
     .topbar-title {
-        font-size: 36px;
+        font-size: 48px;
+    }
+
+    .topbar-subtitle {
+        font-size: 16px;
     }
 
     .view-container {
@@ -1266,11 +1276,12 @@ textarea {
     }
 
     .topbar-title {
-        font-size: 31px;
+        font-size: 40px;
     }
 
     .topbar-subtitle {
-        font-size: 12px;
+        margin-top: 9px;
+        font-size: 14px;
     }
 
     .topbar-actions {
