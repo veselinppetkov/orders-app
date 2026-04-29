@@ -225,6 +225,12 @@ export class UIManager {
         return localStorage.getItem('orderSystem_sidebarCollapsed') === 'true';
     }
 
+    getSidebarWidth() {
+        const savedWidth = parseInt(localStorage.getItem('orderSystem_sidebarWidth'), 10);
+        if (!Number.isFinite(savedWidth)) return 248;
+        return Math.min(380, Math.max(220, savedWidth));
+    }
+
     setSidebarCollapsed(collapsed) {
         const shell = document.querySelector('.app-shell');
         shell?.classList.toggle('sidebar-collapsed', collapsed);
@@ -241,10 +247,11 @@ export class UIManager {
         const app = document.getElementById('app');
         const currentMonth = this.state.get('currentMonth');
         const meta = this.getViewMeta('orders');
+        const sidebarWidth = this.getSidebarWidth();
 
         app.innerHTML = `
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
-        <div class="app-shell ${this.isSidebarCollapsed() ? 'sidebar-collapsed' : ''}">
+        <div class="app-shell ${this.isSidebarCollapsed() ? 'sidebar-collapsed' : ''}" style="--sidebar-width: ${sidebarWidth}px">
             <aside class="sidebar" id="sidebar" aria-label="Основна навигация">
                 <div class="brand">
                     <div class="brand-kicker">RB WTC</div>
@@ -270,6 +277,7 @@ export class UIManager {
                         <span class="user-logout" aria-hidden="true">×</span>
                     </button>
                 </div>
+                <div class="sidebar-resize-handle" id="sidebarResizeHandle" role="separator" aria-label="Промени ширината на менюто" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="380" aria-valuenow="${sidebarWidth}" tabindex="0"></div>
             </aside>
 
             <main class="main">
@@ -362,6 +370,7 @@ export class UIManager {
             const collapsed = !shell?.classList.contains('sidebar-collapsed');
             this.setSidebarCollapsed(collapsed);
         });
+        this.attachSidebarResize();
 
         document.getElementById('sidebarBackdrop')?.addEventListener('click', () => {
             this.closeMobileSidebar();
@@ -476,6 +485,57 @@ export class UIManager {
         });
 
         this.setupGlobalSearch();
+    }
+
+    attachSidebarResize() {
+        const shell = document.querySelector('.app-shell');
+        const handle = document.getElementById('sidebarResizeHandle');
+        if (!shell || !handle) return;
+
+        const minWidth = 220;
+        const maxWidth = 380;
+        const applyWidth = (width) => {
+            const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(width)));
+            shell.style.setProperty('--sidebar-width', `${nextWidth}px`);
+            handle.setAttribute('aria-valuenow', String(nextWidth));
+            localStorage.setItem('orderSystem_sidebarWidth', String(nextWidth));
+        };
+
+        handle.addEventListener('pointerdown', (event) => {
+            if (window.matchMedia('(max-width: 900px)').matches) return;
+            event.preventDefault();
+
+            if (shell.classList.contains('sidebar-collapsed')) {
+                this.setSidebarCollapsed(false);
+            }
+
+            const shellLeft = shell.getBoundingClientRect().left;
+            document.body.classList.add('sidebar-resizing');
+
+            const onPointerMove = (moveEvent) => {
+                applyWidth(moveEvent.clientX - shellLeft);
+            };
+
+            const stopResize = () => {
+                document.body.classList.remove('sidebar-resizing');
+                document.removeEventListener('pointermove', onPointerMove);
+            };
+
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', stopResize, { once: true });
+        });
+
+        handle.addEventListener('keydown', (event) => {
+            const currentWidth = this.getSidebarWidth();
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                applyWidth(currentWidth - 16);
+            }
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                applyWidth(currentWidth + 16);
+            }
+        });
     }
 
     setupGlobalSearch() {

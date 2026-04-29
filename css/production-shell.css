@@ -61,7 +61,7 @@ textarea {
 .app-shell {
     min-height: 100vh;
     display: grid;
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 248px) minmax(0, 1fr);
     transition: grid-template-columns 180ms ease;
 }
 
@@ -76,12 +76,52 @@ textarea {
     display: flex;
     flex-direction: column;
     gap: 22px;
-    width: 248px;
+    width: var(--sidebar-width, 248px);
     padding: 30px 18px;
     background: #1a1814;
     border-right: 1px solid rgba(246, 241, 231, 0.08);
     overflow: hidden;
     transition: width 180ms ease, padding 180ms ease, opacity 140ms ease, transform 180ms ease;
+}
+
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    opacity: 0;
+    outline: none;
+    transition: opacity 120ms ease;
+}
+
+.sidebar-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 3px;
+    width: 2px;
+    height: 46px;
+    border-radius: 2px;
+    background: rgba(201, 166, 70, 0.7);
+    transform: translateY(-50%);
+}
+
+.sidebar:hover .sidebar-resize-handle,
+.sidebar-resize-handle:focus-visible,
+body.sidebar-resizing .sidebar-resize-handle {
+    opacity: 1;
+}
+
+body.sidebar-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
+body.sidebar-resizing .app-shell,
+body.sidebar-resizing .sidebar {
+    transition: none;
 }
 
 .app-shell.sidebar-collapsed .sidebar {
@@ -249,8 +289,8 @@ textarea {
     align-items: center;
     justify-content: space-between;
     gap: 30px;
-    min-height: 118px;
-    padding: 24px 34px;
+    min-height: 104px;
+    padding: 20px 34px;
     background: rgba(246, 241, 231, 0.94);
     border-bottom: 1px solid #e0d8c9;
 }
@@ -296,10 +336,10 @@ textarea {
 }
 
 .topbar.orders-topbar .topbar-subtitle {
-    margin-top: 13px;
+    margin-top: 10px;
     color: #171510;
     font-family: 'Fraunces', Georgia, serif;
-    font-size: 54px;
+    font-size: 40px;
     font-weight: 500;
     line-height: 0.95;
     letter-spacing: 0;
@@ -1241,6 +1281,10 @@ textarea {
         display: inline-block;
     }
 
+    .sidebar-resize-handle {
+        display: none;
+    }
+
     .topbar {
         min-height: auto;
         padding: 18px 16px;
@@ -1265,7 +1309,7 @@ textarea {
     }
 
     .topbar.orders-topbar .topbar-subtitle {
-        font-size: 42px;
+        font-size: 32px;
     }
 
     .view-container {
@@ -1316,7 +1360,7 @@ textarea {
 
     .topbar.orders-topbar .topbar-subtitle {
         margin-top: 9px;
-        font-size: 34px;
+        font-size: 26px;
     }
 
     .topbar-actions {
