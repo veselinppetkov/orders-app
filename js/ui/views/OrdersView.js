@@ -4,6 +4,7 @@ import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
 import { VirtualScroller } from '../../utils/VirtualScroller.js';
 
 const esc = FormatUtils.escapeHtml;
+const FREE_STATUS = 'Свободен';
 
 export default class OrdersView {
     constructor(modules, state, eventBus) {
@@ -37,17 +38,21 @@ export default class OrdersView {
 
     async render() {
         try {
-            const stats = await this.reportsModule.getMonthlyStats();
-            const allOrders = await this.getDisplayOrders();
+            const currentMonth = this.state.get('currentMonth');
+            const [stats, allOrders, currentMonthOrders] = await Promise.all([
+                this.reportsModule.getMonthlyStats(),
+                this.getDisplayOrders(),
+                this.ordersModule.getOrders(currentMonth)
+            ]);
 
-            // Calculate free watches count across all months - use getAllOrders() not getOrders(null)
-            const allMonthsOrders = await this.ordersModule.getAllOrders();
-            const freeCountTotal = allMonthsOrders.filter(o => o.status === 'Свободен').length;
+            const hasAdditionalFilters = Boolean(this.filters.search || this.filters.origin || this.filters.vendor);
+            const freeCountTotal = this.filters.showAllMonths && this.filters.status === FREE_STATUS && !hasAdditionalFilters
+                ? allOrders.length
+                : (await this.ordersModule.getAllOrders({ status: FREE_STATUS })).length;
 
             // Calculate free watches count for current month only
-            const currentMonth = this.state.get('currentMonth');
-            const currentMonthOrders = await this.ordersModule.getOrders(currentMonth);
-            const freeCountMonth = currentMonthOrders.filter(o => o.status === 'Свободен').length;
+            const freeCountMonth = currentMonthOrders.filter(o => o.status === FREE_STATUS).length;
+            const statusCounts = this.getStatusCounts(currentMonthOrders);
 
             // ADD: Update pagination totals
             this.updatePaginationTotals(allOrders.length);
@@ -57,8 +62,16 @@ export default class OrdersView {
 
             return `
         <div class="orders-view">
+            <div class="page-head orders-page-head">
+                <div>
+                    <div class="page-eyebrow">Управление</div>
+                    <h2 class="page-title">Поръчки за ${this.formatMonth(currentMonth)}</h2>
+                    <p class="page-sub">${allOrders.length} резултата в текущия изглед</p>
+                </div>
+                <button class="btn btn-primary" id="new-order-btn">Нова поръчка</button>
+            </div>
             ${this.renderStats(stats)}
-            ${this.renderControls(freeCountMonth, freeCountTotal)}
+            ${this.renderControls(freeCountMonth, freeCountTotal, statusCounts)}
             ${this.renderBulkActions()}
             ${await this.renderFilters()}
             ${this.renderActiveFilters()}
@@ -72,9 +85,9 @@ export default class OrdersView {
             console.error('❌ Failed to render orders view:', error);
             return `
             <div class="error-state">
-                <h3>❌ Failed to load orders</h3>
-                <p>Error: ${esc(error.message)}</p>
-                <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                <h3>Поръчките не можаха да се заредят</h3>
+                <p>Грешка: ${esc(error.message)}</p>
+                <button id="retry-orders-view" class="btn btn-primary" type="button">Опитай отново</button>
             </div>
         `;
         }
@@ -98,6 +111,23 @@ export default class OrdersView {
         }
 
         return allOrders;
+    }
+
+    getStatusCounts(orders) {
+        const counts = {
+            all: orders.length,
+            'Очакван': 0,
+            'Доставен': 0,
+            'Свободен': 0,
+            'Други': 0
+        };
+
+        orders.forEach(order => {
+            if (counts[order.status] === undefined) counts[order.status] = 0;
+            counts[order.status] += 1;
+        });
+
+        return counts;
     }
 
     resetFiltersForOrderReveal() {
@@ -170,11 +200,11 @@ export default class OrdersView {
         return `
         <div id="bulk-actions" class="bulk-actions" style="display: none;">
             <div class="bulk-info">
-                <span id="selected-count">0</span> поръчки избрани
+                Избрани: <span id="selected-count">0</span>
             </div>
             <div class="bulk-controls">
                 <select id="bulk-status" class="bulk-select">
-                    <option value="">-- Промени статус --</option>
+                    <option value="">Промени статус...</option>
                     <option value="Очакван">Очакван</option>
                     <option value="Доставен">Доставен</option>
                     <option value="Свободен">Свободен</option>
@@ -209,9 +239,9 @@ export default class OrdersView {
                     <th style="width: 38px;"><input type="checkbox" id="select-all"></th>
                     <th ${thClass('date')} title="Сортирай по дата">Дата ${this._sortArrow('date')}</th>
                     <th ${thClass('client')} title="Сортирай по клиент">Клиент ${this._sortArrow('client')}</th>
-                    <th ${thClass('origin')} title="Сортирай поизточник">Произход / Доставчик ${this._sortArrow('origin')}</th>
+                    <th ${thClass('origin')} title="Сортирай по източник">Източник / доставчик ${this._sortArrow('origin')}</th>
                     <th ${thClass('model')} title="Сортирай по модел">Модел ${this._sortArrow('model')}</th>
-                    <th ${thClass('totalEUR')} title="Сортирай по суми">Суми ${this._sortArrow('totalEUR')}</th>
+                    <th ${thClass('totalEUR')} title="Сортирай по суми">Финанси ${this._sortArrow('totalEUR')}</th>
                     <th ${thClass('status')} title="Сортирай по статус">Статус ${this._sortArrow('status')}</th>
                     <th style="width: 100px;">Действия</th>
                 </tr>
@@ -236,10 +266,28 @@ export default class OrdersView {
                 <table class="orders-table">
                     ${thead}
                     <tbody>
-                        ${orders.map(order => this.renderOrderRow(order)).join('')}
+                        ${orders.length ? orders.map(order => this.renderOrderRow(order)).join('') : this.renderEmptyRows()}
                     </tbody>
                 </table>
             </div>`;
+    }
+
+    renderEmptyRows() {
+        return `
+            <tr>
+                <td colspan="8">
+                    <div class="empty-state orders-empty-state">
+                        <div class="empty-state-icon">П</div>
+                        <h3 class="empty-state-title">Няма поръчки</h3>
+                        <p class="empty-state-message">Няма записи, които отговарят на избраните филтри.</p>
+                        <div class="empty-state-actions">
+                            <button class="btn secondary" type="button" data-empty-action="clear-orders-filters">Изчисти филтрите</button>
+                            <button class="btn btn-primary" type="button" id="empty-new-order-btn">Нова поръчка</button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
     }
 
     renderOrderRow(order) {
@@ -252,10 +300,18 @@ export default class OrdersView {
                      data-order-id="${order.id}"
                      alt="${esc(order.model)}"
                      title="${esc(order.model)}">`
-            : `<div class="no-image-placeholder">${esc(order.model)}</div>`;
+            : `<div class="no-image-placeholder">${esc((order.model || '??').slice(0, 2).toUpperCase())}</div>`;
         const fullSetDot  = order.fullSet  ? `<span class="model-badge fullset-dot"  title="Пълен сет">✓</span>` : '';
         const noteDot     = order.notes    ? `<span class="model-badge note-dot"      title="${esc(order.notes)}">✎</span>` : '';
-        const modelCell   = `<div class="model-cell-wrap">${imageInner}${fullSetDot}${noteDot}</div>`;
+        const modelCell   = `
+            <div class="model-cell-inline">
+                <div class="model-cell-wrap">${imageInner}${fullSetDot}${noteDot}</div>
+                <div class="model-copy">
+                    <span class="cell-primary">${esc(order.model || 'Без модел')}</span>
+                    <span class="cell-secondary">${order.fullSet ? 'Пълен сет' : 'Без пълен сет'}${order.notes ? ' · има бележка' : ''}</span>
+                </div>
+            </div>
+        `;
 
         const balanceColor = order.balanceEUR < 0
             ? 'var(--text-danger-strong)'
@@ -449,15 +505,6 @@ export default class OrdersView {
 
         this.attachExistingListeners();
         this.attachBulkListeners();
-
-        // Filter handlers to reset pagination
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.filters.search = e.target.value;
-                this.applyFilters();
-            });
-        }
 
         // Virtual scroll — mount after DOM is ready
         if (this._vsOrders) {
@@ -744,6 +791,18 @@ export default class OrdersView {
         document.getElementById('new-order-btn')?.addEventListener('click', () => {
             this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
         });
+        document.getElementById('retry-orders-view')?.addEventListener('click', () => {
+            this.refresh();
+        });
+        document.getElementById('empty-new-order-btn')?.addEventListener('click', () => {
+            this.eventBus.emit('modal:open', { type: 'order', mode: 'create' });
+        });
+        document.querySelector('[data-empty-action="clear-orders-filters"]')?.addEventListener('click', () => {
+            this.clearFilters();
+        });
+        document.getElementById('clear-active-filter')?.addEventListener('click', () => {
+            this.clearFilters();
+        });
 
         // Recently delivered button
         document.getElementById('show-recently-delivered-btn')?.addEventListener('click', async () => {
@@ -775,9 +834,10 @@ export default class OrdersView {
         // Status filters
         document.querySelectorAll('[data-filter-status]').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                this.filters.status = e.target.dataset.filterStatus;
+                this.filters.status = e.currentTarget.dataset.filterStatus;
                 this.filters.showAllMonths = false;
                 this.filters.recentlyDelivered = false;
+                this.pagination.currentPage = 1;
                 await this.refresh();
             });
         });
@@ -812,6 +872,7 @@ export default class OrdersView {
         document.getElementById('filterOrigin')?.addEventListener('change', async (e) => {
             this.filters.origin = e.target.value;
             this.filters.recentlyDelivered = false;
+            this.pagination.currentPage = 1;
             await this.refresh();
         });
 
@@ -819,6 +880,7 @@ export default class OrdersView {
         document.getElementById('filterVendor')?.addEventListener('change', async (e) => {
             this.filters.vendor = e.target.value;
             this.filters.recentlyDelivered = false;
+            this.pagination.currentPage = 1;
             await this.refresh();
         });
 
@@ -866,11 +928,12 @@ export default class OrdersView {
                 console.error('❌ Failed to refresh orders view:', error);
                 container.innerHTML = `
                 <div class="error-state">
-                    <h3>❌ Failed to load orders</h3>
-                    <p>Error: ${esc(error.message)}</p>
-                    <button onclick="window.app.ui.currentView.refresh()" class="btn">🔄 Retry</button>
+                    <h3>Поръчките не можаха да се заредят</h3>
+                    <p>Грешка: ${esc(error.message)}</p>
+                    <button id="retry-orders-view" class="btn btn-primary" type="button">Опитай отново</button>
                 </div>
             `;
+                container.querySelector('#retry-orders-view')?.addEventListener('click', () => this.refresh());
             }
         }
     }
@@ -921,6 +984,11 @@ export default class OrdersView {
 
         return `
             <div class="month-stats">
+                <div class="stat-item kpi-revenue">
+                    <div class="stat-label">Оборот</div>
+                    <div class="stat-value">${stats.revenue.toFixed(2)} €</div>
+                    <div class="stat-sublabel">Продажби без свободни часовници</div>
+                </div>
                 <div class="stat-item">
                     <div class="stat-label">Часовници този месец</div>
                     <div class="stat-value">${totalCount}</div>
@@ -938,17 +1006,22 @@ export default class OrdersView {
         `;
     }
 
-    renderControls(freeCountMonth = 0, freeCountTotal = 0) {
+    renderControls(freeCountMonth = 0, freeCountTotal = 0, statusCounts = {}) {
+        const active = (status, extra = false) => {
+            if (extra === 'recent') return this.filters.recentlyDelivered ? 'active' : '';
+            if (extra === 'free-all') return this.filters.status === 'Свободен' && this.filters.showAllMonths ? 'active' : '';
+            return this.filters.status === status && !this.filters.showAllMonths && !this.filters.recentlyDelivered ? 'active' : '';
+        };
+
         return `
-        <div class="controls">
-            <button class="btn" id="new-order-btn">➕ Нова поръчка</button>
-            <button class="btn secondary" data-filter-status="all">Всички</button>
-            <button class="btn" style="background: #ffc107;" data-filter-status="Очакван">Очаквани</button>
-            <button class="btn success" data-filter-status="Доставен">Доставени</button>
-            <button class="btn info" data-filter-status="Други">Други</button>
-            <button class="btn success" id="show-free-month-btn">🆓 Свободни (месец) <strong>${freeCountMonth}</strong></button>
-            <button class="btn success" id="show-free-total-btn">🆓 Свободни (общо) <strong>${freeCountTotal}</strong></button>
-            <button class="btn" style="background: #17a2b8; color: white;" id="show-recently-delivered-btn">🚚 Последни доставени</button>
+        <div class="controls status-chip-row">
+            <button class="filter-chip ${active('all')}" data-filter-status="all">Всички <span>${statusCounts.all || 0}</span></button>
+            <button class="filter-chip tone-pending ${active('Очакван')}" data-filter-status="Очакван">Очаквани <span>${statusCounts['Очакван'] || 0}</span></button>
+            <button class="filter-chip tone-delivered ${active('Доставен')}" data-filter-status="Доставен">Доставени <span>${statusCounts['Доставен'] || 0}</span></button>
+            <button class="filter-chip tone-free ${active('Свободен')}" id="show-free-month-btn">Свободни този месец <span>${freeCountMonth}</span></button>
+            <button class="filter-chip tone-free ${active('Свободен', 'free-all')}" id="show-free-total-btn">Свободни общо <span>${freeCountTotal}</span></button>
+            <button class="filter-chip tone-other ${active('Други')}" data-filter-status="Други">Други <span>${statusCounts['Други'] || 0}</span></button>
+            <button class="filter-chip tone-recent ${active('', 'recent')}" id="show-recently-delivered-btn">Последни доставени</button>
         </div>
     `;
     }
@@ -963,22 +1036,22 @@ export default class OrdersView {
                     <div class="filter-group">
                         <label>Търсене:</label>
                         <div class="input-with-clear ${this.filters.search ? 'has-value' : ''}">
-                            <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${esc(this.filters.search)}">
-                            <button class="input-clear-btn" type="button" aria-label="Clear search">×</button>
+                            <input type="text" id="searchInput" placeholder="Клиент, модел, телефон..." value="${esc(this.filters.search)}">
+                            <button class="input-clear-btn" type="button" aria-label="Изчисти търсенето">×</button>
                         </div>
                     </div>
                     <div class="filter-group">
                         <label>Източник:</label>
                         <select id="filterOrigin">
                             <option value="">Всички</option>
-                            ${settings.origins.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+                            ${settings.origins.map(o => `<option value="${esc(o)}" ${this.filters.origin === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}
                         </select>
                     </div>
                     <div class="filter-group">
                         <label>Доставчик:</label>
                         <select id="filterVendor">
                             <option value="">Всички</option>
-                            ${settings.vendors.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}
+                            ${settings.vendors.map(v => `<option value="${esc(v)}" ${this.filters.vendor === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -991,7 +1064,7 @@ export default class OrdersView {
                         <label>Търсене:</label>
                         <input type="text" id="searchInput" placeholder="Клиент, модел..." value="${esc(this.filters.search)}">
                     </div>
-                    <div class="error-message">Failed to load filter options</div>
+                    <div class="error-message">Филтрите не можаха да се заредят.</div>
                 </div>
             `;
         }
@@ -1000,17 +1073,17 @@ export default class OrdersView {
     renderActiveFilters() {
         if (this.filters.recentlyDelivered) {
             return `
-                <div class="active-filter-badge" style="background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
-                    <span>🚚 Последни 10 доставени часовника (сортирани по дата на промяна)</span>
-                    <button onclick="window.app.ui.currentView.clearFilters()" class="btn btn-sm" style="background: #0c5460; color: white;">✕ Изчисти</button>
+                <div class="active-filter-badge">
+                    <span>Показани са последните 10 доставени часовника.</span>
+                    <button id="clear-active-filter" class="btn btn-sm secondary" type="button">Изчисти</button>
                 </div>
             `;
         }
         if (this.filters.showAllMonths && this.filters.status === 'Свободен') {
             return `
-                <div class="active-filter-badge" style="background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
-                    <span>📊 Показване на всички свободни часовници от всички месеци</span>
-                    <button onclick="window.app.ui.currentView.clearFilters()" class="btn btn-sm" style="background: #0c5460; color: white;">✕ Изчисти</button>
+                <div class="active-filter-badge">
+                    <span>Показани са всички свободни часовници от всички месеци.</span>
+                    <button id="clear-active-filter" class="btn btn-sm secondary" type="button">Изчисти</button>
                 </div>
             `;
         }

@@ -156,71 +156,155 @@ export class UIManager {
         }
     }
 
+    getNavigationItems() {
+        return [
+            { view: 'orders', label: 'Поръчки', short: 'П' },
+            { view: 'clients', label: 'Клиенти', short: 'К' },
+            { view: 'inventory', label: 'Инвентар', short: 'И' },
+            { view: 'expenses', label: 'Разходи', short: 'Р' },
+            { view: 'reports', label: 'Отчети', short: 'О' },
+            { view: 'settings', label: 'Настройки', short: 'Н' }
+        ];
+    }
+
+    getViewMeta(viewName = 'orders') {
+        const month = this.availableMonths.find(m => m.key === this.state.get('currentMonth'))?.name || '';
+        const map = {
+            orders: {
+                title: 'Поръчки',
+                subtitle: month ? `Работен месец: ${month}` : 'Управление на всички поръчки'
+            },
+            clients: {
+                title: 'Клиенти',
+                subtitle: 'Клиентски профили, контакти и история на поръчките'
+            },
+            inventory: {
+                title: 'Инвентар',
+                subtitle: 'Наличности, поръчани количества и складови цени'
+            },
+            expenses: {
+                title: 'Разходи',
+                subtitle: month ? `Оперативни разходи за ${month}` : 'Оперативни и месечни разходи'
+            },
+            reports: {
+                title: 'Отчети',
+                subtitle: 'Оборот, печалба, маржове и месечни справки'
+            },
+            settings: {
+                title: 'Настройки',
+                subtitle: 'Валути, доставчици, източници и системни параметри'
+            }
+        };
+
+        return map[viewName] || map.orders;
+    }
+
+    syncNavigationState(viewName = 'orders') {
+        document.querySelectorAll('[data-view]').forEach(item => {
+            item.classList.toggle('active', item.dataset.view === viewName);
+        });
+
+        const meta = this.getViewMeta(viewName);
+        const title = document.getElementById('view-title');
+        const subtitle = document.getElementById('view-subtitle');
+        if (title) title.textContent = meta.title;
+        if (subtitle) subtitle.textContent = meta.subtitle;
+    }
+
+    closeMobileSidebar() {
+        document.getElementById('sidebar')?.classList.remove('open');
+        document.getElementById('sidebarBackdrop')?.classList.remove('active');
+    }
+
     render() {
         const app = document.getElementById('app');
         const currentMonth = this.state.get('currentMonth');
+        const meta = this.getViewMeta('orders');
 
         app.innerHTML = `
-        <div class="container">
-            <header class="header">
-                <div class="header-content">
-                    <div class="header-left">
-                        <h1>📦 Управление на поръчки</h1>
-                    </div>
-                    <div class="header-right">
-                        <button class="btn btn-logout" id="logoutBtn" title="Изход от системата">
-                            🚪 Изход
-                        </button>
-                    </div>
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        <div class="app-shell">
+            <aside class="sidebar" id="sidebar" aria-label="Основна навигация">
+                <div class="brand">
+                    <div class="brand-mark">RB WTC</div>
+                    <div class="brand-sub">Управление на поръчки</div>
                 </div>
-                
-                <div class="header-controls">
+
+                <div class="nav-section-label">Главно меню</div>
+                <nav class="nav">
+                    ${this.getNavigationItems().map(item => `
+                        <button class="nav-item ${item.view === 'orders' ? 'active' : ''}" data-view="${item.view}" type="button">
+                            <span class="nav-icon" aria-hidden="true">${item.short}</span>
+                            <span>${item.label}</span>
+                        </button>
+                    `).join('')}
+                </nav>
+
+                <div class="sidebar-footer">
+                    <button class="user-chip" id="logoutBtn" type="button" title="Изход от системата">
+                        <span class="user-avatar" aria-hidden="true">RB</span>
+                        <span class="user-meta">
+                            <span class="user-name">RB WTC</span>
+                            <span class="user-email">Изход от системата</span>
+                        </span>
+                        <span class="user-logout" aria-hidden="true">×</span>
+                    </button>
+                </div>
+            </aside>
+
+            <main class="main">
+                <header class="topbar">
+                    <button class="menu-toggle" id="menuToggle" type="button" aria-label="Отвори меню">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+
+                    <div class="topbar-title-block">
+                        <h1 class="topbar-title" id="view-title">${meta.title}</h1>
+                        <p class="topbar-subtitle" id="view-subtitle">${meta.subtitle}</p>
+                    </div>
+
+                    <div class="topbar-spacer"></div>
+
+                    <div class="global-search-wrapper">
+                        <div class="global-search-input-wrap">
+                            <span class="global-search-icon" aria-hidden="true"></span>
+                            <input type="text" id="global-search-input" class="global-search-input"
+                                   placeholder="Търси клиент, модел, телефон..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <div class="global-search-results" id="global-search-results"></div>
+                    </div>
+
+                    <div class="month-selector">
+                        <label for="monthSelector">Месец</label>
+                        <select id="monthSelector">
+                            ${this.availableMonths.map(m => `
+                                <option value="${m.key}" ${m.key === currentMonth ? 'selected' : ''}>
+                                    ${m.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                        <button class="btn btn-icon-only" id="add-month-btn" type="button" title="Добави следващ месец">+</button>
+                    </div>
+
                     <div class="undo-redo-controls">
                         <button class="undo-btn" id="undo-btn" title="Връщане (Ctrl+Z)">
-                            <span class="btn-icon">↩️</span>
-                            <span class="btn-text">Undo <kbd>Ctrl+Z</kbd></span>
+                            <span class="btn-icon">↶</span>
+                            <span class="btn-text">Върни</span>
                         </button>
                         <button class="redo-btn" id="redo-btn" title="Повторение (Ctrl+Shift+Z)">
-                            <span class="btn-icon">↪️</span>
-                            <span class="btn-text">Redo <kbd>Ctrl+⇧+Z</kbd></span>
+                            <span class="btn-icon">↷</span>
+                            <span class="btn-text">Повтори</span>
                         </button>
                         <div class="undo-info" id="undo-info">
                             <span id="undo-count">0</span> / <span id="redo-count">0</span>
                         </div>
                     </div>
-                    <div class="global-search-wrapper">
-                        <div class="global-search-input-wrap">
-                            <span class="global-search-icon">🔍</span>
-                            <input type="text" id="global-search-input" class="global-search-input"
-                                   placeholder="Търси поръчки..." autocomplete="off" spellcheck="false">
-                        </div>
-                        <div class="global-search-results" id="global-search-results"></div>
-                    </div>
-                </div>
-                
-                <div class="month-selector">
-                    <label>Избери месец:</label>
-                    <select id="monthSelector">
-                        ${this.availableMonths.map(m => `
-                            <option value="${m.key}" ${m.key === currentMonth ? 'selected' : ''}>
-                                ${m.name}
-                            </option>
-                        `).join('')}
-                    </select>
-                    <button class="btn btn-white" id="add-month-btn">➕ Нов месец</button>
-                </div>
-            </header>
-            
-            <nav class="tabs">
-                <button class="tab active" data-view="orders">📋 Поръчки</button>
-                <button class="tab" data-view="clients">👥 Клиенти</button>
-                <button class="tab" data-view="inventory">📦 Инвентар</button>
-                <button class="tab" data-view="expenses">💰 Разходи</button>
-                <button class="tab" data-view="reports">📊 Отчети</button>
-                <button class="tab" data-view="settings">⚙️ Настройки</button>
-            </nav>
-            
-            <main id="view-container" class="view-container"></main>
+                </header>
+
+                <section id="view-container" class="view-container"></section>
+            </main>
         </div>
         
         <div id="notification-container"></div>
@@ -257,6 +341,15 @@ export class UIManager {
     }
 
     attachGlobalListeners() {
+        document.getElementById('menuToggle')?.addEventListener('click', () => {
+            document.getElementById('sidebar')?.classList.toggle('open');
+            document.getElementById('sidebarBackdrop')?.classList.toggle('active');
+        });
+
+        document.getElementById('sidebarBackdrop')?.addEventListener('click', () => {
+            this.closeMobileSidebar();
+        });
+
         // Undo/Redo buttons
         document.getElementById('undo-btn')?.addEventListener('click', () => {
             this.undoRedo.undo();
@@ -288,6 +381,7 @@ export class UIManager {
 
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
+            this.syncNavigationState(currentViewName);
             this.updateUndoRedoButtons();
         });
 
@@ -329,15 +423,17 @@ export class UIManager {
 
             const currentViewName = this.router.getCurrentView();
             await this.switchView(currentViewName);
+            this.syncNavigationState(currentViewName);
 
             this.showNotification('Нов месец добавен успешно!', 'success');
             this.updateUndoRedoButtons();
         });
 
-        // Tab navigation
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', async (e) => {
-                const view = e.target.dataset.view;
+        // Main navigation
+        document.querySelectorAll('[data-view]').forEach(item => {
+            item.addEventListener('click', async (e) => {
+                const view = e.currentTarget.dataset.view;
+                this.closeMobileSidebar();
                 this.router.navigate(view);
             });
         });
@@ -467,9 +563,7 @@ export class UIManager {
 
     // UPDATED: Make view switching completely async with skeleton loading
     async switchView(viewName) {
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.view === viewName);
-        });
+        this.syncNavigationState(viewName);
 
         const container = document.getElementById('view-container');
         if (!container) return;
@@ -562,8 +656,8 @@ export class UIManager {
             `,
             default: `
                 <div class="loading-state">
-                    <h3>📦 Loading ${viewName}...</h3>
-                    <p>Fetching data from database...</p>
+                    <h3>Зареждане...</h3>
+                    <p>Данните се подготвят от базата.</p>
                 </div>
             `
         };
@@ -621,7 +715,7 @@ export class UIManager {
             <div class="toast-actions">
                 ${toast.undoAction ? `
                     <button class="toast-action-btn" data-toast-id="${toast.id}" data-action="undo">
-                        Undo
+                        Отмени
                     </button>
                 ` : ''}
                 <button class="toast-close" data-toast-id="${toast.id}" title="Затвори">
@@ -710,7 +804,7 @@ export class UIManager {
                 }
             },
             error: {
-                icon: '⚠️',
+                icon: '!',
                 title: 'Възникна грешка',
                 message: customOptions.message || 'Неуспешно зареждане на данните',
                 primaryAction: {
@@ -718,11 +812,7 @@ export class UIManager {
                     action: 'retry',
                     variant: 'primary'
                 },
-                secondaryAction: {
-                    text: 'Свържи се с поддръжката',
-                    action: 'support',
-                    variant: 'secondary'
-                }
+                secondaryAction: null
             },
             filter: {
                 icon: '🔍',

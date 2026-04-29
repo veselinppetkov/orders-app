@@ -112,7 +112,7 @@ export class ModalsManager {
             <div class="modal">
                 <div class="modal-content">
                     <div class="loading-state">
-                        <h3>Loading...</h3>
+                        <h3>Зареждане...</h3>
                     </div>
                 </div>
             </div>
@@ -165,9 +165,9 @@ export class ModalsManager {
                 <div class="modal">
                     <div class="modal-content">
                         <div class="error-state">
-                            <h3>❌ Failed to load modal</h3>
-                            <p>Error: ${error.message}</p>
-                            <button data-action="close" class="btn">Close</button>
+                            <h3>Неуспешно зареждане</h3>
+                            <p>Грешка: ${error.message}</p>
+                            <button data-action="close" class="btn">Затвори</button>
                         </div>
                     </div>
                 </div>
@@ -273,128 +273,151 @@ export class ModalsManager {
         <div class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>${isEdit ? '✏️ Редактиране на поръчка' :
-            isDuplicate ? '📋 Дублиране на поръчка' :
-                '➕ Нова поръчка'}</h2>
-                    <button class="modal-close" data-action="close">✕</button>
+                    <h2>${isEdit ? 'Редактиране на поръчка' :
+            isDuplicate ? 'Дублиране на поръчка' :
+                'Нова поръчка'}</h2>
+                    <button class="modal-close" data-action="close" aria-label="Затвори">×</button>
                 </div>
                 
                 <form id="order-form" class="modal-form">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Дата:</label>
-                            <input type="date" id="orderDate" value="${this._esc(formData?.date || new Date().toISOString().split('T')[0])}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Клиент:</label>
-                            <div class="input-with-button">
-                                <input type="text" id="orderClient" list="clients-list" value="${this._esc(formData?.client || '')}" required placeholder="Изберете или въведете клиент">
-                                <datalist id="clients-list">
-                                    ${clients.map(c => `<option value="${this._esc(c.name)}">`).join('')}
-                                </datalist>
-                                <button type="button" class="input-addon-btn" data-action="quick-add-client">+</button>
+                    <section class="form-section">
+                        <div class="form-section-title">Клиент и дата</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderDate">Дата</label>
+                                <input type="date" id="orderDate" value="${this._esc(formData?.date || new Date().toISOString().split('T')[0])}" required>
                             </div>
-                            <div id="client-hint" class="hint-text"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Телефон:</label>
-                            <input type="tel" id="orderPhone" value="${this._esc(formData?.phone || '')}">
-                        </div>
-                        <div class="form-group">
-                            <label>Източник:</label>
-                            <select id="orderOrigin" required>
-                                ${settings.origins.map(o => `
-                                    <option value="${this._esc(o)}" ${formData?.origin === o ? 'selected' : ''}>${this._esc(o)}</option>
-                                `).join('')}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Доставчик:</label>
-                            <select id="orderVendor" required>
-                                ${settings.vendors.map(v => `
-                                    <option value="${this._esc(v)}" ${formData?.vendor === v ? 'selected' : ''}>${this._esc(v)}</option>
-                                `).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Модел:</label>
-                            <input type="text" id="orderModel" value="${this._esc(formData?.model || '')}" required placeholder="Описание на модела">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Снимка на модела:</label>
-                        <div class="image-upload-area">
-                            <input type="file" id="orderImage" accept="image/*" style="display: none;">
-                            <button type="button" class="btn btn-upload" data-action="upload-image">
-                                📷 Избери снимка
-                            </button>
-                            <div class="hint-text">Или поставете снимка с Ctrl+V</div>
-                            <div id="image-preview" class="image-preview">
-                                ${formData?.imageData ? `
-                                    <img src="${this._esc(formData.imageData)}" class="preview-img">
-                                    <button type="button" class="remove-img-btn" data-action="remove-image">✕</button>
-                                ` : '<div class="no-image">Няма избрана снимка</div>'}
+                            <div class="form-group">
+                                <label for="orderClient">Клиент</label>
+                                <div class="input-with-button">
+                                    <input type="text" id="orderClient" list="clients-list" value="${this._esc(formData?.client || '')}" required placeholder="Изберете или въведете клиент">
+                                    <datalist id="clients-list">
+                                        ${clients.map(c => `<option value="${this._esc(c.name)}">`).join('')}
+                                    </datalist>
+                                    <button type="button" class="input-addon-btn" data-action="quick-add-client" title="Добави клиента">+</button>
+                                </div>
+                                <div id="client-hint" class="hint-text"></div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-row">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderPhone">Телефон</label>
+                                <input type="tel" id="orderPhone" value="${this._esc(formData?.phone || '')}" placeholder="+359...">
+                            </div>
+                            <div class="form-group">
+                                <label for="orderOrigin">Източник</label>
+                                <select id="orderOrigin" required>
+                                    ${settings.origins.map(o => `
+                                        <option value="${this._esc(o)}" ${formData?.origin === o ? 'selected' : ''}>${this._esc(o)}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <div class="form-section-title">Продукт</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderVendor">Доставчик</label>
+                                <select id="orderVendor" required>
+                                    ${settings.vendors.map(v => `
+                                        <option value="${this._esc(v)}" ${formData?.vendor === v ? 'selected' : ''}>${this._esc(v)}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="orderModel">Модел</label>
+                                <input type="text" id="orderModel" value="${this._esc(formData?.model || '')}" required placeholder="Марка, модел, референция">
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label>Доставна цена (USD):</label>
-                            <input type="number" id="orderCostUSD" value="${this._esc(formData?.costUSD || '')}" step="0.01" required>
+                            <label>Снимка на модела</label>
+                            <div class="image-upload-area">
+                                <input type="file" id="orderImage" accept="image/*" style="display: none;">
+                                <button type="button" class="btn btn-upload" data-action="upload-image">
+                                    Избери снимка
+                                </button>
+                                <div class="hint-text">Можете да поставите снимка и с Ctrl+V.</div>
+                                <div id="image-preview" class="image-preview">
+                                    ${formData?.imageData ? `
+                                        <img src="${this._esc(formData.imageData)}" class="preview-img" alt="Снимка на модела">
+                                        <button type="button" class="remove-img-btn" data-action="remove-image" aria-label="Премахни снимката">×</button>
+                                    ` : '<div class="no-image">Няма избрана снимка</div>'}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <div class="form-section-title">Финанси и доставка</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderCostUSD">Доставна цена (USD)</label>
+                                <input type="number" id="orderCostUSD" value="${this._esc(formData?.costUSD || '')}" step="0.01" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="orderShippingUSD">Доставка (USD)</label>
+                                <input type="number" id="orderShippingUSD" value="${this._esc(formData?.shippingUSD || settings.factoryShipping)}" step="0.01" min="0">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderExtrasEUR">Допълнителни разходи (€)</label>
+                                <input type="number" id="orderExtrasEUR" value="${this._esc(formData?.extrasEUR || '')}" step="0.01" min="0" placeholder="0.00">
+                                <small>Такси, ремонт, консумативи или други разходи.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="orderSellEUR">Продажна цена (€)</label>
+                                <input type="number" id="orderSellEUR" value="${this._esc(formData?.sellEUR || '')}" step="0.01" min="0" placeholder="0.00">
+                                <small>Крайна цена за клиента.</small>
+                            </div>
+                        </div>
+                        <div class="order-calculation-preview" id="orderCalculationPreview" data-rate="${this._esc(settings.eurRate)}">
+                            <div>
+                                <span>Себестойност</span>
+                                <strong data-calc-total>0.00 €</strong>
+                            </div>
+                            <div>
+                                <span>Продажба</span>
+                                <strong data-calc-sell>0.00 €</strong>
+                            </div>
+                            <div>
+                                <span>Печалба</span>
+                                <strong data-calc-profit>0.00 €</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <div class="form-section-title">Статус и бележки</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderStatus">Статус</label>
+                                <select id="orderStatus">
+                                    <option value="Очакван" ${formData?.status === 'Очакван' ? 'selected' : ''}>Очакван</option>
+                                    <option value="Доставен" ${formData?.status === 'Доставен' ? 'selected' : ''}>Доставен</option>
+                                    <option value="Свободен" ${formData?.status === 'Свободен' ? 'selected' : ''}>Свободен</option>
+                                    <option value="Други" ${formData?.status === 'Други' ? 'selected' : ''}>Други</option>
+                                </select>
+                            </div>
+                            <div class="form-group form-group-inline">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="orderFullSet" ${formData?.fullSet ? 'checked' : ''}>
+                                    Пълен сет
+                                </label>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label>Доставка (USD):</label>
-                            <input type="number" id="orderShippingUSD" value="${this._esc(formData?.shippingUSD || settings.factoryShipping)}" step="0.01">
+                            <label for="orderNotes">Бележки</label>
+                            <textarea id="orderNotes" rows="3" placeholder="Състояние, уговорки, доставка, гаранция...">${this._esc(formData?.notes || '')}</textarea>
                         </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Доп. разходи (€):</label>
-                            <input type="number" id="orderExtrasEUR" value="${this._esc(formData?.extrasEUR || '')}" step="0.01" placeholder="0.00">
-                            <small style="color:#6c757d;">Допълнителни разходи в евро</small>
-                        </div>
-                        <div class="form-group">
-                            <label>Продажна цена (€):</label>
-                            <input type="number" id="orderSellEUR" value="${this._esc(formData?.sellEUR || '')}" step="0.01" placeholder="0.00">
-                            <small style="color:#6c757d;">Крайна цена за клиента в евро</small>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Статус:</label>
-                            <select id="orderStatus">
-                                <option value="Очакван" ${formData?.status === 'Очакван' ? 'selected' : ''}>Очакван</option>
-                                <option value="Доставен" ${formData?.status === 'Доставен' ? 'selected' : ''}>Доставен</option>
-                                <option value="Свободен" ${formData?.status === 'Свободен' ? 'selected' : ''}>Свободен</option>
-                                <option value="Други" ${formData?.status === 'Други' ? 'selected' : ''}>Други</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="orderFullSet" ${formData?.fullSet ? 'checked' : ''}>
-                                Пълен сет
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Бележки:</label>
-                        <textarea id="orderNotes" rows="3">${this._esc(formData?.notes || '')}</textarea>
-                    </div>
+                    </section>
                     
                     <div class="form-actions">
                         <button type="button" class="btn secondary" data-action="close">Отказ</button>
-                        <button type="submit" class="btn primary">
+                        <button type="submit" class="btn btn-primary">
                             ${isEdit ? 'Запази промените' :
             isDuplicate ? 'Създай копие' :
                 'Добави поръчка'}
@@ -699,6 +722,10 @@ export class ModalsManager {
             document.getElementById('orderImage')?.addEventListener('change', (e) => {
                 this.handleImageUpload(e.target.files[0]);
             });
+            ['orderCostUSD', 'orderShippingUSD', 'orderExtrasEUR', 'orderSellEUR'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => this.updateOrderCalculationPreview());
+            });
+            this.updateOrderCalculationPreview();
             this._attachValidation({
                 orderClient:  { validate: v => v.trim().length > 0, message: 'Клиентът е задължителен' },
                 orderModel:   { validate: v => v.trim().length > 0, message: 'Моделът е задължителен' },
@@ -747,6 +774,32 @@ export class ModalsManager {
     }
 
 // js/ui/components/ModalsManager.js - Fix handleOrderSubmit method
+
+    updateOrderCalculationPreview() {
+        const preview = document.getElementById('orderCalculationPreview');
+        if (!preview) return;
+
+        const value = (id) => parseFloat(document.getElementById(id)?.value || '0') || 0;
+        const rate = parseFloat(preview.dataset.rate || this.modules.settings?.state?.get?.('settings')?.eurRate || '0.92') || 0.92;
+        const costUSD = value('orderCostUSD');
+        const shippingUSD = value('orderShippingUSD');
+        const extrasEUR = value('orderExtrasEUR');
+        const sellEUR = value('orderSellEUR');
+        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
+        const profitEUR = sellEUR - totalEUR;
+
+        const totalEl = preview.querySelector('[data-calc-total]');
+        const sellEl = preview.querySelector('[data-calc-sell]');
+        const profitEl = preview.querySelector('[data-calc-profit]');
+
+        if (totalEl) totalEl.textContent = CurrencyUtils.formatAmount(totalEUR, 'EUR');
+        if (sellEl) sellEl.textContent = CurrencyUtils.formatAmount(sellEUR, 'EUR');
+        if (profitEl) {
+            profitEl.textContent = CurrencyUtils.formatAmount(profitEUR, 'EUR');
+            profitEl.classList.toggle('amount-danger', profitEUR < 0);
+            profitEl.classList.toggle('amount-success', profitEUR >= 0);
+        }
+    }
 
     async handleOrderSubmit(e) {
         e.preventDefault();

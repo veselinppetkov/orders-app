@@ -56,9 +56,9 @@ export class OrdersService {
 
     async getOrders(month = null, options = {}) {
         return this.base.executeRequest(async () => {
-            console.log('Loading orders from Supabase, month:', month || 'all');
-
             const includeImageUrls = options.includeImageUrls !== false;
+            const status = options.status || null;
+            console.log('Loading orders from Supabase, month:', month || 'all', status ? `status: ${status}` : '');
 
             let query = this.client
                 .from('orders')
@@ -71,6 +71,10 @@ export class OrdersService {
                 const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
                 const endDate = `${year}-${monthNum}-${lastDay.toString().padStart(2, '0')}`;
                 query = query.gte('date', startDate).lte('date', endDate);
+            }
+
+            if (status) {
+                query = query.eq('status', status);
             }
 
             const { data, error } = await query;

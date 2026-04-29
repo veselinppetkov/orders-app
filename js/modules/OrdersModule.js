@@ -146,7 +146,16 @@ export class OrdersModule {
     // GET ALL ORDERS across months — cached + deduplicated
     async getAllOrders(options = {}) {
         const includeImageUrls = options.includeImageUrls === true;
-        const ALL_KEY = includeImageUrls ? '__all__:images' : '__all__';
+        const status = options.status || null;
+        const ALL_KEY = this.getAllOrdersCacheKey({ includeImageUrls, status });
+
+        if (!includeImageUrls) {
+            const imageKey = this.getAllOrdersCacheKey({ includeImageUrls: true, status });
+            if (this.isCacheValid(imageKey)) {
+                this.stats.cacheHits++;
+                return this.cache.orders.get(imageKey);
+            }
+        }
 
         if (this._inflight.has(ALL_KEY)) {
             this.stats.cacheHits++;
@@ -160,7 +169,7 @@ export class OrdersModule {
 
         this.stats.cacheMisses++;
 
-        const promise = this.supabase.getOrders(null, { includeImageUrls })
+        const promise = this.supabase.getOrders(null, { includeImageUrls, status })
             .then(orders => {
                 this.stats.supabaseOperations++;
                 this.updateCache(ALL_KEY, orders);
@@ -238,12 +247,15 @@ export class OrdersModule {
         try {
             // Get orders - if showAllMonths is true, use getAllOrders(), otherwise get current month
             const needsImageUrls = filters.status === 'Свободен';
+            const statusFilter = filters.status && filters.status !== 'all'
+                ? filters.status
+                : null;
             let orders = filters.showAllMonths
-                ? await this.getAllOrders({ includeImageUrls: needsImageUrls })
+                ? await this.getAllOrders({ includeImageUrls: needsImageUrls, status: statusFilter })
                 : await this.getOrders(this.state.get('currentMonth'));
 
             // Apply filters efficiently
-            if (filters.status && filters.status !== 'all') {
+            if (!filters.showAllMonths && statusFilter) {
                 orders = orders.filter(o => o.status === filters.status);
             }
 
@@ -302,6 +314,12 @@ export class OrdersModule {
         console.log(`💾 Cached ${orders.length} orders for ${month}`);
     }
 
+    getAllOrdersCacheKey({ includeImageUrls = false, status = null } = {}) {
+        const statusPart = status ? `:status:${encodeURIComponent(status)}` : '';
+        const imagePart = includeImageUrls ? ':images' : '';
+        return `__all__${statusPart}${imagePart}`;
+    }
+
     evictOldestCache() {
         // Remove oldest cache entry
         const oldestMonth = Array.from(this.cache.lastUpdate.entries())
@@ -349,10 +367,17 @@ export class OrdersModule {
     }
 
     invalidateAllOrdersCache() {
-        for (const key of ['__all__', '__all__:images']) {
-            this.cache.orders.delete(key);
-            this.cache.lastUpdate.delete(key);
-            this._inflight.delete(key);
+        for (const key of Array.from(this.cache.orders.keys())) {
+            if (key.startsWith('__all__')) {
+                this.cache.orders.delete(key);
+                this.cache.lastUpdate.delete(key);
+            }
+        }
+
+        for (const key of Array.from(this._inflight.keys())) {
+            if (key.startsWith('__all__')) {
+                this._inflight.delete(key);
+            }
         }
     }
 
