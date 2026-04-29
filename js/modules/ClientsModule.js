@@ -325,7 +325,8 @@ export class ClientsModule {
             }
 
             const allOrders = await window.app.modules.orders.getAllOrders({
-                includeImageUrls: options.includeImageUrls === true
+                includeImageUrls: options.includeImageUrls === true,
+                preferLightweight: options.includeImageUrls !== true
             });
             return allOrders.filter(order => order.client === clientName);
 

@@ -108,18 +108,27 @@ export class OrdersModule {
     }
 
     // GET ORDERS with smart caching + in-flight deduplication
-    async getOrders(month = null) {
+    async getOrders(month = null, options = {}) {
         const targetMonth = month || this.state.get('currentMonth');
+        const includeImageUrls = options.includeImageUrls !== false;
+        const preferLightweight = options.preferLightweight === true;
+        const cacheKey = includeImageUrls ? targetMonth : `${targetMonth}:light`;
         this.stats.totalLoads++;
 
         // Return in-flight request if one is already pending for this month
-        if (this._inflight.has(targetMonth)) {
+        if (this._inflight.has(cacheKey)) {
             this.stats.cacheHits++;
-            return this._inflight.get(targetMonth);
+            return this._inflight.get(cacheKey);
         }
 
         // Check cache first
-        if (this.isCacheValid(targetMonth)) {
+        if (this.isCacheValid(cacheKey)) {
+            this.stats.cacheHits++;
+            const cachedOrders = this.cache.orders.get(cacheKey);
+            return this.mergeWithOptimisticUpdates(cachedOrders, targetMonth);
+        }
+
+        if (!includeImageUrls && !preferLightweight && this.isCacheValid(targetMonth)) {
             this.stats.cacheHits++;
             const cachedOrders = this.cache.orders.get(targetMonth);
             return this.mergeWithOptimisticUpdates(cachedOrders, targetMonth);
@@ -127,29 +136,30 @@ export class OrdersModule {
 
         this.stats.cacheMisses++;
 
-        const promise = this.supabase.getOrders(targetMonth)
+        const promise = this.supabase.getOrders(targetMonth, { includeImageUrls })
             .then(orders => {
                 this.stats.supabaseOperations++;
-                this.updateCache(targetMonth, orders);
-                this._inflight.delete(targetMonth);
+                this.updateCache(cacheKey, orders);
+                this._inflight.delete(cacheKey);
                 return this.mergeWithOptimisticUpdates(orders, targetMonth);
             })
             .catch(err => {
-                this._inflight.delete(targetMonth);
+                this._inflight.delete(cacheKey);
                 throw err;
             });
 
-        this._inflight.set(targetMonth, promise);
+        this._inflight.set(cacheKey, promise);
         return promise;
     }
 
     // GET ALL ORDERS across months — cached + deduplicated
     async getAllOrders(options = {}) {
         const includeImageUrls = options.includeImageUrls === true;
+        const preferLightweight = options.preferLightweight === true;
         const status = options.status || null;
         const ALL_KEY = this.getAllOrdersCacheKey({ includeImageUrls, status });
 
-        if (!includeImageUrls) {
+        if (!includeImageUrls && !preferLightweight) {
             const imageKey = this.getAllOrdersCacheKey({ includeImageUrls: true, status });
             if (this.isCacheValid(imageKey)) {
                 this.stats.cacheHits++;
@@ -218,10 +228,10 @@ export class OrdersModule {
             }
 
             // Check cache across all months
-            for (const [month, orders] of this.cache.orders.entries()) {
+            for (const [, orders] of this.cache.orders.entries()) {
                 const found = orders.find(o => o.id === orderId);
                 if (found) {
-                    return { order: found, month };
+                    return { order: found, month: this.getOrderMonth(found.date) };
                 }
             }
 

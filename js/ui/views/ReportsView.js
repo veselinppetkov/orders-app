@@ -12,13 +12,8 @@ export default class ReportsView {
 
     async render() {
         try {
-            const [allTimeStats, originReport, vendorReport, monthlyReport, topClients] = await Promise.all([
-                this.reportsModule.getAllTimeStats(),
-                this.reportsModule.getReportByOrigin(),
-                this.reportsModule.getReportByVendor(),
-                this.reportsModule.getReportByMonth(),
-                this.reportsModule.getTopClients(5),
-            ]);
+            const { allTimeStats, originReport, vendorReport, monthlyReport, topClients } =
+                await this.reportsModule.getReportsData(5);
 
             this._reportData = { allTimeStats, originReport, vendorReport, monthlyReport, topClients };
 

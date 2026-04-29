@@ -77,7 +77,7 @@ export class UIManager {
     async generateMonthsFromOrders() {
         try {
             // Get all orders to find the earliest date
-            const allOrders = await this.modules.orders.getAllOrders();
+            const allOrders = await this.modules.orders.getAllOrders({ includeImageUrls: false, preferLightweight: true });
 
             if (allOrders.length === 0) {
                 // No orders yet - return current month
@@ -589,7 +589,7 @@ export class UIManager {
         if (term.length < 2) { resultsEl.innerHTML = ''; resultsEl.classList.remove('visible'); return; }
 
         try {
-            const allOrders = await this.modules.orders.getAllOrders();
+            const allOrders = await this.modules.orders.getAllOrders({ includeImageUrls: false, preferLightweight: true });
             const lower = term.toLowerCase();
             const matches = allOrders.filter(o =>
                 (o.client  || '').toLowerCase().includes(lower) ||
@@ -611,7 +611,7 @@ export class UIManager {
                     <div class="search-result-item" data-order-id="${esc(o.id)}" data-month="${esc(monthKey)}">
                         <div>
                             <div class="search-result-client">${esc(o.client)} — ${esc(o.model)}</div>
-                            <div class="search-result-meta">${esc(o.date || '')} · ${esc(o.status)}</div>
+                            <div class="search-result-meta">${esc(this.formatDate(o.date))} · ${esc(o.status)}</div>
                         </div>
                         <div class="search-result-amount">${esc(monthKey)}</div>
                     </div>
@@ -656,6 +656,18 @@ export class UIManager {
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         return `${year}-${month}`;
+    }
+
+    formatDate(dateStr) {
+        if (!dateStr) return '';
+        const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+        const date = new Date(dateStr);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
     }
 
     formatMonthTitle(monthKey) {

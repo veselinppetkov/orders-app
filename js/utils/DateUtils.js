@@ -1,11 +1,14 @@
 export class DateUtils {
     static formatDate(dateStr) {
         if (!dateStr) return '';
+        const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
         const date = new Date(dateStr);
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear();
-        return `${day}.${month}.${year}`;
+        return `${day}/${month}/${year}`;
     }
 
     static formatMonthKey(date) {

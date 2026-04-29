@@ -246,6 +246,47 @@ export class ModalsManager {
         });
     }
 
+    getTodayISODate() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    formatDisplayDate(dateValue) {
+        if (!dateValue) return '';
+
+        const isoMatch = String(dateValue).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+        const parsed = this.parseDisplayDate(dateValue);
+        return parsed ? this.formatDisplayDate(parsed) : String(dateValue);
+    }
+
+    parseDisplayDate(dateValue) {
+        const raw = String(dateValue || '').trim();
+        if (!raw) return '';
+
+        const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return raw;
+
+        const compactMatch = raw.match(/^(\d{2})(\d{2})(\d{4})$/);
+        const match = compactMatch || raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+        if (!match) return '';
+
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        const date = new Date(year, month - 1, day);
+        const isValid = date.getFullYear() === year
+            && date.getMonth() === month - 1
+            && date.getDate() === day;
+        if (!isValid) return '';
+
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
     async renderOrderModal(data) {
         const isEdit = data.mode === 'edit';
         const isDuplicate = data.mode === 'duplicate';
@@ -285,7 +326,7 @@ export class ModalsManager {
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="orderDate">Дата</label>
-                                <input type="date" id="orderDate" value="${this._esc(formData?.date || new Date().toISOString().split('T')[0])}" required>
+                                <input type="text" id="orderDate" value="${this._esc(this.formatDisplayDate(formData?.date || this.getTodayISODate()))}" inputmode="numeric" maxlength="10" placeholder="дд/мм/гггг" autocomplete="off" required>
                             </div>
                             <div class="form-group">
                                 <label for="orderClient">Клиент</label>
@@ -621,10 +662,36 @@ export class ModalsManager {
     `;
     }
 
+    getClientProfileStats(orders = []) {
+        let totalRevenue = 0;
+        let totalProfit = 0;
+        let lastOrder = null;
+        let firstOrder = null;
+
+        for (const order of orders) {
+            totalRevenue += order.sellEUR || 0;
+            totalProfit += order.balanceEUR || 0;
+
+            const orderDate = new Date(order.date);
+            if (!lastOrder || orderDate > new Date(lastOrder.date)) lastOrder = order;
+            if (!firstOrder || orderDate < new Date(firstOrder.date)) firstOrder = order;
+        }
+
+        return {
+            totalOrders: orders.length,
+            totalRevenue,
+            totalProfit,
+            lastOrder,
+            firstOrder,
+            avgOrderValue: orders.length ? totalRevenue / orders.length : 0
+        };
+    }
+
     async renderClientProfileModal(data) {
         const client = await this.modules.clients.getClient(data.id);
-        const stats = await this.modules.clients.getClientStats(client.name);
-        const orders = await this.modules.clients.getClientOrders(client.name, { includeImageUrls: true });
+        const orders = await this.modules.clients.getClientOrders(client.name, { includeImageUrls: false });
+        const stats = this.getClientProfileStats(orders);
+        const sortedOrders = [...orders].sort((a, b) => new Date(b.date) - new Date(a.date));
 
         return `
             <div class="modal">
@@ -670,9 +737,8 @@ export class ModalsManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${orders.map(o => {
-                                        const date = new Date(o.date);
-                                        const formattedDate = `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
+                                    ${sortedOrders.map(o => {
+                                        const formattedDate = this.formatDisplayDate(o.date);
                                         return `
                                         <tr>
                                             <td>${formattedDate}</td>
@@ -680,6 +746,7 @@ export class ModalsManager {
                                                 ${o.imageData ?
             `<img src="${this._esc(o.imageData)}"
                                                          class="model-image profile-order-img"
+                                                         loading="lazy"
                                                          alt="${this._esc(o.model)}"
                                                          title="${this._esc(o.model)}"
                                                          data-action="view-profile-image"
@@ -722,11 +789,16 @@ export class ModalsManager {
             document.getElementById('orderImage')?.addEventListener('change', (e) => {
                 this.handleImageUpload(e.target.files[0]);
             });
+            document.getElementById('orderDate')?.addEventListener('blur', (e) => {
+                const isoDate = this.parseDisplayDate(e.target.value);
+                if (isoDate) e.target.value = this.formatDisplayDate(isoDate);
+            });
             ['orderCostUSD', 'orderShippingUSD', 'orderExtrasEUR', 'orderSellEUR'].forEach(id => {
                 document.getElementById(id)?.addEventListener('input', () => this.updateOrderCalculationPreview());
             });
             this.updateOrderCalculationPreview();
             this._attachValidation({
+                orderDate:    { validate: v => Boolean(this.parseDisplayDate(v)), message: 'Въведете дата във формат дд/мм/гггг' },
                 orderClient:  { validate: v => v.trim().length > 0, message: 'Клиентът е задължителен' },
                 orderModel:   { validate: v => v.trim().length > 0, message: 'Моделът е задължителен' },
                 orderCostUSD: { validate: v => v !== '' && parseFloat(v) >= 0, message: 'Въведете валидна сума' },
@@ -820,9 +892,19 @@ export class ModalsManager {
             ? null
             : existingImagePath;
 
+        const isoDate = this.parseDisplayDate(document.getElementById('orderDate').value);
+        if (!isoDate) {
+            this.eventBus.emit('notification:show', {
+                message: 'Въведете дата във формат дд/мм/гггг',
+                type: 'error'
+            });
+            document.getElementById('orderDate')?.focus();
+            return;
+        }
+
         // FIXED: Ensure all form values are properly captured (no undefined/null values)
         const orderData = {
-            date: document.getElementById('orderDate').value,
+            date: isoDate,
             client: document.getElementById('orderClient').value,
             phone: document.getElementById('orderPhone').value || '',
             origin: document.getElementById('orderOrigin').value,

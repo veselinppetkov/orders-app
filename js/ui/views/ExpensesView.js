@@ -9,11 +9,10 @@ export default class ExpensesView {
         try {
             // FIXED: Await async methods
             const expenses = await this.expensesModule.getExpensesSorted(null, 'amount', 'desc');
-            const total = await this.expensesModule.getTotalExpenses();
             const currentMonth = this.state.get('currentMonth');
 
             // DEFENSIVE: Validate expenses data
-            console.log(`📊 Rendering ${expenses.length} expenses for ${currentMonth}. Total: ${total}`);
+            console.log(`📊 Rendering ${expenses.length} expenses for ${currentMonth}`);
 
             // Filter out any expenses with invalid data
             const validExpenses = expenses.filter(exp => {
@@ -24,8 +23,7 @@ export default class ExpensesView {
                 return true;
             });
 
-            // DEFENSIVE: Ensure total is a valid number
-            const safeTotal = isNaN(total) || total === undefined || total === null ? 0 : total;
+            const safeTotal = validExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
             return `
             <div class="expenses-view">

@@ -42,7 +42,7 @@ export default class OrdersView {
             const [stats, allOrders, currentMonthOrders] = await Promise.all([
                 this.reportsModule.getMonthlyStats(),
                 this.getDisplayOrders(),
-                this.ordersModule.getOrders(currentMonth)
+                this.ordersModule.getOrders(currentMonth, { includeImageUrls: false, preferLightweight: true })
             ]);
             const previousMonth = this.getPreviousMonthKey(currentMonth);
             let previousStats = null;
@@ -55,7 +55,11 @@ export default class OrdersView {
             const hasAdditionalFilters = Boolean(this.filters.search || this.filters.origin || this.filters.vendor);
             const freeCountTotal = this.filters.showAllMonths && this.filters.status === FREE_STATUS && !hasAdditionalFilters
                 ? allOrders.length
-                : (await this.ordersModule.getAllOrders()).filter(o => o.status === FREE_STATUS).length;
+                : (await this.ordersModule.getAllOrders({
+                    includeImageUrls: false,
+                    preferLightweight: true,
+                    status: FREE_STATUS
+                })).length;
 
             // Calculate free watches count for current month only
             const freeCountMonth = currentMonthOrders.filter(o => o.status === FREE_STATUS).length;
@@ -418,7 +422,7 @@ export default class OrdersView {
                 ${imageHtml ? `<div class="drawer-section drawer-image-section">${imageHtml}</div>` : ''}
                 <div class="drawer-section">
                     <div class="drawer-meta-grid">
-                        <div class="drawer-meta-item"><span class="drawer-label">Дата</span><span>${esc(o.date || '')}</span></div>
+                        <div class="drawer-meta-item"><span class="drawer-label">Дата</span><span>${this.formatDate(o.date)}</span></div>
                         <div class="drawer-meta-item drawer-meta-copyable">
                             <span class="drawer-label">Телефон</span>
                             <span class="drawer-copy-row">
@@ -1049,7 +1053,6 @@ export default class OrdersView {
                 <div class="stat-item ${balanceClass}">
                     <div class="stat-label">Баланс</div>
                     <div class="stat-value">${balance.toFixed(2)} €</div>
-                    <div class="stat-sublabel">Приходи минус часовници и оперативни разходи</div>
                 </div>
             </div>
         `;
@@ -1281,10 +1284,14 @@ export default class OrdersView {
 
     formatDate(dateStr) {
         if (!dateStr) return '';
+        const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
         const date = new Date(dateStr);
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        return `${day}.${month}`;
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
     }
 
 // ADD: Pagination logic methods

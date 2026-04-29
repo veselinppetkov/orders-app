@@ -57,6 +57,9 @@ export class ExpensesModule {
         // Operation tracking
         this.pendingOperations = new Set();
         this.nextCustomId = 1000; // Fallback IDs for localStorage-only expenses
+        this._expensesCache = new Map();
+        this._expensesInflight = new Map();
+        this.expensesCacheTimeout = 5 * 60 * 1000;
 
         // Statistics
         this.stats = {
@@ -101,32 +104,51 @@ export class ExpensesModule {
         const targetMonth = month || this.state.get('currentMonth');
 
         try {
+            const cached = this._expensesCache.get(targetMonth);
+            if (cached && (Date.now() - cached.timestamp) < this.expensesCacheTimeout) {
+                return [...cached.expenses];
+            }
+
+            if (this._expensesInflight.has(targetMonth)) {
+                const expenses = await this._expensesInflight.get(targetMonth);
+                return [...expenses];
+            }
+
             // Ensure month structure exists with defaults
-            await this.ensureMonthExpenses(targetMonth);
+            const promise = (async () => {
+                await this.ensureMonthExpenses(targetMonth);
 
-            // Load custom expenses from Supabase
-            const supabaseExpenses = await this.supabase.getExpenses(targetMonth);
-            this.stats.supabaseOperations++;
+                // Load custom expenses from Supabase
+                const supabaseExpenses = await this.supabase.getExpenses(targetMonth);
+                this.stats.supabaseOperations++;
 
-            // Get default expenses from localStorage
-            const defaults = this.getExpensesFromLocalStorage(targetMonth);
-            const defaultExpenses = defaults.filter(e => e.isDefault === true);
+                // Get default expenses from localStorage
+                const defaults = this.getExpensesFromLocalStorage(targetMonth);
+                const defaultExpenses = defaults.filter(e => e.isDefault === true);
 
-            // Merge defaults with custom expenses from Supabase
-            const mergedExpenses = [...defaultExpenses, ...supabaseExpenses];
+                // Merge defaults with custom expenses from Supabase
+                const mergedExpenses = [...defaultExpenses, ...supabaseExpenses];
+                this._expensesCache.set(targetMonth, { timestamp: Date.now(), expenses: mergedExpenses });
 
-            console.log(`✅ Loaded ${supabaseExpenses.length} custom expenses from Supabase + ${defaultExpenses.length} defaults. Total: ${mergedExpenses.length} for ${targetMonth}`);
-            return mergedExpenses;
+                console.log(`✅ Loaded ${supabaseExpenses.length} custom expenses from Supabase + ${defaultExpenses.length} defaults. Total: ${mergedExpenses.length} for ${targetMonth}`);
+                return mergedExpenses;
+            })();
+
+            this._expensesInflight.set(targetMonth, promise);
+            const expenses = await promise;
+            return [...expenses];
 
         } catch (error) {
             console.error('❌ Failed to get expenses:', error);
             throw error;
+        } finally {
+            this._expensesInflight.delete(targetMonth);
         }
     }
 
     // GET EXPENSES sorted by amount (highest to lowest)
 async getExpensesSorted(month = null, sortBy = 'amount', order = 'desc') {
-    const expenses = await this.getExpenses(month);
+    const expenses = [...await this.getExpenses(month)];
 
     // Sort by specified field
     return expenses.sort((a, b) => {
@@ -687,8 +709,8 @@ async update(expenseId, expenseData) {
     }
 
     invalidateCalculations() {
-        // Clear any cached calculations when expenses change
-        // This can be expanded later if we add caching
+        this._expensesCache.clear();
+        this._expensesInflight.clear();
     }
 
     // ============================================

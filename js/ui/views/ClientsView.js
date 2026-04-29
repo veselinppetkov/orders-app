@@ -120,7 +120,7 @@ export default class ClientsView {
 
             // Load all orders once — uses OrdersModule cache, avoids N separate fetches
             const allOrders = window.app?.modules?.orders
-                ? await window.app.modules.orders.getAllOrders()
+                ? await window.app.modules.orders.getAllOrders({ includeImageUrls: false, preferLightweight: true })
                 : [];
 
             // Index orders by client name: O(N+M) instead of O(N*M) filter per client.
@@ -299,10 +299,13 @@ export default class ClientsView {
 
     formatDate(dateStr) {
         if (!dateStr) return '';
+        const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
         const date = new Date(dateStr);
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear();
-        return `${day}.${month}.${year}`;
+        return `${day}/${month}/${year}`;
     }
 }
