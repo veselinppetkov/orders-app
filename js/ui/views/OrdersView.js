@@ -406,7 +406,10 @@ export default class OrdersView {
         drawer.innerHTML = `
             <div class="drawer-header">
                 <div class="drawer-title">
-                    <span class="drawer-client">${esc(o.client)}</span>
+                    <div class="drawer-client-row">
+                        <span class="drawer-client">${esc(o.client)}</span>
+                        <button class="drawer-copy-btn" type="button" data-copy-value="${esc(o.client || '')}" data-copy-message="Името е копирано">Копирай име</button>
+                    </div>
                     <span class="status-badge" style="background: ${FormatUtils.getStatusColor(o.status)}; color: ${FormatUtils.getContrastTextColor(FormatUtils.getStatusColor(o.status))}">${esc(o.status)}</span>
                 </div>
                 <button class="drawer-close" id="drawer-close-btn">✕</button>
@@ -416,7 +419,13 @@ export default class OrdersView {
                 <div class="drawer-section">
                     <div class="drawer-meta-grid">
                         <div class="drawer-meta-item"><span class="drawer-label">Дата</span><span>${esc(o.date || '')}</span></div>
-                        <div class="drawer-meta-item"><span class="drawer-label">Телефон</span><span>${esc(o.phone || '—')}</span></div>
+                        <div class="drawer-meta-item drawer-meta-copyable">
+                            <span class="drawer-label">Телефон</span>
+                            <span class="drawer-copy-row">
+                                <span>${esc(o.phone || '—')}</span>
+                                ${o.phone ? `<button class="drawer-copy-btn" type="button" data-copy-value="${esc(o.phone)}" data-copy-message="Телефонът е копиран">Копирай</button>` : ''}
+                            </span>
+                        </div>
                         <div class="drawer-meta-item"><span class="drawer-label">Модел</span><span>${esc(o.model)}</span></div>
                         <div class="drawer-meta-item"><span class="drawer-label">Доставчик</span><span>${esc(o.vendor)}</span></div>
                         <div class="drawer-meta-item"><span class="drawer-label">Източник</span><span>${esc(o.origin)}</span></div>
@@ -481,6 +490,40 @@ export default class OrdersView {
                 }
             });
         });
+
+        drawer.querySelectorAll('[data-copy-value]').forEach(btn => {
+            btn.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                await this.copyDrawerValue(btn.dataset.copyValue || '', btn.dataset.copyMessage || 'Стойността е копирана');
+            });
+        });
+    }
+
+    async copyDrawerValue(value, successMessage = 'Стойността е копирана') {
+        const text = (value || '').trim();
+        if (!text) return;
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+            }
+
+            this.eventBus.emit('notification:show', { message: successMessage, type: 'success' });
+        } catch (error) {
+            console.error('Copy failed:', error);
+            this.eventBus.emit('notification:show', { message: 'Копирането не беше успешно', type: 'error' });
+        }
     }
 
     closeDrawer() {

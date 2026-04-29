@@ -1225,9 +1225,51 @@ textarea {
     background: var(--bg-elevated);
 }
 
+.drawer-client-row,
+.drawer-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.drawer-copy-row {
+    justify-content: space-between;
+}
+
 .drawer-client {
+    min-width: 0;
     font-family: var(--font-display);
     font-size: 20px;
+}
+
+.drawer-copy-btn {
+    min-height: 26px;
+    flex: 0 0 auto;
+    padding: 4px 9px;
+    border: 1px solid #dccfb1;
+    border-radius: var(--radius-pill);
+    background: #fffdfa;
+    color: #867860;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.drawer-copy-btn:hover {
+    background: #f6f1e7;
+    color: #171510;
+}
+
+.drawer-meta-copyable {
+    min-width: 0;
+}
+
+.drawer-meta-copyable .drawer-copy-row > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #notification-container {
