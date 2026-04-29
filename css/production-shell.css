@@ -243,22 +243,20 @@ textarea {
 }
 
 .topbar {
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 40;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 34px;
-    min-height: 150px;
-    padding: 30px 38px;
+    gap: 30px;
+    min-height: 118px;
+    padding: 24px 34px;
     background: rgba(246, 241, 231, 0.94);
     border-bottom: 1px solid #e0d8c9;
-    backdrop-filter: blur(12px);
 }
 
 .topbar-left {
-    flex: 1 0 430px;
+    flex: 1 0 390px;
     min-width: 360px;
     display: flex;
     align-items: center;
@@ -271,20 +269,40 @@ textarea {
 
 .topbar-title {
     margin: 0;
-    font-family: 'Fraunces', Georgia, serif;
-    font-size: 66px;
-    font-weight: 500;
-    line-height: 0.9;
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
     color: #171510;
     letter-spacing: 0;
 }
 
 .topbar-subtitle {
-    margin: 14px 0 0;
+    margin: 6px 0 0;
     color: #867860;
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.2;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.topbar.orders-topbar .topbar-title {
+    font-family: 'JetBrains Mono', var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #867860;
+}
+
+.topbar.orders-topbar .topbar-subtitle {
+    margin-top: 13px;
+    color: #171510;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 54px;
+    font-weight: 500;
+    line-height: 0.95;
+    letter-spacing: 0;
 }
 
 .topbar-actions {
@@ -1242,6 +1260,14 @@ textarea {
         font-size: 16px;
     }
 
+    .topbar.orders-topbar .topbar-title {
+        font-size: 11px;
+    }
+
+    .topbar.orders-topbar .topbar-subtitle {
+        font-size: 42px;
+    }
+
     .view-container {
         padding: 18px 14px;
     }
@@ -1282,6 +1308,15 @@ textarea {
     .topbar-subtitle {
         margin-top: 9px;
         font-size: 14px;
+    }
+
+    .topbar.orders-topbar .topbar-title {
+        font-size: 10px;
+    }
+
+    .topbar.orders-topbar .topbar-subtitle {
+        margin-top: 9px;
+        font-size: 34px;
     }
 
     .topbar-actions {

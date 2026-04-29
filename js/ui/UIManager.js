@@ -209,9 +209,11 @@ export class UIManager {
         const title = document.getElementById('view-title');
         const subtitle = document.getElementById('view-subtitle');
         const primaryAction = document.getElementById('new-order-btn');
+        const topbar = document.querySelector('.topbar');
         if (title) title.textContent = meta.title;
         if (subtitle) subtitle.textContent = meta.subtitle;
         if (primaryAction) primaryAction.hidden = viewName !== 'orders';
+        topbar?.classList.toggle('orders-topbar', viewName === 'orders');
     }
 
     closeMobileSidebar() {
@@ -271,7 +273,7 @@ export class UIManager {
             </aside>
 
             <main class="main">
-                <header class="topbar">
+                <header class="topbar orders-topbar">
                     <div class="topbar-left">
                         <button class="menu-toggle" id="menuToggle" type="button" aria-label="Отвори меню">
                             <span></span>
