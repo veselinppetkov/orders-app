@@ -398,6 +398,28 @@ body.sidebar-resizing .sidebar {
     transform: rotate(225deg);
 }
 
+.sidebar-floating-toggle {
+    position: fixed;
+    top: 18px;
+    left: calc(var(--sidebar-width, 248px) + 16px);
+    z-index: 80;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+    box-shadow: 0 8px 22px rgba(23, 23, 23, 0.12);
+    transition: opacity 140ms ease, transform 140ms ease, left 180ms ease;
+}
+
+.app-shell.show-floating-sidebar-toggle .sidebar-floating-toggle {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.app-shell.sidebar-collapsed .sidebar-floating-toggle {
+    left: 16px;
+}
+
 .menu-toggle span {
     display: block;
     width: 17px;
@@ -1282,6 +1304,10 @@ textarea {
     }
 
     .sidebar-resize-handle {
+        display: none;
+    }
+
+    .sidebar-floating-toggle {
         display: none;
     }
 

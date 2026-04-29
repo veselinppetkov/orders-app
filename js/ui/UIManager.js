@@ -236,11 +236,10 @@ export class UIManager {
         shell?.classList.toggle('sidebar-collapsed', collapsed);
         localStorage.setItem('orderSystem_sidebarCollapsed', collapsed ? 'true' : 'false');
 
-        const button = document.getElementById('sidebarCollapseBtn');
-        if (button) {
+        document.querySelectorAll('.sidebar-toggle-control').forEach(button => {
             button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
             button.title = collapsed ? 'Покажи менюто' : 'Скрий менюто';
-        }
+        });
     }
 
     render() {
@@ -288,9 +287,9 @@ export class UIManager {
                             <span></span>
                             <span></span>
                         </button>
-                        <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" type="button" aria-expanded="${this.isSidebarCollapsed() ? 'false' : 'true'}" title="${this.isSidebarCollapsed() ? 'Покажи менюто' : 'Скрий менюто'}">
-                            <span></span>
-                        </button>
+                    <button class="sidebar-collapse-btn sidebar-toggle-control" id="sidebarCollapseBtn" type="button" aria-expanded="${this.isSidebarCollapsed() ? 'false' : 'true'}" title="${this.isSidebarCollapsed() ? 'Покажи менюто' : 'Скрий менюто'}">
+                        <span></span>
+                    </button>
 
                         <div class="topbar-title-block">
                             <h1 class="topbar-title" id="view-title">${meta.title}</h1>
@@ -325,6 +324,10 @@ export class UIManager {
 
                 <section id="view-container" class="view-container"></section>
             </main>
+
+            <button class="sidebar-collapse-btn sidebar-toggle-control sidebar-floating-toggle" id="sidebarFloatingToggle" type="button" aria-expanded="${this.isSidebarCollapsed() ? 'false' : 'true'}" title="${this.isSidebarCollapsed() ? 'Покажи менюто' : 'Скрий менюто'}">
+                <span></span>
+            </button>
         </div>
         
         <div id="notification-container"></div>
@@ -365,12 +368,15 @@ export class UIManager {
             document.getElementById('sidebar')?.classList.toggle('open');
             document.getElementById('sidebarBackdrop')?.classList.toggle('active');
         });
-        document.getElementById('sidebarCollapseBtn')?.addEventListener('click', () => {
-            const shell = document.querySelector('.app-shell');
-            const collapsed = !shell?.classList.contains('sidebar-collapsed');
-            this.setSidebarCollapsed(collapsed);
+        document.querySelectorAll('.sidebar-toggle-control').forEach(button => {
+            button.addEventListener('click', () => {
+                const shell = document.querySelector('.app-shell');
+                const collapsed = !shell?.classList.contains('sidebar-collapsed');
+                this.setSidebarCollapsed(collapsed);
+            });
         });
         this.attachSidebarResize();
+        this.attachFloatingSidebarToggle();
 
         document.getElementById('sidebarBackdrop')?.addEventListener('click', () => {
             this.closeMobileSidebar();
@@ -536,6 +542,21 @@ export class UIManager {
                 applyWidth(currentWidth + 16);
             }
         });
+    }
+
+    attachFloatingSidebarToggle() {
+        const shell = document.querySelector('.app-shell');
+        const topbar = document.querySelector('.topbar');
+        if (!shell || !topbar) return;
+
+        const syncFloatingToggle = () => {
+            const topbarIsOutOfView = topbar.getBoundingClientRect().bottom < 12;
+            shell.classList.toggle('show-floating-sidebar-toggle', topbarIsOutOfView);
+        };
+
+        syncFloatingToggle();
+        window.addEventListener('scroll', syncFloatingToggle, { passive: true });
+        window.addEventListener('resize', syncFloatingToggle);
     }
 
     setupGlobalSearch() {
