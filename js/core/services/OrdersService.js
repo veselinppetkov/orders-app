@@ -1,3 +1,5 @@
+import { CurrencyUtils } from '../../utils/CurrencyUtils.js';
+
 export class OrdersService {
     constructor(base, images) {
         this.base = base;
@@ -17,7 +19,7 @@ export class OrdersService {
 
             const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
             const sellEUR = parseFloat(orderData.sellEUR) || 0;
-            const rate = parseFloat(orderData.rate);
+            const rate = CurrencyUtils.normalizeUSDtoEURRate(orderData.rate);
 
             if (!rate || rate <= 0) {
                 console.error('Invalid exchange rate for order creation:', { orderData, rate });
@@ -127,7 +129,7 @@ export class OrdersService {
 
                 const extrasEUR = parseFloat(orderData.extrasEUR) || 0;
                 const sellEUR = parseFloat(orderData.sellEUR) || 0;
-                const rate = parseFloat(orderData.rate);
+                const rate = CurrencyUtils.normalizeUSDtoEURRate(orderData.rate);
 
                 if (!rate || rate <= 0) {
                     console.error('Invalid exchange rate for order update:', { orderId, orderData, rate });
@@ -222,13 +224,14 @@ export class OrdersService {
     async transformOrderFromDB(dbOrder, options = {}) {
         const costUSD = parseFloat(dbOrder.cost_usd) || 0;
         const shippingUSD = parseFloat(dbOrder.shipping_usd) || 0;
-        const rate = parseFloat(dbOrder.rate) || 0;
+        const storedRate = parseFloat(dbOrder.rate) || 0;
+        const rate = CurrencyUtils.normalizeUSDtoEURRate(storedRate);
 
         const extrasEUR = parseFloat(dbOrder.extras_eur) || 0;
         const sellEUR = parseFloat(dbOrder.sell_eur) || 0;
 
-        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-        const balanceEUR = sellEUR - totalEUR;
+        const totalEUR = CurrencyUtils.roundEUR(((costUSD + shippingUSD) * rate) + extrasEUR);
+        const balanceEUR = CurrencyUtils.roundEUR(sellEUR - totalEUR);
 
         const includeImageUrls = options.includeImageUrls !== false;
         const displayImageUrl = includeImageUrls
@@ -246,10 +249,11 @@ export class OrdersService {
             costUSD,
             shippingUSD,
             rate,
+            storedRate,
             extrasEUR: parseFloat(extrasEUR.toFixed(2)),
             sellEUR: parseFloat(sellEUR.toFixed(2)),
-            totalEUR: parseFloat(totalEUR.toFixed(2)),
-            balanceEUR: parseFloat(balanceEUR.toFixed(2)),
+            totalEUR,
+            balanceEUR,
             status: dbOrder.status,
             fullSet: dbOrder.full_set,
             notes: dbOrder.notes || '',

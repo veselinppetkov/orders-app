@@ -542,7 +542,8 @@ export class OrdersModule {
         const rateSource = data.rate !== undefined && data.rate !== null && data.rate !== ''
             ? data.rate
             : settings.eurRate;
-        const rate = parseFloat(rateSource);
+        const rawRate = parseFloat(rateSource);
+        const rate = CurrencyUtils.normalizeUSDtoEURRate(rawRate);
 
         // Validate exchange rate
         if (!rate || isNaN(rate) || rate <= 0) {
@@ -581,8 +582,8 @@ export class OrdersModule {
         };
 
         // Calculate derived fields (EUR only)
-        order.totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-        order.balanceEUR = sellEUR - order.totalEUR;
+        order.totalEUR = CurrencyUtils.roundEUR(((costUSD + shippingUSD) * rate) + extrasEUR);
+        order.balanceEUR = CurrencyUtils.roundEUR(sellEUR - order.totalEUR);
 
         // Log calculation for debugging
         console.log(`📊 Order cost calculation:
@@ -702,7 +703,7 @@ export class OrdersModule {
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
-        const rate = parseFloat(order.rate) || parseFloat(settings.eurRate);
+        const rate = CurrencyUtils.normalizeUSDtoEURRate(parseFloat(order.rate) || parseFloat(settings.eurRate));
 
         if (!rate) {
             console.warn('⚠️ No exchange rate available for recalculation');
@@ -712,8 +713,8 @@ export class OrdersModule {
         const extrasEUR = order.extrasEUR || 0;
         const sellEUR = order.sellEUR || 0;
 
-        updatedOrder.totalEUR = ((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR;
-        updatedOrder.balanceEUR = sellEUR - updatedOrder.totalEUR;
+        updatedOrder.totalEUR = CurrencyUtils.roundEUR(((updatedOrder.costUSD + updatedOrder.shippingUSD) * rate) + extrasEUR);
+        updatedOrder.balanceEUR = CurrencyUtils.roundEUR(sellEUR - updatedOrder.totalEUR);
 
         return updatedOrder;
     }

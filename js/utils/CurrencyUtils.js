@@ -7,6 +7,12 @@
  */
 
 export class CurrencyUtils {
+    // Official fixed conversion rate: 1 EUR = 1.95583 BGN.
+    static BGN_PER_EUR = 1.95583;
+
+    // Historical orders stored rate as USD->BGN. Current orders store USD->EUR.
+    static LEGACY_USD_TO_BGN_RATE_THRESHOLD = 1.2;
+
     // Currency symbols
     static SYMBOLS = {
         EUR: '€',
@@ -77,6 +83,30 @@ export class CurrencyUtils {
             return 0;
         }
         return this.roundEUR(amountUSD * usdToEurRate);
+    }
+
+    /**
+     * Convert a stored order exchange rate to the application's USD->EUR rate.
+     * Older rows used USD->BGN rates around 1.5-1.9; those must be divided by
+     * the fixed BGN/EUR conversion rate before calculating EUR totals.
+     *
+     * @param {number|string} rate - Stored exchange rate
+     * @returns {number} Effective USD->EUR rate
+     */
+    static normalizeUSDtoEURRate(rate) {
+        const parsedRate = parseFloat(rate) || 0;
+        if (parsedRate > this.LEGACY_USD_TO_BGN_RATE_THRESHOLD) {
+            return parsedRate / this.BGN_PER_EUR;
+        }
+        return parsedRate;
+    }
+
+    /**
+     * @param {number|string} rate - Stored exchange rate
+     * @returns {boolean} True when the value looks like a legacy USD->BGN rate
+     */
+    static isLegacyUSDtoBGNRate(rate) {
+        return (parseFloat(rate) || 0) > this.LEGACY_USD_TO_BGN_RATE_THRESHOLD;
     }
 
     /**

@@ -309,7 +309,9 @@ export class ModalsManager {
 
         const settings = await this.modules.settings.getSettings();
         const clients = await this.modules.clients.getAllClients();
-        const calculationRate = isEdit && formData?.rate ? formData.rate : settings.eurRate;
+        const calculationRate = CurrencyUtils.normalizeUSDtoEURRate(
+            isEdit && formData?.rate ? formData.rate : settings.eurRate
+        );
 
         return `
         <div class="modal">
@@ -853,13 +855,15 @@ export class ModalsManager {
         if (!preview) return;
 
         const value = (id) => parseFloat(document.getElementById(id)?.value || '0') || 0;
-        const rate = parseFloat(preview.dataset.rate || this.modules.settings?.state?.get?.('settings')?.eurRate || '0.92') || 0.92;
+        const rate = CurrencyUtils.normalizeUSDtoEURRate(
+            preview.dataset.rate || this.modules.settings?.state?.get?.('settings')?.eurRate || '0.92'
+        ) || 0.92;
         const costUSD = value('orderCostUSD');
         const shippingUSD = value('orderShippingUSD');
         const extrasEUR = value('orderExtrasEUR');
         const sellEUR = value('orderSellEUR');
-        const totalEUR = ((costUSD + shippingUSD) * rate) + extrasEUR;
-        const profitEUR = sellEUR - totalEUR;
+        const totalEUR = CurrencyUtils.roundEUR(((costUSD + shippingUSD) * rate) + extrasEUR);
+        const profitEUR = CurrencyUtils.roundEUR(sellEUR - totalEUR);
 
         const totalEl = preview.querySelector('[data-calc-total]');
         const sellEl = preview.querySelector('[data-calc-sell]');
