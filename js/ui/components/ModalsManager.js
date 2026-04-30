@@ -309,6 +309,7 @@ export class ModalsManager {
 
         const settings = await this.modules.settings.getSettings();
         const clients = await this.modules.clients.getAllClients();
+        const calculationRate = isEdit && formData?.rate ? formData.rate : settings.eurRate;
 
         return `
         <div class="modal">
@@ -415,7 +416,7 @@ export class ModalsManager {
                                 <small>Крайна цена за клиента.</small>
                             </div>
                         </div>
-                        <div class="order-calculation-preview" id="orderCalculationPreview" data-rate="${this._esc(settings.eurRate)}">
+                        <div class="order-calculation-preview" id="orderCalculationPreview" data-rate="${this._esc(calculationRate)}">
                             <div>
                                 <span>Себестойност</span>
                                 <strong data-calc-total>0.00 €</strong>
@@ -877,12 +878,14 @@ export class ModalsManager {
         e.preventDefault();
 
         // Get existing image data/path for edit mode
+        let existingOrder = null;
         let existingImageData = null;
         let existingImagePath = null;
         if (this.currentModal.mode === 'edit') {
             const result = await this.modules.orders.findOrderById(this.currentModal.id);
-            existingImageData = result?.order?.imageData || null;
-            existingImagePath = result?.order?.imagePath || result?.order?.imageUrl || null;
+            existingOrder = result?.order || null;
+            existingImageData = existingOrder?.imageData || null;
+            existingImagePath = existingOrder?.imagePath || existingOrder?.imageUrl || null;
         }
 
         const imageData = this.imageMarkedForRemoval
@@ -915,6 +918,7 @@ export class ModalsManager {
             shippingUSD: document.getElementById('orderShippingUSD').value || '0',
             extrasEUR: document.getElementById('orderExtrasEUR').value || '0',
             sellEUR: document.getElementById('orderSellEUR').value || '0',
+            rate: existingOrder?.rate ?? '',
             status: document.getElementById('orderStatus').value,
             fullSet: document.getElementById('orderFullSet').checked,
             notes: document.getElementById('orderNotes').value || '',

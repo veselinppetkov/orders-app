@@ -16,9 +16,17 @@ export class ReportsModule {
         return { sellEUR, totalEUR, balanceEUR };
     }
 
+    hasRevenue(order) {
+        return (parseFloat(order?.sellEUR) || 0) > 0;
+    }
+
+    isFinancialOrder(order) {
+        return order?.status !== 'Свободен' || this.hasRevenue(order);
+    }
+
     async getReportsData(topClientLimit = 5) {
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
         const uniqueMonths = [...new Set(soldOrders.map(o => o.date?.substring(0, 7)).filter(Boolean))];
         const expensesByMonth = new Map();
 
@@ -80,9 +88,9 @@ export class ReportsModule {
         const allOrders = await this.ordersModule.getOrders(targetMonth, { includeImageUrls: false, preferLightweight: true });
         const expenses = await this.expensesModule.getExpenses(targetMonth);
 
-        // Filter out "Свободен" (Free/Inventory) watches - they're inventory, not sales
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
-        const freeWatches = allOrders.filter(o => o.status === 'Свободен');
+        // Free watches are inventory unless they already have a recorded sale price.
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
+        const freeWatches = allOrders.filter(o => o.status === 'Свободен' && !this.hasRevenue(o));
 
         const operatingExpenses = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
         const revenue = soldOrders.reduce((sum, o) => sum + (o.sellEUR || 0), 0);
@@ -107,8 +115,8 @@ export class ReportsModule {
         // Get all orders from Supabase
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
 
-        // Filter out "Свободен" (Free/Inventory) watches
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        // Free watches are inventory unless they already have a recorded sale price.
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
 
         // Get unique months from orders
         const uniqueMonths = new Set(soldOrders.map(o => o.date.substring(0, 7)));
@@ -132,19 +140,19 @@ export class ReportsModule {
 
     async getReportByOrigin() {
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
         return this.aggregateBy(soldOrders, 'origin');
     }
 
     async getReportByVendor() {
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
         return this.aggregateBy(soldOrders, 'vendor');
     }
 
     async getReportByMonth() {
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
         const report = {};
 
         // Group orders by month
@@ -178,7 +186,7 @@ export class ReportsModule {
 
     async getTopClients(limit = 10) {
         const allOrders = await this.ordersModule.getAllOrders({ includeImageUrls: false, preferLightweight: true });
-        const soldOrders = allOrders.filter(o => o.status !== 'Свободен');
+        const soldOrders = allOrders.filter(o => this.isFinancialOrder(o));
         const clientStats = this.aggregateBy(soldOrders, 'client');
 
         return Object.entries(clientStats)

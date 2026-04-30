@@ -15,7 +15,8 @@ export class OrdersModule {
             orders: new Map(), // month -> orders array  ('__all__' for all-months)
             lastUpdate: new Map(), // month -> timestamp
             cacheTimeout: 5 * 60 * 1000, // 5 minutes
-            maxCacheSize: 12 // max cache entries (10 months + '__all__' + buffer)
+            maxCacheSize: 12, // max cache entries (10 months + '__all__' + buffer)
+            generation: 0
         };
 
         // In-flight request deduplication: key -> Promise
@@ -136,10 +137,13 @@ export class OrdersModule {
 
         this.stats.cacheMisses++;
 
+        const requestGeneration = this.cache.generation;
         const promise = this.supabase.getOrders(targetMonth, { includeImageUrls })
             .then(orders => {
                 this.stats.supabaseOperations++;
-                this.updateCache(cacheKey, orders);
+                if (this.cache.generation === requestGeneration) {
+                    this.updateCache(cacheKey, orders);
+                }
                 this._inflight.delete(cacheKey);
                 return this.mergeWithOptimisticUpdates(orders, targetMonth);
             })
@@ -179,10 +183,13 @@ export class OrdersModule {
 
         this.stats.cacheMisses++;
 
+        const requestGeneration = this.cache.generation;
         const promise = this.supabase.getOrders(null, { includeImageUrls, status })
             .then(orders => {
                 this.stats.supabaseOperations++;
-                this.updateCache(ALL_KEY, orders);
+                if (this.cache.generation === requestGeneration) {
+                    this.updateCache(ALL_KEY, orders);
+                }
                 this._inflight.delete(ALL_KEY);
                 return orders;
             })
@@ -343,37 +350,73 @@ export class OrdersModule {
     }
 
     addOrderToCache(order) {
+        this.markCacheMutated();
         const month = this.getOrderMonth(order.date);
-        if (this.cache.orders.has(month)) {
-            const orders = this.cache.orders.get(month);
-            orders.push(order);
-            orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+        this.invalidateMonthInflight(month);
+
+        for (const key of this.getMonthCacheKeys(month)) {
+            if (this.cache.orders.has(key)) {
+                const orders = this.cache.orders.get(key);
+                orders.push(order);
+                orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+            }
         }
+
         // All-orders caches are stale after any mutation
         this.invalidateAllOrdersCache();
     }
 
     updateOrderInCache(order, oldMonth, newMonth) {
-        if (oldMonth && this.cache.orders.has(oldMonth)) {
-            const oldOrders = this.cache.orders.get(oldMonth);
-            const index = oldOrders.findIndex(o => o.id === order.id);
-            if (index !== -1) oldOrders.splice(index, 1);
+        this.markCacheMutated();
+        const months = new Set([oldMonth, newMonth].filter(Boolean));
+
+        for (const month of months) {
+            this.invalidateMonthInflight(month);
+
+            for (const key of this.getMonthCacheKeys(month)) {
+                if (!this.cache.orders.has(key)) continue;
+
+                const orders = this.cache.orders.get(key);
+                const index = orders.findIndex(o => o.id === order.id);
+                if (index !== -1) orders.splice(index, 1);
+
+                if (month === newMonth) {
+                    orders.push(order);
+                    orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+                }
+            }
         }
-        if (newMonth && this.cache.orders.has(newMonth)) {
-            const newOrders = this.cache.orders.get(newMonth);
-            newOrders.push(order);
-            newOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
-        }
+
         this.invalidateAllOrdersCache();
     }
 
     removeOrderFromCache(orderId, month) {
-        if (this.cache.orders.has(month)) {
-            const orders = this.cache.orders.get(month);
-            const index = orders.findIndex(o => o.id === orderId);
-            if (index !== -1) orders.splice(index, 1);
+        this.markCacheMutated();
+        this.invalidateMonthInflight(month);
+
+        for (const key of this.getMonthCacheKeys(month)) {
+            if (this.cache.orders.has(key)) {
+                const orders = this.cache.orders.get(key);
+                const index = orders.findIndex(o => o.id === orderId);
+                if (index !== -1) orders.splice(index, 1);
+            }
         }
+
         this.invalidateAllOrdersCache();
+    }
+
+    markCacheMutated() {
+        this.cache.generation += 1;
+    }
+
+    getMonthCacheKeys(month) {
+        return month ? [month, `${month}:light`] : [];
+    }
+
+    invalidateMonthInflight(month) {
+        for (const key of this.getMonthCacheKeys(month)) {
+            this._inflight.delete(key);
+        }
     }
 
     invalidateAllOrdersCache() {
@@ -392,8 +435,10 @@ export class OrdersModule {
     }
 
     clearCache() {
+        this.markCacheMutated();
         this.cache.orders.clear();
         this.cache.lastUpdate.clear();
+        this._inflight.clear();
         console.log('🧹 Orders cache cleared');
     }
 
@@ -494,15 +539,18 @@ export class OrdersModule {
             ? parseFloat(data.shippingUSD) || 0
             : parseFloat(settings.factoryShipping) || 0;
 
-        const rate = parseFloat(settings.eurRate);
+        const rateSource = data.rate !== undefined && data.rate !== null && data.rate !== ''
+            ? data.rate
+            : settings.eurRate;
+        const rate = parseFloat(rateSource);
 
         // Validate exchange rate
         if (!rate || isNaN(rate) || rate <= 0) {
-            console.error('❌ Invalid exchange rate:', { eurRate: settings.eurRate, parsed: rate, settings });
-            throw new Error(`Invalid USD→EUR exchange rate: ${settings.eurRate}. Please check Settings page.`);
+            console.error('❌ Invalid exchange rate:', { rateSource, parsed: rate, settings });
+            throw new Error(`Invalid USD→EUR exchange rate: ${rateSource}. Please check Settings page.`);
         }
 
-        console.log(`💱 Using exchange rate: 1 USD = ${rate} EUR (from settings)`);
+        console.log(`💱 Using exchange rate: 1 USD = ${rate} EUR (${data.rate ? 'from order' : 'from settings'})`);
 
         // Use EUR values directly (no BGN conversion)
         const extrasEUR = parseFloat(data.extrasEUR) || 0;
@@ -616,7 +664,11 @@ export class OrdersModule {
             });
 
             // UNIFIED: Use same async preparation logic as create
-            const updatedOrder = await this.prepareOrder({ ...orderData, id: orderId });
+            const updatedOrder = await this.prepareOrder({
+                ...orderData,
+                id: orderId,
+                rate: orderData.rate ?? currentOrder.order.rate
+            });
             const newMonth = this.getOrderMonth(updatedOrder.date);
             const oldMonth = currentOrder.month;
 
@@ -650,10 +702,10 @@ export class OrdersModule {
 // OPTIONAL: Add method to recalculate order with fresh settings
     recalculateOrder(order) {
         const settings = this.state.get('settings') || {};
-        const rate = parseFloat(settings.eurRate) || order.rate;
+        const rate = parseFloat(order.rate) || parseFloat(settings.eurRate);
 
         if (!rate) {
-            console.warn('⚠️ No exchange rate available for recalculation, using order stored rate');
+            console.warn('⚠️ No exchange rate available for recalculation');
         }
 
         const updatedOrder = { ...order, rate };
