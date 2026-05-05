@@ -61,6 +61,14 @@ export default class OrdersView {
                     status: FREE_STATUS
                 })).length;
 
+            const deliveredCountTotal = this.filters.showAllMonths && this.filters.status === 'Доставен' && !hasAdditionalFilters
+                ? allOrders.length
+                : (await this.ordersModule.getAllOrders({
+                    includeImageUrls: false,
+                    preferLightweight: true,
+                    status: 'Доставен'
+                })).length;
+
             // Calculate free watches count for current month only
             const freeCountMonth = currentMonthOrders.filter(o => o.status === FREE_STATUS).length;
             const statusCounts = this.getStatusCounts(currentMonthOrders);
@@ -74,7 +82,7 @@ export default class OrdersView {
             return `
         <div class="orders-view">
             ${this.renderStats(stats, previousStats, currentMonth, previousMonth)}
-            ${this.renderControls(freeCountMonth, freeCountTotal, statusCounts)}
+            ${this.renderControls(freeCountMonth, freeCountTotal, statusCounts, deliveredCountTotal)}
             ${this.renderBulkActions()}
             ${await this.renderFilters()}
             ${this.renderActiveFilters()}
@@ -882,6 +890,18 @@ export default class OrdersView {
             await this.refresh();
         });
 
+        // Delivered watches (total) button - Show all delivered items across all months, newest first
+        document.getElementById('show-delivered-total-btn')?.addEventListener('click', async () => {
+            this.filters.status = 'Доставен';
+            this.filters.showAllMonths = true;
+            this.filters.search = '';
+            this.filters.recentlyDelivered = false;
+            this.sortBy = 'date';
+            this.sortDir = 'desc';
+            this.pagination.currentPage = 1;
+            await this.refresh();
+        });
+
         // Status filters
         document.querySelectorAll('[data-filter-status]').forEach(btn => {
             btn.addEventListener('click', async (e) => {
@@ -1058,10 +1078,11 @@ export default class OrdersView {
         `;
     }
 
-    renderControls(freeCountMonth = 0, freeCountTotal = 0, statusCounts = {}) {
+    renderControls(freeCountMonth = 0, freeCountTotal = 0, statusCounts = {}, deliveredCountTotal = 0) {
         const active = (status, extra = false) => {
             if (extra === 'recent') return this.filters.recentlyDelivered ? 'active' : '';
             if (extra === 'free-all') return this.filters.status === 'Свободен' && this.filters.showAllMonths ? 'active' : '';
+            if (extra === 'delivered-all') return this.filters.status === 'Доставен' && this.filters.showAllMonths ? 'active' : '';
             return this.filters.status === status && !this.filters.showAllMonths && !this.filters.recentlyDelivered ? 'active' : '';
         };
 
@@ -1070,6 +1091,7 @@ export default class OrdersView {
             <button class="filter-chip ${active('all')}" data-filter-status="all">Всички <span>${statusCounts.all || 0}</span></button>
             <button class="filter-chip tone-pending ${active('Очакван')}" data-filter-status="Очакван">Очаквани <span>${statusCounts['Очакван'] || 0}</span></button>
             <button class="filter-chip tone-delivered ${active('Доставен')}" data-filter-status="Доставен">Доставени <span>${statusCounts['Доставен'] || 0}</span></button>
+            <button class="filter-chip tone-delivered ${active('Доставен', 'delivered-all')}" id="show-delivered-total-btn">Доставени общо <span>${deliveredCountTotal}</span></button>
             <button class="filter-chip tone-free ${active('Свободен')}" id="show-free-month-btn">Свободни този месец <span>${freeCountMonth}</span></button>
             <button class="filter-chip tone-free ${active('Свободен', 'free-all')}" id="show-free-total-btn">Свободни общо <span>${freeCountTotal}</span></button>
             <button class="filter-chip tone-other ${active('Други')}" data-filter-status="Други">Други <span>${statusCounts['Други'] || 0}</span></button>
@@ -1135,6 +1157,14 @@ export default class OrdersView {
             return `
                 <div class="active-filter-badge">
                     <span>Показани са всички свободни часовници от всички месеци.</span>
+                    <button id="clear-active-filter" class="btn btn-sm secondary" type="button">Изчисти</button>
+                </div>
+            `;
+        }
+        if (this.filters.showAllMonths && this.filters.status === 'Доставен') {
+            return `
+                <div class="active-filter-badge">
+                    <span>Показани са всички доставени часовници от всички месеци, най-новите най-горе.</span>
                     <button id="clear-active-filter" class="btn btn-sm secondary" type="button">Изчисти</button>
                 </div>
             `;
